@@ -33,7 +33,7 @@
       <button data-page="profile">Hồ sơ</button>
       <button data-page="money">Tiền</button>
       <button data-page="cv">CV</button>
-      <button data-page="food">Ăn uống</button>
+      <button data-page="food">Sức khỏe</button>
       <button data-page="travel">Chuyến đi</button>
       <button data-page="time">Thời gian</button>
       <button data-page="install">Cài đặt</button>
@@ -128,7 +128,17 @@
     </section>
 
     <section id="food" class="page">
-      <div class="section-head"><h2>Thực đơn</h2><button onclick="openForm('meal')">+ Lưu món</button></div>
+      <div class="section-head">
+        <h2>Sức khỏe & giảm cân</h2>
+        <div class="actions"><button class="outline" onclick="openHealthForm()">Cập nhật mục tiêu</button><button onclick="openForm('weightLog')">+ Cân nặng</button></div>
+      </div>
+      <p class="hint">Lộ trình dành cho người đang ít vận động: khởi đầu rất nhỏ, ưu tiên bài ít tác động và tăng dần. Đây không phải chẩn đoán hay phác đồ y khoa.</p>
+      <div id="healthMetrics" class="insight-grid"></div>
+      <div id="weightProgress" class="health-progress"></div>
+      <div class="section-head subhead"><h2>Bài tập hôm nay</h2><button class="outline" onclick="installHealthCalendarUi()">Nhắc mỗi ngày</button></div>
+      <div id="workoutSuggestions" class="workout-grid"></div>
+      <div class="section-head subhead"><h2>Thực đơn đã lưu</h2><button onclick="openForm('meal')">+ Lưu món</button></div>
+      <article class="card meal-guide"><h3>Quy tắc bữa ăn không phải đếm quá nhiều</h3><p class="meta">½ đĩa rau · ¼ đạm · ¼ tinh bột; ưu tiên nước lọc, ăn chậm và chuẩn bị sẵn một bữa “cứu hộ” đơn giản cho ngày ADHD quá tải.</p></article>
       <div id="meals" class="cards"></div>
     </section>
 

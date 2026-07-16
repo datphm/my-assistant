@@ -9,6 +9,14 @@ Một web app riêng cho bạn, mở được trên máy tính và iPhone; dữ 
 - Tab **Tiền** cho phép thêm ví, tài khoản ngân hàng hoặc thẻ; nhập chi tiêu thủ công; và hiển thị biểu đồ phân bổ chi tiêu tháng hiện tại. Email ngân hàng được gán nhóm chi tiêu tự động theo từ khóa phổ biến; bạn nên kiểm tra lại những giao dịch gán vào nhóm `Khác`.
 - Bạn có thể đặt tỷ trọng riêng qua nút **Thiết lập %**. Các tỷ trọng này là mục tiêu do bạn đặt, không phải khuyến nghị tài chính của app.
 
+## Sức khỏe, ăn uống và vận động
+
+- Tab **Sức khỏe** thay cho tab Ăn uống cũ nhưng vẫn giữ toàn bộ thực đơn đã lưu. Hồ sơ mặc định dùng chiều cao 165 cm, cân nặng bắt đầu 90 kg, mốc 75 kg rồi 70 kg và ngày mục tiêu 31/10/2026; tất cả đều sửa được.
+- App tính tiến độ, BMI ước tính, tốc độ giảm cần thiết và vùng cân nặng tham khảo nếu giảm dần khoảng 0,5–1 kg mỗi tuần. Mục tiêu quá gấp sẽ được cảnh báo thay vì ép tăng cường độ.
+- Bài tập ưu tiên đi bộ, vận động với ghế/tường, giãn cơ và cardio ít tác động. Mức bài tự tăng theo số phút đi bộ/thể dục đã log trong bảy ngày gần nhất.
+- Nút **Nhắc mỗi ngày** tạo lịch vận động 10 phút trên Google Calendar; hệ thống nhắc thông minh cũng email nếu đến giờ mà chưa có phiên đi bộ/thể dục trong ngày.
+- Đây là công cụ hỗ trợ thói quen, không thay thế bác sĩ hoặc chuyên gia dinh dưỡng. Nếu có bệnh nền, đau khớp, đau ngực, chóng mặt hoặc khó thở bất thường, hãy dừng tập và tìm tư vấn y tế phù hợp.
+
 ## Cách dùng đơn giản nhất
 
 GitHub **không** cài app vào iPhone. GitHub dùng để lưu mã nguồn. Cách đơn giản và miễn phí là triển khai app này thành Google Apps Script Web App, rồi mở cùng một link trên Mac và iPhone.

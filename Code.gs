@@ -2,6 +2,8 @@ const HEADERS = {
   Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
+  HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'limitations', 'updatedAt'],
+  WeightLogs: ['id', 'date', 'weightKg', 'note'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
@@ -33,9 +35,56 @@ function getData() {
   ensureDefaultCv_(ss);
   ensureDefaultFlights_(ss);
   ensureDefaultRoutine_(ss);
+  ensureDefaultHealth_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   return result;
+}
+
+function ensureDefaultHealth_(ss) {
+  const sheet = ss.getSheetByName('HealthProfile');
+  if (readRows_(sheet).length) return;
+  upsertRow_(sheet, {
+    id: 'default', heightCm: 165, startWeightKg: 90, currentWeightKg: 90,
+    goal1Kg: 75, goal2Kg: 70, targetDate: '2026-10-31', activityLevel: 'sedentary',
+    exerciseTime: '18:30:00', limitations: '', updatedAt: new Date()
+  });
+}
+
+function saveHealthProfile(item) {
+  const sheet = getBook_().getSheetByName('HealthProfile');
+  const current = readRows_(sheet)[0] || {};
+  const value = Object.assign({}, current, item, { id: 'default', updatedAt: new Date() });
+  upsertRow_(sheet, value);
+  return 'Đã cập nhật mục tiêu sức khỏe.';
+}
+
+function logWeight(item) {
+  const weight = Number(item && item.weightKg);
+  if (!weight || weight < 30 || weight > 300) throw new Error('Cân nặng cần nằm trong khoảng 30–300 kg.');
+  const ss = getBook_();
+  const logSheet = ss.getSheetByName('WeightLogs');
+  const value = {
+    id: Utilities.getUuid(), date: item.date ? new Date(item.date) : new Date(),
+    weightKg: weight, note: item.note || ''
+  };
+  logSheet.appendRow(HEADERS.WeightLogs.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  const healthSheet = ss.getSheetByName('HealthProfile');
+  const profile = readRows_(healthSheet)[0] || { id: 'default', heightCm: 165, startWeightKg: 90, goal1Kg: 75, goal2Kg: 70, targetDate: '2026-10-31' };
+  upsertRow_(healthSheet, Object.assign({}, profile, { currentWeightKg: weight, updatedAt: new Date() }));
+  return 'Đã ghi cân nặng ' + weight + ' kg.';
+}
+
+function deleteWeightLog(id) {
+  deleteItem('WeightLogs', id);
+  const ss = getBook_();
+  const healthSheet = ss.getSheetByName('HealthProfile');
+  const profile = readRows_(healthSheet)[0] || {};
+  const latest = readRows_(ss.getSheetByName('WeightLogs')).filter(function(row) { return row.date; }).sort(function(a, b) { return new Date(b.date) - new Date(a.date); })[0];
+  upsertRow_(healthSheet, Object.assign({}, profile, {
+    id: 'default', currentWeightKg: latest ? latest.weightKg : (profile.startWeightKg || 90), updatedAt: new Date()
+  }));
+  return 'Đã xoá lần cân và cập nhật lại cân nặng hiện tại.';
 }
 
 function ensureDefaultRoutine_(ss) {
@@ -654,6 +703,7 @@ function sendFlightReminders_(recipient, now) {
 function sendRoutineReminders_(recipient, now) {
   const ss = getBook_();
   ensureDefaultRoutine_(ss);
+  ensureDefaultHealth_(ss);
   const settings = readRows_(ss.getSheetByName('RoutineSettings'))[0];
   const props = PropertiesService.getUserProperties();
   const tz = Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh';
@@ -680,6 +730,18 @@ function sendRoutineReminders_(recipient, now) {
   if (!active && isAwakeTime_(hhmm, settings.wakeTime, settings.bedtime) && now.getTime() - lastPrompt >= interval) {
     MailApp.sendEmail(recipient, 'My Assistant · Bạn đang làm gì?', 'Mở My Assistant và bấm đúng một nút để log hoạt động hiện tại. Nếu đang trôi thời gian, chọn “Thời gian chết” — ghi nhận, không tự trách.');
     props.setProperty('LAST_TIME_LOG_PROMPT', String(now.getTime()));
+  }
+  const health = readRows_(ss.getSheetByName('HealthProfile'))[0] || {};
+  const exerciseTime = String(health.exerciseTime || '18:30').slice(0, 5);
+  const movedToday = readRows_(ss.getSheetByName('TimeLogs')).some(function(log) {
+    if (!log.startAt || !/^(walk|exercise)$/.test(String(log.kind || ''))) return false;
+    return Utilities.formatDate(new Date(log.startAt), tz, 'yyyy-MM-dd') === dateKey;
+  });
+  if (!movedToday && exerciseTime && hhmm >= exerciseTime && lastRoutineSent.exercise !== dateKey) {
+    MailApp.sendEmail(recipient, 'My Assistant · Chỉ cần vận động 10 phút', 'Không cần có động lực trước. Hãy mở My Assistant → Sức khỏe và bắt đầu bài 10 phút ít tác động. Nếu đau ngực, chóng mặt hoặc đau khớp tăng lên, hãy dừng lại.');
+    createNotification_('health_move', 'Đến giờ vận động 10 phút', 'Mở tab Sức khỏe và chọn bài dễ nhất.', 'health', 'default', 'high', 'health-move:' + dateKey);
+    lastRoutineSent.exercise = dateKey;
+    props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
   }
 }
 
@@ -715,6 +777,27 @@ function installRoutineCalendar() {
   return 'Đã tạo 4 điểm neo hằng ngày trong Google Calendar trong 1 năm.';
 }
 
+function installHealthCalendar() {
+  const ss = getBook_();
+  ensureDefaultHealth_(ss);
+  const health = readRows_(ss.getSheetByName('HealthProfile'))[0] || {};
+  const calendar = CalendarApp.getDefaultCalendar();
+  const props = PropertiesService.getUserProperties();
+  const oldId = props.getProperty('HEALTH_EVENT_ID');
+  if (oldId) {
+    try { const oldSeries = calendar.getEventSeriesById(oldId); if (oldSeries) oldSeries.deleteEventSeries(); } catch (error) {}
+  }
+  const start = nextDateAt_(health.exerciseTime || '18:30');
+  const end = new Date(start.getTime() + 15 * 60000);
+  const recurrence = CalendarApp.newRecurrence().addDailyRule().until(new Date(Date.now() + 184 * 86400000));
+  const series = calendar.createEventSeries('Vận động 10 phút · My Assistant', start, end, recurrence, {
+    description: 'Mục tiêu nhỏ cho ngày ít năng lượng: đi bộ chậm hoặc bài ít tác động trong tab Sức khỏe. Bắt đầu nhỏ rồi tăng dần.'
+  });
+  series.addPopupReminder(10);
+  props.setProperty('HEALTH_EVENT_ID', series.getId());
+  return 'Đã tạo nhắc vận động hằng ngày lúc ' + String(health.exerciseTime || '18:30').slice(0, 5) + ' trong 6 tháng.';
+}
+
 function nextDateAt_(hhmm) {
   const parts = String(hhmm || '08:00').split(':').map(Number);
   const value = new Date();
@@ -740,8 +823,9 @@ function enableSmartReminders() {
   const calendarName = CalendarApp.getDefaultCalendar().getName();
   installReminderTrigger();
   installRoutineCalendar();
+  installHealthCalendar();
   const flights = syncFutureFlightsToCalendar_();
-  return `Đã bật hệ thống nhắc thông minh qua Calendar “${calendarName}” + email: deadline 30 phút, quá hạn, việc bị quên, điểm neo sinh hoạt và ${flights} chuyến bay tương lai.`;
+  return `Đã bật hệ thống nhắc thông minh qua Calendar “${calendarName}” + email: deadline, việc bị quên, sinh hoạt, vận động hằng ngày và ${flights} chuyến bay tương lai.`;
 }
 
 function uninstallReminderTrigger() {

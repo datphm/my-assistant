@@ -1,5 +1,5 @@
 <script>
-let data={tasks:[],debts:[],meals:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
+let data={tasks:[],debts:[],meals:[],healthprofile:[],weightlogs:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
@@ -23,7 +23,7 @@ function renderCurrentPage(){
   if(page==='profile')renderProfile();
   if(page==='money')renderMoney();
   if(page==='cv')renderCvs();
-  if(page==='food')renderMeals();
+  if(page==='food')renderHealth();
   if(page==='travel')renderTravel();
   if(page==='time')renderTime();
   if(page==='install')renderInstall();
@@ -115,11 +115,12 @@ function renderNotifications(){
   const visible=unread.filter(n=>{const key=`${n.type}:${n.targetId}`;if(seen.has(key))return false;seen.add(key);return true}).slice(0,5);
   if(!visible.length){box.innerHTML='';box.hidden=true;return}
   box.hidden=false;
-  box.innerHTML=`<div class="notification-head"><div><span class="pill">TRỢ LÝ ĐANG BÁM VIỆC</span><h2>${visible.length} việc cần chú ý</h2></div></div><div class="notification-list">${visible.map(n=>`<article class="notice ${escAttr(n.priority||'normal')}"><button class="notice-main" onclick="openNotificationTarget('${escAttr(n.targetType)}','${escAttr(n.targetId)}')"><b>${esc(n.title)}</b><span>${esc(n.message)}</span><small>${dateTime(n.createdAt)}</small></button><button class="notice-done" onclick="readNotification('${escAttr(n.id)}')" aria-label="Đánh dấu đã đọc">✓</button></article>`).join('')}</div>`;
+  box.innerHTML=`<div class="notification-head"><div><span class="pill">TRỢ LÝ ĐANG BÁM VIỆC</span><h2>${visible.length} mục cần chú ý</h2></div></div><div class="notification-list">${visible.map(n=>`<article class="notice ${escAttr(n.priority||'normal')}"><button class="notice-main" onclick="openNotificationTarget('${escAttr(n.targetType)}','${escAttr(n.targetId)}')"><b>${esc(n.title)}</b><span>${esc(n.message)}</span><small>${dateTime(n.createdAt)}</small></button><button class="notice-done" onclick="readNotification('${escAttr(n.id)}')" aria-label="Đánh dấu đã đọc">✓</button></article>`).join('')}</div>`;
 }
 function readNotification(id){google.script.run.withSuccessHandler(load).withFailureHandler(fail).markNotificationRead(id)}
 function openNotificationTarget(type,id){
   if(type==='flight'){activatePage('travel');setTimeout(()=>$('upcomingFlightPlan')?.scrollIntoView({behavior:'smooth'}),50);return}
+  if(type==='health'){activatePage('food');setTimeout(()=>$('workoutSuggestions')?.scrollIntoView({behavior:'smooth'}),50);return}
   activatePage('today');
   setTimeout(()=>document.querySelector(`[onclick="editItem('task','${id}')"]`)?.closest('.card')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
 }
@@ -190,7 +191,35 @@ function renderAllocation(periodTx){
 }
 
 function renderCvs(){$('cvs').innerHTML=data.cvs.map(cv=>`<article class="card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · ${esc(cv.fileName||'Bản text')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><button class="outline small" onclick="editCv('${cv.id}')">Cập nhật</button></div>${cv.content?`<p class="cv-preview">${esc(cv.content).slice(0,260)}${cv.content.length>260?'...':''}</p>`:''}${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở file CV trên Google Drive ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>'}
-function renderMeals(){$('meals').innerHTML=data.meals.map(m=>`<article class="card"><h3>${esc(m.title)} <span class="amount orange">${m.calories} kcal</span></h3><p class="meta">${esc(m.ingredients)}${m.notes?' · '+esc(m.notes):''}</p></article>`).join('')||'<div class="empty">Lưu các món bạn thích để khỏi phải nghĩ mỗi ngày.</div>'}
+function renderHealth(){
+  const h=(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',exerciseTime:'18:30'};
+  const logs=(data.weightlogs||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const current=Number(h.currentWeightKg||logs[0]?.weightKg||h.startWeightKg||90),start=Number(h.startWeightKg||90),goal1=Number(h.goal1Kg||75),goal2=Number(h.goal2Kg||70),height=Number(h.heightCm||165)/100;
+  const bmi=height?current/(height*height):0,lost=Math.max(0,start-current),remaining=Math.max(0,current-goal2),target=new Date(h.targetDate||'2026-10-31T23:59:59'),weeks=Math.max(0,(target-new Date())/604800000),required=weeks?remaining/weeks:remaining;
+  const safeLow=Math.max(goal2,current-weeks),safeHigh=Math.max(goal2,current-weeks*.5),progress=Math.max(0,Math.min(100,(start-current)/Math.max(1,start-goal2)*100));
+  $('healthMetrics').innerHTML=[metricCard('Hiện tại',current.toFixed(1)+' kg',`BMI ước tính ${bmi.toFixed(1)}`),metricCard('Đã giảm',lost.toFixed(1)+' kg',`Từ ${start} kg`),metricCard('Mốc 1',goal1+' kg',current<=goal1?'Đã đạt':'Còn '+Math.max(0,current-goal1).toFixed(1)+' kg'),metricCard('Mục tiêu 2',goal2+' kg',`Còn ${remaining.toFixed(1)} kg`)].join('');
+  $('weightProgress').innerHTML=`<article class="card goal-card"><div class="goal-head"><div><span>LỘ TRÌNH ĐẾN ${dateShort(h.targetDate)}</span><h2>${current.toFixed(1)} → ${goal1} → ${goal2} kg</h2></div><b>${Math.round(progress)}%</b></div><div class="goal-track"><i style="width:${progress}%"></i><em style="left:${Math.max(0,Math.min(100,(start-goal1)/Math.max(1,start-goal2)*100))}%"></em></div><p class="meta">Để chạm ${goal2} kg đúng hạn cần trung bình ${required.toFixed(1)} kg/tuần. Nhịp giảm cân thường được khuyến nghị là khoảng 0,5–1 kg/tuần; theo nhịp đó, vùng cân nặng hợp lý vào ngày mục tiêu là khoảng ${safeLow.toFixed(1)}–${safeHigh.toFixed(1)} kg.</p>${required>1?'<div class="health-warning"><b>Mục tiêu hiện tại khá gấp.</b><span>Ưu tiên mốc 75 kg trước, sau đó tiếp tục về 70 kg. Nên trao đổi với bác sĩ/chuyên gia dinh dưỡng, đặc biệt nếu có tăng huyết áp, tiểu đường, đau khớp hoặc ngưng thở khi ngủ.</span></div>':''}<div class="weight-history">${logs.slice(0,6).map(w=>`<span><b>${Number(w.weightKg).toFixed(1)} kg</b><small>${dateShort(w.date)}</small><button onclick="removeWeight('${w.id}')" aria-label="Xoá lần cân">×</button></span>`).join('')||'<p class="meta">Chưa có lần cân nào. Ghi một lần mỗi tuần, cùng thời điểm và điều kiện.</p>'}</div></article>`;
+  $('workoutSuggestions').innerHTML=workoutPlanCards(h);
+  $('meals').innerHTML=data.meals.map(m=>`<article class="card"><div class="card-top"><div><h3>${esc(m.title)} <span class="amount orange">${m.calories||'—'} kcal</span></h3><p class="meta">${esc(m.ingredients)}${m.notes?' · '+esc(m.notes):''}</p></div><button class="outline small" onclick="editItem('meal','${m.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Lưu vài món dễ làm để ngày bận không phải quyết định lại từ đầu.</div>';
+}
+function workoutPlanCards(h){
+  const weekMinutes=(data.timelogs||[]).filter(log=>/^(walk|exercise)$/.test(log.kind||'')&&new Date(log.startAt)>new Date(Date.now()-7*86400000)).reduce((sum,log)=>sum+Number(log.durationMinutes||0),0);
+  const stage=weekMinutes<45?1:weekMinutes<90?2:3;
+  const plans=stage===1?[
+    ['🚶','Đi bộ khởi động','10 phút','Tốc độ vẫn nói được trọn câu. Nếu mệt, chia 2 × 5 phút.','walk'],
+    ['🪑','Sức mạnh với ghế','8 phút','Ngồi–đứng khỏi ghế 6–8 lần · chống đẩy tường 6–8 lần · nhón gót 8 lần. Làm 1 vòng.','exercise'],
+    ['🧘','Giãn cơ & khớp','6 phút','Xoay vai, cổ chân, duỗi bắp chân và hông; chuyển động chậm, không nín thở.','exercise']
+  ]:stage===2?[
+    ['🚶','Đi bộ đều','15–20 phút','Giữ mức vừa: thở nhanh hơn nhưng vẫn nói chuyện được.','walk'],
+    ['🪑','Sức mạnh toàn thân','12 phút','Ngồi–đứng, chống đẩy tường, kéo khăn, nhón gót: 2 vòng × 8 lần.','exercise'],
+    ['🎵','Vận động vui','15 phút','Đi bộ theo nhạc hoặc đạp xe nhẹ; chọn thứ ít gây áp lực lên khớp.','exercise']
+  ]:[
+    ['🚶','Đi bộ nhanh vừa','25–30 phút','Có thể chia 15 + 15 phút. Không cần chạy.','walk'],
+    ['💪','Sức mạnh 2 vòng','15 phút','Ngồi–đứng, chống đẩy tường, bridge hoặc kéo dây nhẹ: 2 vòng × 8–10 lần.','exercise'],
+    ['🏊','Cardio ít tác động','20 phút','Bơi, đạp xe nhẹ hoặc đi bộ; chọn hoạt động khớp chịu được.','exercise']
+  ];
+  return `<article class="card workout-summary"><span>TUẦN NÀY</span><b>${weekMinutes} / 150 phút</b><p class="meta">Bạn đang ở mức ${stage}/3. Mục tiêu dài hạn là tăng dần tới 150 phút vận động vừa/tuần và 2 buổi sức mạnh; tuần đầu chỉ cần tạo nhịp.</p></article>`+plans.map(p=>`<article class="card workout-card"><span class="workout-icon">${p[0]}</span><div><h3>${p[1]}</h3><b>${p[2]}</b><p class="meta">${p[3]}</p></div><button onclick="startTimeLog('${p[4]}','${escAttr(p[1])}')">Bắt đầu</button></article>`).join('')+`<article class="card safety-card"><b>Dừng và kiểm tra sức khỏe nếu có dấu hiệu bất thường</b><p class="meta">Đau ngực, khó thở khác thường, chóng mặt/ngất hoặc đau khớp tăng rõ rệt. Nếu có bệnh nền hoặc lâu rồi chưa vận động, hãy hỏi nhân viên y tế về loại và mức bài tập phù hợp.</p></article>`;
+}
 
 function renderTravel(){
   const flights=data.flights.slice().sort((a,b)=>new Date(b.departure)-new Date(a.departure));
@@ -263,6 +292,8 @@ const fields={
  task:[['title','Việc cần làm','text'],['dueAt','Nhắc lúc','datetime-local'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Bắt đầu trong (phút)','number'],['chaseMode','Mức nhắc','select','normal,urgent'],['status','Trạng thái','select','todo,doing,blocked,done']],
  debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
  meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],
+ healthProfile:[['heightCm','Chiều cao (cm)','number'],['startWeightKg','Cân nặng bắt đầu (kg)','number'],['currentWeightKg','Cân nặng hiện tại (kg)','number'],['goal1Kg','Mốc đầu tiên (kg)','number'],['goal2Kg','Mục tiêu tiếp theo (kg)','number'],['targetDate','Ngày mục tiêu','date'],['activityLevel','Mức vận động hiện tại','select','sedentary,light,active'],['exerciseTime','Giờ nhắc vận động','time'],['limitations','Đau/giới hạn vận động cần lưu ý','textarea']],
+ weightLog:[['date','Ngày cân','date'],['weightKg','Cân nặng (kg)','number'],['note','Ghi chú','text']],
  flight:[['code','Mã chuyến bay','text'],['bookingRef','Mã đặt chỗ / PNR','text'],['destination','Điểm đến / mã sân bay đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text'],['fromCode','Từ sân bay','text'],['toCode','Đến sân bay','text'],['flightType','Loại chuyến bay','select','domestic,international'],['airportTravelMinutes','Thời gian đi tới sân bay (phút)','number'],['checkinUrl','Link check-in online','url'],['status','Trạng thái','select','scheduled,changed,delayed,cancelled'],['distanceKm','Khoảng cách km','number'],['ticketPrice','Giá vé đã mua','number'],['depTime','Giờ bay dự kiến','text'],['arrTime','Giờ đến dự kiến','text'],['airline','Hãng bay','text'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
  hotel:[['name','Tên khách sạn','text'],['city','Thành phố','text'],['address','Địa chỉ đầy đủ','text'],['checkIn','Check-in','date'],['checkOut','Check-out','date'],['bookingRef','Mã đặt phòng','text'],['price','Giá đã đặt','number'],['notes','Ghi chú','textarea']],
  wallet:[['name','Tên ví / tài khoản','text'],['type','Loại','select','Tiền mặt,Tài khoản ngân hàng,Thẻ tín dụng,Tiết kiệm'],['balance','Số dư hiện tại','number']],
@@ -277,6 +308,7 @@ const fields={
 };
 
 function openProfileForm(){openForm('profile',data.profile[0]||{})}
+function openHealthForm(){openForm('healthProfile',(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',exerciseTime:'18:30'})}
 function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
 function editItem(kind,id){
   const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans]};
@@ -286,7 +318,7 @@ function editItem(kind,id){
 }
 function openForm(type,item={}){
   currentType=type;editingId=item.id||'';
-  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',weightLog:'Ghi cân nặng',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
@@ -312,14 +344,17 @@ function saveForm(event){
   if(currentType==='cv'){saveCvForm(event.target,item);return}
   const runner=google.script.run.withSuccessHandler(result=>{formDialog.close();toast(result&&result.calendarWarning?'Đã lưu việc; hãy bấm Calendar để cấp lại quyền Google.':'Đã lưu và đồng bộ');load()}).withFailureHandler(fail);
   if(currentType==='profile'){runner.saveProfile(item);return}
+  if(currentType==='healthProfile'){runner.saveHealthProfile(item);return}
+  if(currentType==='weightLog'){runner.logWeight(item);return}
   if(currentType==='routine'){runner.saveRoutineSettings(item);return}
   if(currentType==='balance'){runner.updateWalletBalanceManual(item);return}
   if(currentType==='walletAdjust'){runner.adjustWalletManual(item);return}
   const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
-function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ'}[o]||o}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ'}[o]||o}
 function removeItem(type,id){if(!confirm('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
+function removeWeight(id){if(!confirm('Xoá lần cân này?'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWeightLog(id)}
 function removeWallet(id){if(!confirm('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
 function saveCvForm(form,item){
   const file=form.querySelector('input[name="cvFile"]').files[0];
@@ -344,6 +379,7 @@ function disableTravelSync(){google.script.run.withSuccessHandler(toast).withFai
 function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}
 function connectReminderServices(){google.script.run.withSuccessHandler(toast).withFailureHandler(e=>fail((e.message||String(e))+' — Nếu Google yêu cầu quyền, mở Apps Script và chạy authorizeReminderServices một lần.')).authorizeReminderServices()}
 function enableSmartRemindersUi(){google.script.run.withSuccessHandler(msg=>{toast(msg);const el=$('notificationStatus');if(el)el.textContent='Đã bật: Calendar + email + nhắc việc/chuyến bay thông minh.'}).withFailureHandler(e=>fail((e.message||String(e))+' — Google có thể yêu cầu cấp quyền Calendar và email lần đầu.')).enableSmartReminders()}
+function installHealthCalendarUi(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installHealthCalendar()}
 function disableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallReminderTrigger()}
 function syncCalendar(id){google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).syncTaskToCalendar(id)}
 function enableDeviceNotifications(){
