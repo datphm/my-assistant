@@ -165,7 +165,7 @@ function importExpensesFromGmail(query, walletId) {
       const amount = parseVnd_(body);
       if (!amount) return;
       const direction = guessDirection_(message.getSubject() + ' ' + body);
-      sheet.appendRow([Utilities.getUuid(), message.getDate(), amount, cleanMerchant_(message.getSubject()), 'Gmail import', message.getId(), categorize_(message.getSubject() + ' ' + body), direction, walletId || '']);
+      sheet.appendRow(HEADERS.Expenses.map(key => ({id:Utilities.getUuid(), date:message.getDate(), amount, merchant:cleanMerchant_(message.getSubject()), source:'Gmail import', gmailMessageId:message.getId(), category:categorize_(message.getSubject() + ' ' + body), direction, walletId:walletId || '', debtId:''}[key] ?? '')));
       if (walletId && !balance) adjustWalletByTransaction_(walletId, amount, direction, message.getDate());
       count++;
     }
