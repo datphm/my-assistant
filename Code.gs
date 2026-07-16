@@ -289,9 +289,17 @@ function buildIosProfile_() {
   <key>PayloadUUID</key><string>${uuid2}</string>
   <key>PayloadVersion</key><integer>1</integer>
 </dict></plist>`;
-  return ContentService.createTextOutput(xml)
-    .setMimeType(ContentService.MimeType.XML)
-    .downloadAsFile('My-Assistant-iPhone.mobileconfig');
+  // Apps Script cannot set Apple's custom mobileconfig MIME type directly.
+  // Serve a tiny download page that creates the profile as a Blob; this avoids
+  // Safari/in-app browsers rendering a blank XML page instead of downloading it.
+  const payload = JSON.stringify(xml).replace(/</g, '\\u003c');
+  const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tải hồ sơ My Assistant</title>
+  <style>body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;padding:28px;line-height:1.5;background:#f4f7f6;color:#173b46}a{display:inline-block;padding:14px 18px;background:#176b63;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>
+  <h2>Hồ sơ My Assistant iPhone</h2><p>Nếu tệp chưa tự tải, bấm nút bên dưới rồi mở bằng Safari.</p>
+  <a id="download" download="My-Assistant-iPhone.mobileconfig">Tải hồ sơ</a>
+  <script>const xml=${payload};const blob=new Blob([xml],{type:'application/x-apple-aspen-config'});const a=document.getElementById('download');a.href=URL.createObjectURL(blob);setTimeout(()=>a.click(),250);</script>`;
+  return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function buildAndroidApkNote_() {
