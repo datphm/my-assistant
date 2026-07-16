@@ -15,7 +15,7 @@
         <div><h1>My Assistant</h1><p>Việc ít hơn. Đúng lúc hơn.</p></div>
       </div>
       <div class="header-actions">
-        <button class="quiet" onclick="enableEmails()">Bật email nhắc</button>
+        <button class="quiet" onclick="enableEmails()">Bật nhắc chủ động</button>
         <button class="quiet danger" onclick="disableEmails()">Tắt email nhắc</button>
       </div>
     </header>
@@ -33,6 +33,10 @@
 
     <section id="today" class="page active">
       <div class="section-head"><h2>Việc kế tiếp</h2><button onclick="openForm('task')">+ Thêm việc</button></div>
+      <article class="card time-anchor">
+        <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
+        <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
+      </article>
       <article class="card think-deep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
         <h2>Đừng chỉ nhận việc. Hãy chốt đầu ra.</h2>
