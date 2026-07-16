@@ -18,14 +18,29 @@ jobs:
       - name: Restore Google authorization
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-        run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "Missing GitHub secret: CLASPRC_JSON"
+            exit 1
+          fi
+          printf '%s\n' "$CLASPRC_JSON" > ~/.clasprc.json
+          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME + '/.clasprc.json', 'utf8'))"
       - name: Set target Apps Script project
         env:
           SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-        run: printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > .clasp.json
+        run: |
+          if [ -z "$SCRIPT_ID" ]; then
+            echo "Missing GitHub secret: APPS_SCRIPT_ID"
+            exit 1
+          fi
+          node -e "require('fs').writeFileSync('.clasp.json', JSON.stringify({ scriptId: process.env.SCRIPT_ID, rootDir: '.' }))"
       - name: Push source and update Web App
         env:
           DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
         run: |
+          if [ -z "$DEPLOYMENT_ID" ]; then
+            echo "Missing GitHub secret: APPS_SCRIPT_DEPLOYMENT_ID"
+            exit 1
+          fi
           clasp push --force
           clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub automatic update $GITHUB_SHA"
