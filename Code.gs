@@ -15,6 +15,7 @@ function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
   if (download === 'ios-profile') return buildIosProfile_();
   if (download === 'android-apk') return buildAndroidApkNote_();
+  if (download === 'json') return buildJsonExport_();
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('My Assistant')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -34,6 +35,50 @@ function getData() {
 function exportAllData() {
   const data = getData();
   return { exportedAt: new Date().toISOString(), source: 'My Assistant Google Apps Script', data };
+}
+
+function buildJsonExport_() {
+  return ContentService.createTextOutput(JSON.stringify(exportAllData(), null, 2))
+    .setMimeType(ContentService.MimeType.JSON)
+    .downloadAsFile('my-assistant-google-data.json');
+}
+
+function suggestTaskPlan(message) {
+  const text = String(message || '').trim();
+  if (!text) throw new Error('Hãy dán nhiệm vụ bạn vừa nhận.');
+  const isEvent = /sinh nhật|escape|phòng chơi|đặt phòng|booking|sự kiện/i.test(text);
+  const steps = isEvent ? [
+    'Chốt số người tham gia: hỏi ngay người chưa xác nhận',
+    'Cập nhật số lượng vào file Docs và báo lại người giao việc',
+    'Chốt phương án di chuyển chủ động; bỏ phương án không còn dùng',
+    'Chọn phòng/phương án phù hợp và giữ một phương án dự phòng',
+    'Gọi trực tiếp nơi cung cấp: báo số người, yêu cầu và hỏi giới hạn phát sinh',
+    'Thảo luận rồi chốt thời lượng, chi phí và người thanh toán',
+    'Xác nhận booking; cập nhật Docs/lịch; gửi recap kết quả và bước tiếp theo'
+  ] : [
+    'Viết lại đầu ra phải bàn giao và deadline chính xác',
+    'Liệt kê người cần hỏi; nhắn hoặc gọi ngay người đang giữ thông tin',
+    'Chốt các ràng buộc: số người, ngân sách, địa điểm, di chuyển hoặc quyền quyết định',
+    'Đưa ra một phương án đề xuất và một phương án dự phòng',
+    'Thực hiện hành động chốt; cập nhật file Docs/Sheet/Calendar liên quan',
+    'Gửi recap cho người giao việc: đã chốt gì, còn kẹt gì, khi nào xong'
+  ];
+  const now = Date.now();
+  return steps.map(function(title, index) {
+    return {
+      title: title,
+      area: 'Công việc',
+      minutes: index < 2 ? 10 : 20,
+      status: 'todo',
+      dueAt: new Date(now + (index + 1) * 30 * 60 * 1000).toISOString()
+    };
+  });
+}
+
+function addSuggestedTasks(items) {
+  if (!Array.isArray(items) || !items.length) throw new Error('Chưa chọn bước nào để thêm.');
+  items.forEach(function(item) { addItem('Tasks', item); });
+  return { count: items.length };
 }
 
 function addItem(type, item) {
