@@ -38,6 +38,7 @@ function getData() {
   ensureDefaultRoutine_(ss);
   ensureDefaultHealth_(ss);
   ensureDefaultReflection_(ss);
+  seedReflectionDetails_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   result.dailyguidance = buildDailyGuidance_(ss);
@@ -55,6 +56,111 @@ function ensureDefaultReflection_(ss) {
     targetIndustries: 'Startup, vận hành, dịch vụ, công nghệ', tuViNotes: '', batTuNotes: '',
     numerologyNotes: '', horoscopeNotes: '', dailyGuidanceEnabled: 'yes', updatedAt: new Date()
   });
+}
+
+function seedReflectionDetails_(ss) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('REFLECTION_DETAILS_2026_SEEDED')) return;
+  const sheet = ss.getSheetByName('ReflectionProfile');
+  const current = readRows_(sheet)[0] || { id: 'default' };
+  upsertRow_(sheet, Object.assign({}, current, {
+    id: 'default', fullName: current.fullName || 'Phạm Nguyễn Gia Đạt',
+    dateOfBirth: current.dateOfBirth || '2003-05-12', birthTime: current.birthTime || '10:25:00',
+    gender: current.gender || 'male', zodiacSign: 'Kim Ngưu', lifePathNumber: 4,
+    tuViNotes: current.tuViNotes || defaultTuViNotes_(),
+    batTuNotes: current.batTuNotes || defaultBatTuNotes_(),
+    horoscopeNotes: current.horoscopeNotes || defaultHoroscopeNotes_(),
+    numerologyNotes: current.numerologyNotes || defaultNumerologyNotes_(),
+    updatedAt: new Date()
+  }));
+  props.setProperty('REFLECTION_DETAILS_2026_SEEDED', '1');
+}
+
+function defaultTuViNotes_() {
+  return `LÁ SỐ TỬ VI PHẠM NGUYỄN GIA ĐẠT — HẠN NĂM 2026, 24 TUỔI MỤ
+Sinh năm 2003 — Quý Mùi. Giới tính Âm Nam. Âm Dương nghịch lý. Cung mệnh Dương Liễu Mộc. Cục Kim Tứ Cục, Cục khắc Mệnh. Thân cư Phu Thê.
+
+Cung Mệnh tại Tý — Giáp Tý — 4 đến 13 tuổi: Vũ Khúc, Thiên Phủ, Thiên Hình, Lộc Tồn, Đào Hoa, Tử Phù, Nguyệt Đức, Bác Sĩ, L.Thiên Khốc, L.Thiên Hư, gặp Triệt.
+Cung Huynh tại Hợi — Quý Hợi — 14 đến 23 tuổi: Thiên Đồng, Đà La, Long Trì, Thiên Giải, Lực Sĩ, Quan Phù, Thiên Khốc, Thiên Quý, Thai Phụ.
+Cung Phu tại Tuất — Nhâm Tuất — 24 đến 33 tuổi: Phá Quân, Hóa Lộc, Địa Giải, Thanh Long, Thiếu Âm, Thiên Trù, Địa Võng.
+Cung Tử tại Dậu — Tân Dậu — 34 đến 43 tuổi: Văn Khúc, Tiểu Hao, Tang Môn, Đẩu Quân, gặp Tuần.
+Cung Tài tại Thân — Canh Thân — 44 đến 53 tuổi: Liêm Trinh, Hồng Loan, Bát Tọa, Tướng Quân, Thiếu Dương, Quốc Ấn, Thiên Không, Cô Thần, Kiếp Sát, L.Tang Môn, L.Thiên Mã, gặp Tuần.
+Cung Tật tại Mùi — Kỷ Mùi — 54 đến 63 tuổi: Tả Phù, Hữu Bật, Hoa Cái, Tấu Thư, Thái Tuế, Phong Cáo, Thiên Tài, Thiên Sứ.
+Cung Thiên tại Ngọ — Mậu Ngọ — 64 đến 73 tuổi: Thất Sát, Địa Không, Tam Thai, Phi Liêm, Trực Phù, Thiên Quan, L.Thái Tuế, L.Kình Dương.
+Cung Nô tại Tỵ — Đinh Tỵ — 74 đến 83 tuổi: Thiên Lương, Văn Xương, Thiên Việt, Hỉ Thần, Điếu Khách, Đường Phù, Thiên Thọ, Thiên Phúc, Thiên Mã, Thiên Thương, L.Lộc Tồn.
+Cung Quan tại Thìn — Bính Thìn — 84 đến 93 tuổi: Tử Vi, Thiên Tướng, Hỏa Tinh, Địa Kiếp, Thiên Riêu, Thiên Y, Bệnh Phù, Phúc Đức, Thiên Đức, Quả Tú, Thiên La, L.Đà La.
+Cung Điền tại Mão — Ất Mão — 94 đến 103 tuổi: Thiên Cơ, Cự Môn, Linh Tinh, Thiên Khôi, Hóa Quyền, Phượng Các, Giải Thần, Đại Hao, Bạch Hổ, Ân Quang, LN.Văn Tinh.
+Cung Phúc tại Dần — Giáp Dần — 104 đến 113 tuổi: Tham Lang, Hóa Kỵ, Thiên Hỉ, Phục Binh, Long Đức, Lưu Hà, L.Bạch Hổ.
+Cung Phụ tại Sửu — Ất Sửu — từ 114 tuổi: Thái Dương, Thái Âm, Kình Dương, Hóa Khoa, Quan Phù, Tuế Phá, Thiên Hư, Phá Toái, gặp Triệt.`;
+}
+
+function defaultBatTuNotes_() {
+  return `BÁT TỰ PHẠM NGUYỄN GIA ĐẠT
+Nam. Dương lịch GMT+7: 10:25, 12/05/2003. Âm lịch: ngày 12 tháng 4 năm 2003. Nhật chủ: Ất Mộc.
+
+TỨ TRỤ NGUYÊN CỤC
+Trụ năm: Quý Mùi — nạp âm Dương Liễu Mộc. Quý: Thiên Ấn. Mùi tàng Kỷ, Đinh, Ất; phó tinh Thiên Tài, Thực Thần, Tỷ Kiên. Vòng Trường Sinh: Mộ.
+Trụ tháng: Đinh Tỵ — nạp âm Sa Trung Thủy. Đinh: Thực Thần. Tỵ tàng Bính, Mậu, Canh; phó tinh Thương Quan, Chính Tài, Chính Quan. Vòng Trường Sinh: Đế Vượng.
+Trụ ngày: Ất Dậu — nạp âm Tuyền Trung Thủy. Ất: Nhật Chủ. Dậu tàng Tân; phó tinh Thất Sát. Vòng Trường Sinh: Tuyệt.
+Trụ giờ: Tân Tỵ — nạp âm Bạch Lạp Thổ. Tân: Thất Sát. Tỵ tàng Bính, Mậu, Canh; phó tinh Thương Quan, Chính Tài, Chính Quan. Vòng Trường Sinh: Mộc Dục.
+
+ĐẠI VẬN
+2 tuổi, 2005–2014: Bính Thìn — Thương Quan.
+12 tuổi, 2015–2024: Ất Mão — Tỷ Kiên.
+22 tuổi, 2025–2034: Giáp Dần — Kiếp Tài.
+32 tuổi, 2035–2044: Quý Sửu — Thiên Ấn.
+42 tuổi, 2045–2054: Nhâm Tý — Chính Ấn.
+52 tuổi, 2055–2064: Tân Hợi — Thất Sát.
+62 tuổi, 2065–2074: Canh Tuất — Chính Quan.
+72 tuổi, 2075–2084: Kỷ Dậu — Thiên Tài.
+82 tuổi, 2085–2094: Mậu Thân — Chính Tài.
+
+Năm xem 2026: Bính Ngọ — Thương Quan. Đại vận hiện tại: Giáp Dần — Kiếp Tài.`;
+}
+
+function defaultHoroscopeNotes_() {
+  return `NATAL CHART — TROPICAL, PLACIDUS
+
+HÀNH TINH
+Sun Taurus 21°01'. Moon Virgo 25°02'. Mercury Taurus 13°28' R. Venus Aries 24°47'. Mars Aquarius 11°48'. Jupiter Leo 10°13'. Saturn Gemini 27°15'. Uranus Pisces 2°33'. Neptune Aquarius 13°12'. Pluto Sagittarius 19°18' R. Lilith Taurus 10°00'. North Node Taurus 29°32'.
+
+NHÀ
+ASC Leo 0°04'. II Leo 27°45'. III Virgo 28°19'. IV Scorpio 0°32'. V Sagittarius 1°50'. VI Capricorn 1°20'. VII Aquarius 0°04'. VIII Aquarius 27°45'. IX Pisces 28°19'. MC Taurus 0°32'. XI Gemini 1°50'. XII Cancer 1°20'.
+
+VỊ TRÍ TRONG NHÀ
+Sun nhà X/MC. Moon nhà II. Mercury nhà X/MC. Venus nhà IX. Mars nhà VII. Jupiter nhà I/ASC. Saturn nhà XI. Uranus nhà VIII. Neptune nhà VII. Pluto nhà V. Lilith nhà X/MC. North Node nhà X/MC.
+
+PHÂN BỐ
+Masculine 6, feminine 4. Fire 3, earth 3, air 3, water 1. Cardinal 1, fixed 5, mutable 4.
+
+GÓC CHIẾU
+Sun trine Moon 4°00' (95); Sun conjunction Mercury 7°34' (176); Sun conjunction North Node 8°31' (53).
+Moon square Saturn 2°13' (-82); Moon square Pluto 5°43' (-5); Moon trine North Node 4°31' (35).
+Mercury square Mars 1°40' (-101); Mercury square Jupiter 3°15' (-60); Mercury square Neptune 0°15' (-96); Mercury conjunction Lilith 3°27' (209).
+Venus sextile Saturn 2°28' (78); Venus trine Pluto 5°29' (18); Venus square ASC 5°17' (-6); Venus conjunction MC 5°45' (83).
+Mars opposition Jupiter 1°35' (-181); Mars conjunction Neptune 1°25' (275); Mars square Lilith 1°47' (-42).
+Jupiter opposition Neptune 2°59' (-94); Jupiter square Lilith 0°13' (-48).
+Saturn trine Uranus 5°19' (24); Saturn opposition Pluto 7°56' (-12); Saturn sextile MC 3°17' (27).
+Uranus square North Node 3°01' (-10); Uranus sextile MC 2°01' (36).
+Neptune square Lilith 3°12' (-9). Lilith conjunction MC 9°29' (0).
+Tổng điểm: dương 1109, âm -746, ròng 363.
+
+Part of Fortune: Sagittarius 4°05'. South Node: Scorpio 29°32'.`;
+}
+
+function defaultNumerologyNotes_() {
+  return `THẦN SỐ HỌC
+Sứ Mệnh Cuộc Đời: 4 (13)
+Tố Chất Tiềm Ẩn: 22
+Động Lực Bên Trong: 11
+Thái Độ Bên Ngoài: 2
+Phản Ứng Ban Đầu: 7
+Mong Muốn Ban Đầu: 1
+Cân Bằng Tâm Lý: 5
+Chỉ Số Phát Triển: 7
+Năng Lượng Thành Phần Nổi Trội: 1, 5, 7
+Năm Thần Số: 9
+Nợ Bài Học: 6`;
 }
 
 function saveReflectionProfile(item) {
