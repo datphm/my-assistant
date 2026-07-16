@@ -10,6 +10,7 @@ const HEADERS = {
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
+  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
@@ -36,9 +37,94 @@ function getData() {
   ensureDefaultFlights_(ss);
   ensureDefaultRoutine_(ss);
   ensureDefaultHealth_(ss);
+  ensureDefaultReflection_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
+  result.dailyguidance = buildDailyGuidance_(ss);
   return result;
+}
+
+function ensureDefaultReflection_(ss) {
+  const sheet = ss.getSheetByName('ReflectionProfile');
+  if (readRows_(sheet).length) return;
+  upsertRow_(sheet, {
+    id: 'default', fullName: 'Phạm Nguyễn Gia Đạt', dateOfBirth: '2003-05-12', birthTime: '10:25:00',
+    birthPlace: '', gender: 'male', zodiacSign: 'Kim Ngưu', lifePathNumber: 4,
+    strengths: 'Vận hành startup, xử lý nhiều đầu việc, giao tiếp và kết nối',
+    interests: 'Vận hành, du lịch, tối ưu hệ thống, công nghệ', workStyle: 'Cần deadline rõ, checklist ngắn và nhắc chủ động',
+    targetIndustries: 'Startup, vận hành, dịch vụ, công nghệ', tuViNotes: '', batTuNotes: '',
+    numerologyNotes: '', horoscopeNotes: '', dailyGuidanceEnabled: 'yes', updatedAt: new Date()
+  });
+}
+
+function saveReflectionProfile(item) {
+  const sheet = getBook_().getSheetByName('ReflectionProfile');
+  const current = readRows_(sheet)[0] || {};
+  const value = Object.assign({}, current, item, {
+    id: 'default', zodiacSign: zodiacSign_(item.dateOfBirth || current.dateOfBirth),
+    lifePathNumber: lifePathNumber_(item.dateOfBirth || current.dateOfBirth), updatedAt: new Date()
+  });
+  upsertRow_(sheet, value);
+  return 'Đã cập nhật hồ sơ định hướng và chiêm nghiệm.';
+}
+
+function zodiacSign_(dateValue) {
+  const date = new Date(dateValue);
+  if (isNaN(date)) return '';
+  const m = date.getUTCMonth() + 1, d = date.getUTCDate();
+  const signs = [[1,20,'Ma Kết','Bảo Bình'],[2,19,'Bảo Bình','Song Ngư'],[3,21,'Song Ngư','Bạch Dương'],[4,20,'Bạch Dương','Kim Ngưu'],[5,21,'Kim Ngưu','Song Tử'],[6,21,'Song Tử','Cự Giải'],[7,23,'Cự Giải','Sư Tử'],[8,23,'Sư Tử','Xử Nữ'],[9,23,'Xử Nữ','Thiên Bình'],[10,23,'Thiên Bình','Bọ Cạp'],[11,22,'Bọ Cạp','Nhân Mã'],[12,22,'Nhân Mã','Ma Kết']];
+  const row = signs[m - 1];
+  return d < row[1] ? row[2] : row[3];
+}
+
+function lifePathNumber_(dateValue) {
+  const digits = String(dateValue || '').replace(/\D/g, '').split('').map(Number);
+  if (!digits.length) return '';
+  let sum = digits.reduce(function(total, value) { return total + value; }, 0);
+  while (sum > 9 && ![11, 22, 33].includes(sum)) sum = String(sum).split('').reduce(function(total, value) { return total + Number(value); }, 0);
+  return sum;
+}
+
+function buildDailyGuidance_(ss) {
+  ensureDefaultReflection_(ss);
+  const profile = readRows_(ss.getSheetByName('ReflectionProfile'))[0] || {};
+  const now = new Date();
+  const tasks = readRows_(ss.getSheetByName('Tasks')).filter(function(task) { return !task.done && task.status !== 'done'; }).sort(function(a, b) {
+    if (!a.dueAt) return 1; if (!b.dueAt) return -1; return new Date(a.dueAt) - new Date(b.dueAt);
+  });
+  const overdue = tasks.filter(function(task) { return task.dueAt && new Date(task.dueAt) <= now; });
+  const focus = overdue[0] || tasks[0] || null;
+  const dateSeed = Number(Utilities.formatDate(now, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyyMMdd'));
+  const headlines = ['Chốt một đầu ra trước khi mở việc mới', 'Chủ động báo tiến độ trước khi bị hỏi', 'Làm bước có thể nhìn thấy trong 10 phút', 'Gọi hoặc hỏi thẳng người đang giữ thông tin', 'Hoàn thành bản đủ dùng trước, tối ưu sau'];
+  const adhdPrompts = ['Đặt hẹn giờ 10 phút và chỉ mở đúng một tài liệu.', 'Viết bước tiếp theo thành một động từ cụ thể.', 'Nếu đang kẹt, gửi một câu hỏi rõ ràng thay vì tiếp tục suy nghĩ một mình.', 'Để điện thoại ngoài tầm tay cho tới khi hết phiên.', 'Gửi recap ba dòng: đã làm gì, còn kẹt gì, khi nào xong.'];
+  const careerFits = careerFits_(profile, readRows_(ss.getSheetByName('CVs')));
+  const reflectionMessages = [
+    'Câu hỏi chiêm nghiệm: hôm nay điều gì cần sự ổn định thay vì thêm ý tưởng mới?',
+    'Câu hỏi chiêm nghiệm: quyết định nào có thể chốt bằng dữ liệu hoặc một cuộc gọi?',
+    'Câu hỏi chiêm nghiệm: bạn đang cố hoàn hảo ở chỗ nào trong khi chỉ cần hoàn thành?',
+    'Câu hỏi chiêm nghiệm: cam kết nhỏ nào bạn chắc chắn giữ được hôm nay?'
+  ];
+  return {
+    date: now.toISOString(), headline: headlines[dateSeed % headlines.length],
+    focusTaskId: focus ? focus.id : '', focusTask: focus ? focus.title : 'Chọn một việc quan trọng cho hôm nay',
+    focusReason: overdue.length ? 'Đây là việc quá hạn gần nhất.' : focus ? 'Đây là deadline gần nhất.' : 'Chưa có deadline mở.',
+    steps: focus ? ['Mở đúng tài liệu hoặc kênh liên quan', 'Làm bước đầu tiên trong 10 phút', 'Gửi cập nhật hoặc câu hỏi chốt ngay sau phiên'] : ['Ghi một đầu ra cần hoàn thành', 'Đặt deadline cụ thể', 'Bắt đầu phiên 10 phút'],
+    adhdPrompt: adhdPrompts[(dateSeed + 1) % adhdPrompts.length], careerFits: careerFits,
+    zodiacSign: profile.zodiacSign || zodiacSign_(profile.dateOfBirth), lifePathNumber: profile.lifePathNumber || lifePathNumber_(profile.dateOfBirth),
+    reflection: reflectionMessages[(dateSeed + 2) % reflectionMessages.length],
+    reflectionDisclaimer: 'Chiêm tinh và thần số học chỉ là nội dung tự suy ngẫm, không phải phương pháp khoa học để dự đoán sự nghiệp hay quyết định quan trọng.'
+  };
+}
+
+function careerFits_(profile, cvs) {
+  const text = [profile.strengths, profile.interests, profile.workStyle, profile.targetIndustries].concat((cvs || []).map(function(cv) { return cv.targetRole; })).join(' ').toLowerCase();
+  const fits = [];
+  if (/vận hành|operation|startup|quy trình|hệ thống/.test(text)) fits.push({ role: 'Operations / Startup Operations', reason: 'Phù hợp với sở thích vận hành, xử lý quy trình và kết nối nhiều đầu việc.' });
+  if (/dự án|project|điều phối|coordinator/.test(text)) fits.push({ role: 'Project Coordinator', reason: 'Tận dụng khả năng theo dõi người phụ trách, deadline và đầu ra.' });
+  if (/giao tiếp|khách hàng|dịch vụ|customer/.test(text)) fits.push({ role: 'Customer Success / Service Operations', reason: 'Kết hợp giao tiếp với xử lý vấn đề và vận hành dịch vụ.' });
+  if (/công nghệ|tech|data|tối ưu|automation/.test(text)) fits.push({ role: 'Business Operations / Automation', reason: 'Phù hợp khi công việc có công cụ, dữ liệu và cải tiến quy trình rõ ràng.' });
+  if (!fits.length) fits.push({ role: 'Operations Coordinator', reason: 'Điểm bắt đầu thực tế để kiểm chứng thế mạnh bằng trải nghiệm và phản hồi công việc.' });
+  return fits.slice(0, 3);
 }
 
 function ensureDefaultHealth_(ss) {
@@ -741,6 +827,29 @@ function sendRoutineReminders_(recipient, now) {
     MailApp.sendEmail(recipient, 'My Assistant · Chỉ cần vận động 10 phút', 'Không cần có động lực trước. Hãy mở My Assistant → Sức khỏe và bắt đầu bài 10 phút ít tác động. Nếu đau ngực, chóng mặt hoặc đau khớp tăng lên, hãy dừng lại.');
     createNotification_('health_move', 'Đến giờ vận động 10 phút', 'Mở tab Sức khỏe và chọn bài dễ nhất.', 'health', 'default', 'high', 'health-move:' + dateKey);
     lastRoutineSent.exercise = dateKey;
+    props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
+  }
+  ensureDefaultReflection_(ss);
+  const reflectionProfile = readRows_(ss.getSheetByName('ReflectionProfile'))[0] || {};
+  const guidanceTime = String(settings.wakeTime || '07:30').slice(0, 5);
+  if (reflectionProfile.dailyGuidanceEnabled !== 'no' && hhmm >= guidanceTime && lastRoutineSent.dailyGuidance !== dateKey) {
+    const guidance = buildDailyGuidance_(ss);
+    const body = [
+      guidance.headline,
+      '',
+      'Việc ưu tiên: ' + guidance.focusTask,
+      guidance.focusReason,
+      '',
+      'Ba bước:',
+      guidance.steps.map(function(step, index) { return (index + 1) + '. ' + step; }).join('\n'),
+      '',
+      'ADHD: ' + guidance.adhdPrompt,
+      '',
+      'My Assistant dùng dữ liệu công việc thực tế cho lời khuyên này; phần chiêm nghiệm trong app không phải dự đoán khoa học.'
+    ].join('\n');
+    MailApp.sendEmail(recipient, 'My Assistant · Ưu tiên hôm nay', body);
+    createNotification_('daily_guidance', guidance.headline, guidance.focusTask, 'career', 'default', 'normal', 'daily-guidance:' + dateKey);
+    lastRoutineSent.dailyGuidance = dateKey;
     props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
   }
 }

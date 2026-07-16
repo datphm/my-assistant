@@ -17,6 +17,14 @@ Một web app riêng cho bạn, mở được trên máy tính và iPhone; dữ 
 - Nút **Nhắc mỗi ngày** tạo lịch vận động 10 phút trên Google Calendar; hệ thống nhắc thông minh cũng email nếu đến giờ mà chưa có phiên đi bộ/thể dục trong ngày.
 - Đây là công cụ hỗ trợ thói quen, không thay thế bác sĩ hoặc chuyên gia dinh dưỡng. Nếu có bệnh nền, đau khớp, đau ngực, chóng mặt hoặc khó thở bất thường, hãy dừng tập và tìm tư vấn y tế phù hợp.
 
+## CV, định hướng nghề nghiệp và chiêm nghiệm
+
+- Phần **Định hướng & chiêm nghiệm** trong tab CV lưu tên, ngày/giờ/nơi sinh, thế mạnh, sở thích nghề nghiệp, môi trường làm việc phù hợp và nội dung tử vi, bát tự, thần số học hoặc horoscope mà người dùng chủ động dán vào.
+- Cung Mặt Trời và số đường đời cơ bản được tính tự động. Tử vi và bát tự không được tự dựng khi thiếu dữ liệu; giao diện hiển thị rõ mục nào đang chờ người dùng bổ sung.
+- Gợi ý ngành nghề dùng CV, vai trò hướng tới, sở thích và thế mạnh thực tế. Dữ liệu chiêm tinh không được dùng để xếp hạng nghề nghiệp, tuyển dụng, tài chính hoặc sức khỏe.
+- Mỗi ngày app chọn một deadline thực tế, đưa ba bước hành động và một gợi ý ADHD ngắn. Nếu bật email lời khuyên hằng ngày và đã cài trigger nhắc thông minh, bản tóm tắt được gửi sau giờ thức dậy mục tiêu.
+- Chiêm tinh và thần số học trong app là nội dung tự suy ngẫm/giải trí, không phải phương pháp khoa học để dự đoán tương lai hoặc thay thế tư vấn chuyên môn.
+
 ## Cách dùng đơn giản nhất
 
 GitHub **không** cài app vào iPhone. GitHub dùng để lưu mã nguồn. Cách đơn giản và miễn phí là triển khai app này thành Google Apps Script Web App, rồi mở cùng một link trên Mac và iPhone.

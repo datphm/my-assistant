@@ -1,5 +1,5 @@
 <script>
-let data={tasks:[],debts:[],meals:[],healthprofile:[],weightlogs:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
+let data={tasks:[],debts:[],meals:[],healthprofile:[],weightlogs:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],reflectionprofile:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
@@ -121,6 +121,7 @@ function readNotification(id){google.script.run.withSuccessHandler(load).withFai
 function openNotificationTarget(type,id){
   if(type==='flight'){activatePage('travel');setTimeout(()=>$('upcomingFlightPlan')?.scrollIntoView({behavior:'smooth'}),50);return}
   if(type==='health'){activatePage('food');setTimeout(()=>$('workoutSuggestions')?.scrollIntoView({behavior:'smooth'}),50);return}
+  if(type==='career'){activatePage('cv');setTimeout(()=>$('dailyGuidance')?.scrollIntoView({behavior:'smooth'}),50);return}
   activatePage('today');
   setTimeout(()=>document.querySelector(`[onclick="editItem('task','${id}')"]`)?.closest('.card')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
 }
@@ -190,7 +191,14 @@ function renderAllocation(periodTx){
   $('allocationChart').innerHTML=`<div class="chart-wrap"><div class="donut" style="background:conic-gradient(${segments.join(',')})"><div><b>${spending.length?vnd(total):Math.round(total)+'%'}</b><span>${spending.length?'đã chi':'mục tiêu'}</span></div></div><div class="legend"><p class="meta">${label}</p>${entries.map(([name,value],i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${esc(name)}</span><b>${spending.length?vnd(value):Math.round(value/total*100)+'%'}</b></div>`).join('')}</div></div>`;
 }
 
-function renderCvs(){$('cvs').innerHTML=data.cvs.map(cv=>`<article class="card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · ${esc(cv.fileName||'Bản text')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><button class="outline small" onclick="editCv('${cv.id}')">Cập nhật</button></div>${cv.content?`<p class="cv-preview">${esc(cv.content).slice(0,260)}${cv.content.length>260?'...':''}</p>`:''}${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở file CV trên Google Drive ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>'}
+function renderCvs(){
+  $('cvs').innerHTML=data.cvs.map(cv=>`<article class="card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · ${esc(cv.fileName||'Bản text')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><button class="outline small" onclick="editCv('${cv.id}')">Cập nhật</button></div>${cv.content?`<p class="cv-preview">${esc(cv.content).slice(0,260)}${cv.content.length>260?'...':''}</p>`:''}${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở file CV trên Google Drive ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>';
+  const p=(data.reflectionprofile||[])[0]||{},g=data.dailyguidance||{};
+  $('dailyGuidance').innerHTML=`<article class="card guidance-card"><span class="pill">THÔNG ĐIỆP THỰC TẾ HÔM NAY</span><h2>${esc(g.headline||'Chốt một đầu ra trước khi mở việc mới')}</h2><div class="guidance-focus"><small>VIỆC ƯU TIÊN</small><b>${esc(g.focusTask||'Chọn một việc quan trọng')}</b><span>${esc(g.focusReason||'')}</span></div><ol>${(g.steps||[]).map(step=>`<li>${esc(step)}</li>`).join('')}</ol><div class="adhd-nudge"><b>Gợi ý ADHD</b><span>${esc(g.adhdPrompt||'Đặt hẹn giờ 10 phút và chỉ làm bước đầu tiên.')}</span></div>${g.focusTaskId?`<button onclick="activatePage('today')">Mở danh sách việc</button>`:''}</article>`;
+  $('careerAnalysis').innerHTML=`<article class="card"><span class="section-kicker">PHÂN TÍCH NGHỀ NGHIỆP THEO DỮ LIỆU</span><h3>Nhóm vai trò nên kiểm chứng</h3><p class="meta">Dựa trên CV, sở thích và thế mạnh bạn nhập — không dựa trên tử vi.</p><div class="career-fits">${(g.careerFits||[]).map(f=>`<div><b>${esc(f.role)}</b><span>${esc(f.reason)}</span></div>`).join('')||'<p class="meta">Cập nhật hồ sơ để nhận gợi ý.</p>'}</div></article>`;
+  const noteStatus=value=>value?'<span class="status-badge ok">ĐÃ CÓ DỮ LIỆU</span>':'<span class="status-badge warning">CHỜ BẠN DÁN</span>';
+  $('reflectionProfile').innerHTML=`<article class="card reflection-card"><span class="section-kicker">GÓC CHIÊM NGHIỆM</span><h3>${esc(p.fullName||'Phạm Nguyễn Gia Đạt')}</h3><p class="meta">${p.dateOfBirth?dateShort(p.dateOfBirth):'12/05/2003'} · ${esc(String(p.birthTime||'10:25').slice(0,5))}${p.birthPlace?' · '+esc(p.birthPlace):' · chưa nhập nơi sinh'}</p><div class="reflection-numbers"><span><small>HOROSCOPE</small><b>${esc(g.zodiacSign||p.zodiacSign||'Kim Ngưu')}</b></span><span><small>THẦN SỐ HỌC</small><b>Đường đời ${esc(g.lifePathNumber||p.lifePathNumber||4)}</b></span></div><div class="reflection-status"><p>Tử vi ${noteStatus(p.tuViNotes)}</p><p>Bát tự ${noteStatus(p.batTuNotes)}</p><p>Thần số học ${noteStatus(p.numerologyNotes)}</p><p>Horoscope ${noteStatus(p.horoscopeNotes)}</p></div><blockquote>${esc(g.reflection||'Hôm nay điều gì cần sự ổn định thay vì thêm ý tưởng mới?')}</blockquote><p class="reflection-disclaimer">${esc(g.reflectionDisclaimer||'Nội dung này chỉ để tự suy ngẫm.')}</p></article>`;
+}
 function renderHealth(){
   const h=(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',exerciseTime:'18:30'};
   const logs=(data.weightlogs||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -302,6 +310,7 @@ const fields={
  expense:[['date','Ngày giao dịch','date'],['amount','Số tiền','number'],['direction','Loại','select','expense,income'],['merchant','Nơi chi / ghi chú','text'],['category','Nhóm','select','Ăn uống,Di chuyển,Hóa đơn,Mua sắm,Sức khỏe,Công việc,Trả nợ,Khác'],['walletId','Từ ví / tài khoản','wallet'],['debtId','Khoản nợ được trả (nếu có)','debt']],
  allocation:[['name','Tên mục tiêu','text'],['percent','Tỷ trọng (%)','number'],['color','Màu','color']],
  cv:[['title','Tên CV / phiên bản','text'],['targetRole','Vai trò hướng tới','text'],['content','Nội dung hoặc ghi chú thay đổi','textarea'],['driveUrl','Link Google Drive / Docs (nếu có)','url'],['cvFile','Upload file PDF CV','file']],
+ reflection:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh dương lịch','date'],['birthTime','Giờ sinh','time'],['birthPlace','Nơi sinh (thành phố, quốc gia)','text'],['gender','Giới tính dùng khi lập lá số','select','male,female,other'],['strengths','Thế mạnh thực tế','textarea'],['interests','Sở thích nghề nghiệp','textarea'],['workStyle','Môi trường/cách làm việc phù hợp','textarea'],['targetIndustries','Ngành muốn thử','textarea'],['tuViNotes','Dán toàn bộ nội dung tử vi','textarea'],['batTuNotes','Dán toàn bộ nội dung bát tự','textarea'],['numerologyNotes','Dán phân tích thần số học','textarea'],['horoscopeNotes','Dán horoscope/bản đồ sao','textarea'],['dailyGuidanceEnabled','Email lời khuyên hằng ngày','select','yes,no']],
  profile:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh','date'],['bloodType','Nhóm máu','select','Chưa rõ,A+,A−,B+,B−,AB+,AB−,O+,O−'],['emergencyContact','Liên hệ khẩn cấp','text'],['medicalNotes','Ghi chú sức khỏe','textarea']],
  routine:[['breakfastTime','Giờ ăn sáng','time'],['lunchTime','Giờ ăn trưa','time'],['dinnerTime','Giờ ăn tối','time'],['bedtime','Giờ bắt đầu đi ngủ','time'],['wakeTime','Giờ thức dậy mục tiêu','time'],['targetSleepHours','Mục tiêu ngủ mỗi đêm (giờ)','number'],['sleepLatencyMinutes','Thời gian để ngủ (phút)','number'],['logIntervalMinutes','Hỏi log lại sau (phút)','number']],
  plan:[['name','Tên kế hoạch','text'],['type','Loại','select','trip,purchase,education,health,other'],['targetDate','Ngày cần tiền','date'],['estimatedCost','Tổng chi phí dự kiến','number'],['savedAmount','Đã dành sẵn','number'],['priority','Ưu tiên','select','high,medium,low'],['notes','Ghi chú / các khoản cấu thành','textarea']]
@@ -309,6 +318,7 @@ const fields={
 
 function openProfileForm(){openForm('profile',data.profile[0]||{})}
 function openHealthForm(){openForm('healthProfile',(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',exerciseTime:'18:30'})}
+function openReflectionForm(){openForm('reflection',(data.reflectionprofile||[])[0]||{fullName:'Phạm Nguyễn Gia Đạt',dateOfBirth:'2003-05-12',birthTime:'10:25',dailyGuidanceEnabled:'yes'})}
 function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
 function editItem(kind,id){
   const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans]};
@@ -318,7 +328,7 @@ function editItem(kind,id){
 }
 function openForm(type,item={}){
   currentType=type;editingId=item.id||'';
-  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',weightLog:'Ghi cân nặng',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',weightLog:'Ghi cân nặng',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
@@ -332,7 +342,7 @@ function fieldHtml(name,label,input,options,value){
   if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
   let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
   const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#245647"':'';
-  const optional=['terminal','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl'];
+  const optional=['terminal','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl','birthPlace'];
   return `<div class="field"><label>${label}</label><input ${input==='color'||optional.includes(name)?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
 }
 function saveForm(event){
@@ -344,6 +354,7 @@ function saveForm(event){
   if(currentType==='cv'){saveCvForm(event.target,item);return}
   const runner=google.script.run.withSuccessHandler(result=>{formDialog.close();toast(result&&result.calendarWarning?'Đã lưu việc; hãy bấm Calendar để cấp lại quyền Google.':'Đã lưu và đồng bộ');load()}).withFailureHandler(fail);
   if(currentType==='profile'){runner.saveProfile(item);return}
+  if(currentType==='reflection'){runner.saveReflectionProfile(item);return}
   if(currentType==='healthProfile'){runner.saveHealthProfile(item);return}
   if(currentType==='weightLog'){runner.logWeight(item);return}
   if(currentType==='routine'){runner.saveRoutineSettings(item);return}
@@ -352,7 +363,7 @@ function saveForm(event){
   const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
-function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ'}[o]||o}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',male:'Nam',female:'Nữ',yes:'Bật',no:'Tắt',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ'}[o]||o}
 function removeItem(type,id){if(!confirm('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
 function removeWeight(id){if(!confirm('Xoá lần cân này?'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWeightLog(id)}
 function removeWallet(id){if(!confirm('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
