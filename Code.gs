@@ -380,6 +380,13 @@ function installReminderTrigger() {
   return 'Đã bật nhắc chủ động: việc thường mỗi 2 giờ, việc Bám đuổi mỗi 15 phút.';
 }
 
+function authorizeReminderServices() {
+  const calendarName = CalendarApp.getDefaultCalendar().getName();
+  const quota = MailApp.getRemainingDailyQuota();
+  installReminderTrigger();
+  return `Đã kết nối Calendar “${calendarName}” và bật nhắc chủ động. Hạn mức email còn lại hôm nay: ${quota}.`;
+}
+
 function uninstallReminderTrigger() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
   return 'Đã tắt email nhắc việc.';
