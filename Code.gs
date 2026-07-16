@@ -2,7 +2,7 @@ const HEADERS = {
   Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
-  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId'],
+  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
@@ -12,7 +12,8 @@ const HEADERS = {
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
   RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'updatedAt'],
-  Plans: ['id', 'name', 'type', 'targetDate', 'estimatedCost', 'savedAmount', 'priority', 'notes']
+  Plans: ['id', 'name', 'type', 'targetDate', 'estimatedCost', 'savedAmount', 'priority', 'notes'],
+  Notifications: ['id', 'type', 'title', 'message', 'targetType', 'targetId', 'priority', 'dedupeKey', 'createdAt', 'readAt']
 };
 
 function doGet(e) {
@@ -153,6 +154,9 @@ function addItem(type, item) {
   if (type === 'Tasks' && item.dueAt) {
     try { syncTaskToCalendar(id); } catch (error) { calendarWarning = error.message || String(error); }
   }
+  if (type === 'Flights' && item.departure) {
+    try { syncFlightToCalendar_(id); } catch (error) { calendarWarning = error.message || String(error); }
+  }
   return { ok: true, id: id, calendarWarning: calendarWarning };
 }
 
@@ -168,6 +172,9 @@ function updateItem(type, item) {
   let calendarWarning = '';
   if (type === 'Tasks' && item.dueAt) {
     try { syncTaskToCalendar(item.id); } catch (error) { calendarWarning = error.message || String(error); }
+  }
+  if (type === 'Flights' && item.departure) {
+    try { syncFlightToCalendar_(item.id); } catch (error) { calendarWarning = error.message || String(error); }
   }
   return { ok: true, calendarWarning: calendarWarning };
 }
@@ -381,17 +388,28 @@ function importTravelFromGmail(query) {
   const ss = getBook_();
   const flightSheet = ss.getSheetByName('Flights');
   const hotelSheet = ss.getSheetByName('Hotels');
-  const importedFlights = new Set(readRows_(flightSheet).map(row => row.gmailMessageId).filter(Boolean));
+  const currentFlights = readRows_(flightSheet);
+  const importedFlights = new Set(currentFlights.map(row => row.gmailMessageId).filter(Boolean));
   const importedHotels = new Set(readRows_(hotelSheet).map(row => row.gmailMessageId).filter(Boolean));
   const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
-  let flights = 0, hotels = 0;
+  let flights = 0, updatedFlights = 0, hotels = 0;
   messages.forEach(message => {
     const body = message.getPlainBody();
     const text = message.getSubject() + '\n' + body;
     const flight = parseFlightEmail_(text, message);
     if (flight && !importedFlights.has(message.getId())) {
-      flightSheet.appendRow(HEADERS.Flights.map(key => flight[key] === undefined ? '' : flight[key]));
-      flights++;
+      const match = findMatchingFlight_(currentFlights, flight);
+      if (match) {
+        const merged = Object.assign({}, match, compactObject_(flight), { id: match.id, lastCheckedAt: new Date() });
+        upsertRow_(flightSheet, merged);
+        Object.assign(match, merged);
+        updatedFlights++;
+      } else {
+        flightSheet.appendRow(HEADERS.Flights.map(key => flight[key] === undefined ? '' : flight[key]));
+        currentFlights.push(flight);
+        flights++;
+      }
+      importedFlights.add(message.getId());
     }
     const hotel = parseHotelEmail_(text, message);
     if (hotel && !importedHotels.has(message.getId())) {
@@ -399,7 +417,29 @@ function importTravelFromGmail(query) {
       hotels++;
     }
   });
-  return { flights, hotels };
+  syncFutureFlightsToCalendar_();
+  return { flights, updatedFlights, hotels };
+}
+
+function compactObject_(value) {
+  const result = {};
+  Object.keys(value || {}).forEach(function(key) {
+    if (value[key] !== '' && value[key] !== null && value[key] !== undefined) result[key] = value[key];
+  });
+  return result;
+}
+
+function findMatchingFlight_(rows, flight) {
+  const code = String(flight.code || '').replace(/\s+/g, '').toUpperCase();
+  if (!code) return null;
+  const target = flight.departure ? new Date(flight.departure) : null;
+  return rows.filter(function(row) {
+    if (String(row.code || '').replace(/\s+/g, '').toUpperCase() !== code) return false;
+    if (!target || !row.departure) return true;
+    return Math.abs(new Date(row.departure) - target) <= 3 * 86400000;
+  }).sort(function(a, b) {
+    return Math.abs(new Date(a.departure) - target) - Math.abs(new Date(b.departure) - target);
+  })[0] || null;
 }
 
 function installTravelSync(query) {
@@ -407,7 +447,8 @@ function installTravelSync(query) {
   PropertiesService.getUserProperties().setProperty('TRAVEL_SYNC_QUERY', query);
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncTravelEmailsAutomatically').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('syncTravelEmailsAutomatically').timeBased().everyHours(2).create();
-  return 'Đã bật đồng bộ email chuyến bay / khách sạn mỗi 2 tiếng.';
+  installReminderTrigger();
+  return 'Đã bật rà email chuyến bay / khách sạn mỗi 2 tiếng và nhắc check-in trước 24 giờ.';
 }
 
 function syncTravelEmailsAutomatically() {
@@ -416,30 +457,198 @@ function syncTravelEmailsAutomatically() {
   return importTravelFromGmail(query);
 }
 
+function reviewFutureFlights() {
+  const query = PropertiesService.getUserProperties().getProperty('TRAVEL_SYNC_QUERY');
+  const imported = query ? importTravelFromGmail(query) : { flights: 0, updatedFlights: 0, hotels: 0 };
+  const synced = syncFutureFlightsToCalendar_();
+  const future = readRows_(getBook_().getSheetByName('Flights')).filter(function(flight) {
+    return flight.departure && new Date(flight.departure) > new Date() && flight.status !== 'cancelled';
+  });
+  return {
+    futureFlights: future.length,
+    newFlights: imported.flights || 0,
+    updatedFlights: imported.updatedFlights || 0,
+    calendarSynced: synced
+  };
+}
+
+function syncFutureFlightsToCalendar_() {
+  const flights = readRows_(getBook_().getSheetByName('Flights'));
+  const now = new Date();
+  let count = 0;
+  flights.forEach(function(flight) {
+    if (!flight.departure || new Date(flight.departure) <= now || flight.status === 'cancelled') return;
+    try { syncFlightToCalendar_(flight.id); count++; } catch (error) { console.error(error); }
+  });
+  return count;
+}
+
+function syncFlightToCalendar_(id) {
+  const sheet = getBook_().getSheetByName('Flights');
+  const flight = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!flight || !flight.departure) throw new Error('Chuyến bay chưa có giờ khởi hành.');
+  const departure = new Date(flight.departure);
+  const arrival = flightArrivalDate_(departure, flight.arrTime);
+  const cal = CalendarApp.getDefaultCalendar();
+  let event = null;
+  if (flight.calendarEventId) {
+    try { event = cal.getEventById(flight.calendarEventId); } catch (error) { event = null; }
+  }
+  const title = '✈️ ' + (flight.code || 'Chuyến bay') + ' · ' + (flight.fromCode || '?') + ' → ' + (flight.toCode || flight.destination || '?');
+  const checkin = new Date(departure.getTime() - 24 * 60 * 60 * 1000);
+  const type = flightType_(flight);
+  const airportLead = type === 'international' ? 180 : 120;
+  const travelMinutes = Number(flight.airportTravelMinutes || 45);
+  const checkinUrl = flight.checkinUrl || airlineCheckinUrl_(flight.code);
+  const leaveAt = new Date(departure.getTime() - (airportLead + travelMinutes) * 60000);
+  const description = [
+    'My Assistant · lịch trình tự tính',
+    'Mở check-in online: ' + formatDateTime_(checkin),
+    'Nên rời đi: ' + formatDateTime_(leaveAt),
+    'Có mặt sân bay trước: ' + airportLead + ' phút',
+    flight.terminal ? 'Nhà ga: ' + flight.terminal : '',
+    flight.bookingRef ? 'Mã đặt chỗ: ' + flight.bookingRef : '',
+    checkinUrl ? 'Check-in: ' + checkinUrl : '',
+    flight.note || ''
+  ].filter(String).join('\n');
+  if (event) {
+    event.setTitle(title);
+    event.setTime(departure, arrival);
+    event.setDescription(description);
+  } else {
+    event = cal.createEvent(title, departure, arrival, { description: description });
+  }
+  event.removeAllReminders();
+  [1440, type === 'international' ? 240 : 180, 120].forEach(function(minutes) {
+    try { event.addPopupReminder(minutes); } catch (error) {}
+  });
+  upsertRow_(sheet, Object.assign({}, flight, {
+    flightType: flight.flightType || type,
+    airportTravelMinutes: flight.airportTravelMinutes || 45,
+    checkinUrl: checkinUrl,
+    status: flight.status || 'scheduled',
+    calendarEventId: event.getId(),
+    lastCheckedAt: new Date()
+  }));
+  return event.getId();
+}
+
+function airlineCheckinUrl_(code) {
+  const prefix = (String(code || '').match(/^[A-Z0-9]{2}/) || [''])[0].toUpperCase();
+  const urls = {
+    VJ: 'https://www.vietjetair.com/vi/checkin',
+    VN: 'https://www.vietnamairlines.com/vn/vi/travel-information/check-in/online-check-in',
+    QH: 'https://www.bambooairways.com/vn-vi/check-in',
+    VU: 'https://www.vietravelairlines.com/vn/vi/check-in',
+    AK: 'https://www.airasia.com/check-in/',
+    FD: 'https://www.airasia.com/check-in/',
+    TR: 'https://www.flyscoot.com/en/check-in',
+    SQ: 'https://www.singaporeair.com/check-in',
+    MH: 'https://www.malaysiaairlines.com/check-in'
+  };
+  return urls[prefix] || '';
+}
+
+function flightArrivalDate_(departure, arrTime) {
+  const arrival = new Date(departure);
+  const parts = String(arrTime || '').match(/(\d{1,2}):(\d{2})/);
+  if (!parts) return new Date(departure.getTime() + 2 * 60 * 60 * 1000);
+  arrival.setHours(Number(parts[1]), Number(parts[2]), 0, 0);
+  if (arrival <= departure) arrival.setDate(arrival.getDate() + 1);
+  return arrival;
+}
+
+function flightType_(flight) {
+  if (flight.flightType === 'domestic' || flight.flightType === 'international') return flight.flightType;
+  const vn = ['HAN','SGN','DAD','HPH','DIN','VCL','VCS','VTG','HUI','CXR','PQC','UIH','BMV','THD','VII'];
+  return vn.includes(String(flight.fromCode || '').toUpperCase()) && vn.includes(String(flight.toCode || '').toUpperCase()) ? 'domestic' : 'international';
+}
+
+function formatDateTime_(value) {
+  return Utilities.formatDate(new Date(value), Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy HH:mm');
+}
+
 function uninstallTravelSync() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncTravelEmailsAutomatically').forEach(t => ScriptApp.deleteTrigger(t));
   return 'Đã tắt đồng bộ email chuyến bay / khách sạn.';
 }
 
 function sendDueTaskReminders() {
-  const sheet = getBook_().getSheetByName('Tasks');
+  const ss = getBook_();
+  const sheet = ss.getSheetByName('Tasks');
   const rows = readRows_(sheet);
   const now = new Date();
   const recipient = Session.getEffectiveUser().getEmail();
   if (!recipient) throw new Error('Hãy triển khai app trong tài khoản Google Workspace của bạn để gửi email nhắc việc.');
   rows.forEach((task, i) => {
+    if (!task.dueAt || task.done || task.status === 'done') return;
     const due = new Date(task.dueAt);
     const last = task.lastEmailedAt ? new Date(task.lastEmailedAt) : null;
     const snoozed = task.snoozedUntil && new Date(task.snoozedUntil) > now;
-    const overdue = !task.done && !task.startedAt && !snoozed && due <= now;
+    if (snoozed) return;
+    const delta = due - now;
+    const overdue = delta <= 0;
+    const dueSoon = delta > 0 && delta <= 30 * 60 * 1000;
+    const forgotten = delta <= -24 * 60 * 60 * 1000 && !task.startedAt;
+    if (dueSoon) createNotification_('due_30m', 'Còn dưới 30 phút', task.title, 'task', task.id, 'high', 'due30:' + task.id);
+    if (overdue) createNotification_(forgotten ? 'forgotten_task' : 'overdue', forgotten ? 'Việc có nguy cơ bị quên' : 'Việc đã quá hạn', task.title, 'task', task.id, forgotten ? 'critical' : 'high', (forgotten ? 'forgotten:' : 'overdue:') + task.id);
     const interval = task.chaseMode === 'urgent' ? 15 * 60 * 1000 : 2 * 60 * 60 * 1000;
     const canRepeat = !last || (now - last) >= interval;
-    if (!overdue || !canRepeat) return;
+    if ((!overdue && !dueSoon) || !canRepeat || task.startedAt) return;
     const urgent = task.chaseMode === 'urgent';
-    MailApp.sendEmail(recipient, `${urgent ? 'KHẨN · ' : ''}My Assistant: ${task.title}`, `Đến giờ: ${task.title}\n\nBước duy nhất lúc này: mở việc và làm ${task.minutes || 10} phút.\n\nBấm “Đã bắt đầu” trong My Assistant để dừng chuỗi nhắc, hoặc ✓ khi hoàn thành.`);
+    const prefix = forgotten ? 'VIỆC BỊ QUÊN · ' : urgent ? 'KHẨN · ' : dueSoon ? 'CÒN 30 PHÚT · ' : '';
+    MailApp.sendEmail(recipient, `${prefix}My Assistant: ${task.title}`, `${dueSoon ? 'Sắp đến hạn' : 'Đến giờ'}: ${task.title}\n\nBước duy nhất lúc này: mở việc và làm ${task.minutes || 10} phút.\n\nBấm “Đã bắt đầu” trong My Assistant để dừng chuỗi nhắc, hoặc ✓ khi hoàn thành.`);
     sheet.getRange(i + 2, 7).setValue(now);
   });
+  sendFlightReminders_(recipient, now);
   sendRoutineReminders_(recipient, now);
+}
+
+function createNotification_(type, title, message, targetType, targetId, priority, dedupeKey) {
+  const sheet = getBook_().getSheetByName('Notifications');
+  const existing = readRows_(sheet).some(function(item) { return item.dedupeKey === dedupeKey; });
+  if (existing) return false;
+  const value = { id: Utilities.getUuid(), type, title, message, targetType, targetId, priority: priority || 'normal', dedupeKey, createdAt: new Date(), readAt: '' };
+  sheet.appendRow(HEADERS.Notifications.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  return true;
+}
+
+function markNotificationRead(id) {
+  const sheet = getBook_().getSheetByName('Notifications');
+  const item = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!item) throw new Error('Không tìm thấy thông báo.');
+  upsertRow_(sheet, Object.assign({}, item, { readAt: new Date() }));
+  return { ok: true };
+}
+
+function sendFlightReminders_(recipient, now) {
+  const flights = readRows_(getBook_().getSheetByName('Flights'));
+  const props = PropertiesService.getUserProperties();
+  const sent = JSON.parse(props.getProperty('FLIGHT_REMINDERS_SENT') || '{}');
+  flights.forEach(function(flight) {
+    if (!flight.departure || flight.status === 'cancelled') return;
+    const departure = new Date(flight.departure);
+    if (departure <= now) return;
+    const hours = (departure - now) / 3600000;
+    const key = String(flight.id || flight.code);
+    if (hours <= 24 && !sent[key + ':checkin']) {
+      const checkinLink = flight.checkinUrl ? '\nCheck-in: ' + flight.checkinUrl : '';
+      MailApp.sendEmail(recipient, 'CHECK-IN · ' + (flight.code || 'Chuyến bay') + ' ' + (flight.fromCode || '') + ' → ' + (flight.toCode || ''), 'Đã đến cửa sổ check-in online trước 24 giờ.\nKhởi hành: ' + formatDateTime_(departure) + checkinLink + '\n\nKiểm tra lại giờ bay, nhà ga, hành lý và giấy tờ ngay bây giờ.');
+      createNotification_('flight_checkin', 'Đã mở check-in online', (flight.code || 'Chuyến bay') + ' · ' + formatDateTime_(departure), 'flight', flight.id, 'critical', 'flight-checkin:' + key);
+      sent[key + ':checkin'] = now.getTime();
+    }
+    const type = flightType_(flight);
+    const lead = type === 'international' ? 4 : 3;
+    if (hours <= lead && !sent[key + ':leave']) {
+      const travel = Number(flight.airportTravelMinutes || 45);
+      const airportLead = type === 'international' ? 180 : 120;
+      const leaveAt = new Date(departure.getTime() - (travel + airportLead) * 60000);
+      MailApp.sendEmail(recipient, 'SẮP RA SÂN BAY · ' + (flight.code || 'Chuyến bay'), 'Giờ nên rời đi: ' + formatDateTime_(leaveAt) + '\nGiờ bay: ' + formatDateTime_(departure) + '\n\nKiểm tra: giấy tờ, hành lý, nhà ga, phương tiện di chuyển và tình trạng chuyến bay.');
+      createNotification_('flight_leave', 'Chuẩn bị ra sân bay', 'Nên rời đi lúc ' + formatDateTime_(leaveAt), 'flight', flight.id, 'critical', 'flight-leave:' + key);
+      sent[key + ':leave'] = now.getTime();
+    }
+  });
+  props.setProperty('FLIGHT_REMINDERS_SENT', JSON.stringify(sent));
 }
 
 function sendRoutineReminders_(recipient, now) {
@@ -525,6 +734,14 @@ function authorizeReminderServices() {
   const quota = MailApp.getRemainingDailyQuota();
   installReminderTrigger();
   return `Đã kết nối Calendar “${calendarName}” và bật nhắc chủ động. Hạn mức email còn lại hôm nay: ${quota}.`;
+}
+
+function enableSmartReminders() {
+  const calendarName = CalendarApp.getDefaultCalendar().getName();
+  installReminderTrigger();
+  installRoutineCalendar();
+  const flights = syncFutureFlightsToCalendar_();
+  return `Đã bật hệ thống nhắc thông minh qua Calendar “${calendarName}” + email: deadline 30 phút, quá hạn, việc bị quên, điểm neo sinh hoạt và ${flights} chuyến bay tương lai.`;
 }
 
 function uninstallReminderTrigger() {
@@ -660,6 +877,11 @@ function parseFlightEmail_(text, message) {
   if (!flight) return null;
   const airports = (text.match(/\b[A-Z]{3}\b/g) || []).filter(code => knownAirports_().includes(code));
   const date = parseTravelDate_(text) || message.getDate();
+  const times = (text.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/g) || []).slice(0, 2);
+  if (times[0]) {
+    const parts = times[0].split(':').map(Number);
+    date.setHours(parts[0], parts[1], 0, 0);
+  }
   const fromCode = airports[0] || '';
   const toCode = airports.find(code => code !== fromCode) || '';
   const distance = fromCode && toCode ? distanceForRoute_(fromCode, toCode) : 0;
@@ -673,14 +895,17 @@ function parseFlightEmail_(text, message) {
     fromCode,
     toCode,
     distanceKm: distance,
-    depTime: '',
-    arrTime: '',
+    depTime: times[0] || '',
+    arrTime: times[1] || '',
     airline: airlineFromCode_(flight[1]),
     aircraft: '',
     seat: '',
-    note: 'Imported from Gmail',
+    note: /cancel|huỷ|hủy/i.test(text) ? 'Hãng báo huỷ chuyến trong email' : /delay|trễ|thay đổi giờ|reschedul/i.test(text) ? 'Hãng báo thay đổi / chậm giờ trong email' : 'Imported from Gmail',
     source: 'Gmail travel import',
-    gmailMessageId: message.getId()
+    gmailMessageId: message.getId(),
+    status: /cancel|huỷ|hủy/i.test(text) ? 'cancelled' : /delay|trễ/i.test(text) ? 'delayed' : /thay đổi giờ|reschedul/i.test(text) ? 'changed' : 'scheduled',
+    bookingRef: (text.match(/(?:booking|mã đặt chỗ|reservation|pnr|confirmation)[^A-Z0-9]{0,20}([A-Z0-9]{5,8})/i) || [])[1] || '',
+    lastCheckedAt: new Date()
   };
 }
 

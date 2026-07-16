@@ -4,6 +4,9 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0e203c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="My Assistant">
   <link rel="icon" href="https://datphm.github.io/my-assistant/logo.png">
   <link rel="apple-touch-icon" href="https://datphm.github.io/my-assistant/logo-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +21,7 @@
         <div><h1>My Assistant <span class="build-badge">THINK DEEP · LIVE</span></h1><p>Việc ít hơn. Đúng lúc hơn.</p></div>
       </div>
       <div class="header-actions">
-        <button class="quiet" onclick="connectReminderServices()">Bật push Calendar</button>
+        <button class="quiet primary-reminder" onclick="enableSmartRemindersUi()">Bật hệ thống nhắc</button>
         <button class="quiet" onclick="enableEmails()">Bật nhắc chủ động</button>
         <button class="quiet danger" onclick="disableEmails()">Tắt email nhắc</button>
       </div>
@@ -42,6 +45,7 @@
         <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
         <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
       </article>
+      <section id="notificationCenter" class="notification-center"></section>
       <article class="card think-deep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
         <h2>Đừng chỉ nhận việc. Hãy chốt đầu ra.</h2>
@@ -131,7 +135,7 @@
     <section id="travel" class="page">
       <div class="section-head">
         <h2>Chuyến đi</h2>
-        <div class="actions"><button class="outline" onclick="importTravel()">Nhập Gmail</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
+        <div class="actions"><button class="outline" onclick="reviewFutureFlightsUi()">Rà lại lịch bay</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
       </div>
       <p class="hint">Đã nạp sẵn list chuyến bay từ file PDF bạn gửi. Gmail chỉ quét khi bạn nhập query, ví dụ từ hãng bay/Booking/Agoda trong 2 năm.</p>
       <div class="inline wrap travel-tools">
@@ -141,6 +145,7 @@
         <button class="outline danger" onclick="disableTravelSync()">Tắt tự động</button>
       </div>
       <div id="travelInsights" class="insight-grid"></div>
+      <div id="upcomingFlightPlan" class="cards flight-plans"></div>
       <h3>Chuyến bay</h3>
       <div id="flights" class="cards"></div>
       <div class="section-head subhead"><h3>Khách sạn</h3><button class="outline" onclick="openForm('hotel')">+ Khách sạn</button></div>
@@ -196,10 +201,10 @@
         <article class="card install-card">
           <span class="pill">Thông báo</span>
           <h3>Push notification & nhắc nền</h3>
-          <p class="meta">Trên iPhone, thông báo nền ổn định sẽ đi qua ứng dụng Google Calendar/Gmail. Hồ sơ iPhone tạo icon mở app; bản thân hồ sơ không tự sinh thông báo.</p>
+          <p class="meta">Hệ thống dùng Google Calendar + email để nhắc nền ổn định: trước deadline 30 phút, quá hạn, việc bị quên, sinh hoạt và check-in chuyến bay trước 24 giờ.</p>
           <div class="actions stacked">
-            <button onclick="connectReminderServices()">Kết nối Calendar + nhắc</button>
-            <button onclick="enableDeviceNotifications()">Bật thông báo thiết bị</button>
+            <button onclick="enableSmartRemindersUi()">Bật hệ thống nhắc thông minh</button>
+            <button class="outline" onclick="enableDeviceNotifications()">Kiểm tra thông báo web</button>
             <button class="outline" onclick="enableEmails()">Bật email nhắc</button>
             <button class="outline danger" onclick="disableEmails()">Tắt email nhắc</button>
           </div>

@@ -17,7 +17,15 @@ GitHub **không** cài app vào iPhone. GitHub dùng để lưu mã nguồn. Cá
 2. Tạo các file `Code.gs`, `Index.html`, `Styles.html`, `Script.html`, và `appsscript.json`; dán đúng nội dung từ thư mục này vào từng file. Trong Project Settings, đổi timezone thành `Asia/Ho_Chi_Minh`.
 3. Chọn **Deploy → New deployment → Web app**. Execute as: **Me**; Who has access: **Only myself**. Bấm Deploy, chấp nhận các quyền Google mà app giải thích.
 4. Mở URL Web App trên Mac để dùng desktop. Trên iPhone, mở URL bằng Safari → **Share → Add to Home Screen**. Đây sẽ là biểu tượng “My Assistant” trên màn hình chính.
-5. Trong app, bấm **Bật email nhắc** một lần. App sẽ kiểm tra mỗi 2 tiếng và email bạn cho tới khi bạn bấm dấu ✓ hoàn thành việc. Có thể đổi tần suất ở hàm `installReminderTrigger`.
+5. Trong app, bấm **Bật hệ thống nhắc** một lần và cấp quyền Calendar/email. Bộ máy chạy mỗi 15 phút để bắt đúng cửa sổ thời gian, nhưng việc thường chỉ gửi lại mỗi 2 giờ; chỉ việc đặt chế độ **Bám đuổi** mới nhắc mỗi 15 phút. Bấm **Đã bắt đầu** hoặc dấu ✓ để dừng chuỗi nhắc.
+
+## Nhắc chủ động và lịch bay
+
+- Việc sắp đến hạn 30 phút, việc quá hạn và việc có nguy cơ bị quên được đưa vào trung tâm thông báo trong app; việc quan trọng tiếp tục được nhắc qua email theo nhịp đã chọn.
+- Nút **Bật hệ thống nhắc** tạo bốn điểm neo sinh hoạt trong Google Calendar: ăn sáng, ăn trưa, ăn tối và chuẩn bị ngủ. App cũng nhắc log thời gian khi bạn đang thức nhưng chưa có phiên hoạt động nào.
+- Tab **Chuyến đi → Rà lại lịch bay** đọc lại các email nằm trong truy vấn Gmail bạn đã thiết lập, cập nhật chuyến tương ứng và đồng bộ chuyến tương lai sang Calendar.
+- Với mỗi chuyến tương lai, app tự phân loại nội địa/quốc tế, tính giờ nên rời đi từ thời gian di chuyển tới sân bay, thêm link check-in của các hãng phổ biến và nhắc mở check-in trước 24 giờ.
+- Đây là bộ luật chạy miễn phí, không gọi AI và không phải dữ liệu vận hành trực tiếp từ hãng bay. Thay đổi hoặc delay chỉ được phát hiện khi email hãng/đại lý gửi về Gmail; trước khi đi vẫn cần kiểm tra lại trên website hoặc ứng dụng chính thức của hãng.
 
 ## Gmail và chi tiêu
 

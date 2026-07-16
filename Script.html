@@ -1,5 +1,5 @@
 <script>
-let data={tasks:[],debts:[],meals:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[]};
+let data={tasks:[],debts:[],meals:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
@@ -14,6 +14,7 @@ function render(){
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
   $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
   renderKanban();
+  renderNotifications();
   renderTimeAnchor();
   renderCurrentPage();
 }
@@ -102,6 +103,27 @@ function renderKanban(){
   $('kanban').innerHTML=col('Đang cháy / hôm nay',overdue,'Không có việc quá hạn.')+col('Sắp tới',upcoming,'Chưa có việc sắp tới.')+col('Đã xong',done,'Chưa tick xong việc nào.');
 }
 
+function renderNotifications(){
+  const box=$('notificationCenter');if(!box)return;
+  const unread=(data.notifications||[]).filter(n=>{
+    if(n.readAt)return false;
+    if(n.targetType==='task'){const task=data.tasks.find(t=>t.id===n.targetId);return task&&!truth(task.done)&&task.status!=='done'}
+    if(n.targetType==='flight'){const flight=data.flights.find(f=>f.id===n.targetId);return flight&&flight.status!=='cancelled'&&new Date(flight.departure)>new Date()}
+    return true;
+  }).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const seen=new Set();
+  const visible=unread.filter(n=>{const key=`${n.type}:${n.targetId}`;if(seen.has(key))return false;seen.add(key);return true}).slice(0,5);
+  if(!visible.length){box.innerHTML='';box.hidden=true;return}
+  box.hidden=false;
+  box.innerHTML=`<div class="notification-head"><div><span class="pill">TRỢ LÝ ĐANG BÁM VIỆC</span><h2>${visible.length} việc cần chú ý</h2></div></div><div class="notification-list">${visible.map(n=>`<article class="notice ${escAttr(n.priority||'normal')}"><button class="notice-main" onclick="openNotificationTarget('${escAttr(n.targetType)}','${escAttr(n.targetId)}')"><b>${esc(n.title)}</b><span>${esc(n.message)}</span><small>${dateTime(n.createdAt)}</small></button><button class="notice-done" onclick="readNotification('${escAttr(n.id)}')" aria-label="Đánh dấu đã đọc">✓</button></article>`).join('')}</div>`;
+}
+function readNotification(id){google.script.run.withSuccessHandler(load).withFailureHandler(fail).markNotificationRead(id)}
+function openNotificationTarget(type,id){
+  if(type==='flight'){activatePage('travel');setTimeout(()=>$('upcomingFlightPlan')?.scrollIntoView({behavior:'smooth'}),50);return}
+  activatePage('today');
+  setTimeout(()=>document.querySelector(`[onclick="editItem('task','${id}')"]`)?.closest('.card')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
+}
+
 function renderProfile(){
   const p=data.profile[0];
   $('profileCard').innerHTML=p?`<article class="card profile-card"><h3>${esc(p.fullName||'Hồ sơ của bạn')}</h3><div class="detail-grid"><span>Ngày sinh</span><b>${p.dateOfBirth?new Date(p.dateOfBirth).toLocaleDateString('vi-VN'):'Chưa lưu'}</b><span>Nhóm máu</span><b>${esc(p.bloodType||'Chưa lưu')}</b><span>Liên hệ khẩn cấp</span><b>${esc(p.emergencyContact||'Chưa lưu')}</b><span>Ghi chú sức khỏe</span><b>${esc(p.medicalNotes||'Chưa lưu')}</b></div><p class="hint">Thông tin này chỉ nằm trong Google Sheet riêng của tài khoản triển khai app.</p></article>`:'<div class="empty">Thêm ngày sinh, nhóm máu và liên hệ khẩn cấp để có sẵn khi cần.</div>';
@@ -172,6 +194,7 @@ function renderMeals(){$('meals').innerHTML=data.meals.map(m=>`<article class="c
 
 function renderTravel(){
   const flights=data.flights.slice().sort((a,b)=>new Date(b.departure)-new Date(a.departure));
+  const upcoming=flights.filter(f=>f.departure&&new Date(f.departure)>new Date()&&f.status!=='cancelled').sort((a,b)=>new Date(a.departure)-new Date(b.departure));
   const totalKm=flights.reduce((s,f)=>s+Number(f.distanceKm||0),0);
   const yearKm=flights.filter(f=>new Date(f.departure).getFullYear()===new Date().getFullYear()).reduce((s,f)=>s+Number(f.distanceKm||0),0);
   const topAirline=topBy(flights,f=>f.airline||airlineFromCode(f.code)||'Chưa rõ');
@@ -179,13 +202,22 @@ function renderTravel(){
   $('travelInsights').innerHTML=[
     metricCard('Tổng chuyến bay',flights.length+' chuyến','Từ PDF + Gmail + nhập tay'),
     metricCard('Tổng dặm',num(Math.round(totalKm*0.621371))+' mi',num(totalKm)+' km'),
-    metricCard('Năm nay',num(yearKm)+' km',num(Math.round(yearKm*0.621371))+' mi'),
+    metricCard('Sắp tới',upcoming.length+' chuyến',upcoming[0]?countdownLabel(upcoming[0].departure):'Chưa có lịch bay'),
     metricCard('Top route / hãng',`${esc(topRoute.name)} · ${esc(topAirline.name)}`,`${topRoute.count} lần · ${topAirline.count} lần`)
   ].join('');
+  $('upcomingFlightPlan').innerHTML=upcoming.length?upcoming.slice(0,4).map(f=>flightPlanCard(f)).join(''):'<div class="empty">Chưa có chuyến bay tương lai. Thêm chuyến hoặc bật đồng bộ Gmail.</div>';
   const visibleFlights=flights.slice(0,flightLimit);
-  $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
+  $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))} ${flightStatusBadge(f.status)}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}${f.lastCheckedAt?`<p class="meta">Rà lần cuối ${dateTime(f.lastCheckedAt)}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
   $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
 }
+function flightPlanCard(f){
+  const dep=new Date(f.departure),international=(f.flightType||inferFlightType(f))==='international',airportLead=international?180:120,travel=Number(f.airportTravelMinutes||45),checkin=new Date(dep-24*3600000),leave=new Date(dep-(airportLead+travel)*60000),airport=new Date(dep-airportLead*60000);
+  const checkinReady=Date.now()>=checkin&&Date.now()<dep;
+  return `<article class="card flight-plan"><div class="flight-plan-head"><div><span class="pill">${international?'QUỐC TẾ':'NỘI ĐỊA'} · ${esc(f.code||'CHUYẾN BAY')}</span><h2>${esc(routeLabel(f))}</h2><p>${dateTime(f.departure)} ${flightStatusBadge(f.status)}</p></div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div><div class="flight-timeline"><div class="${checkinReady?'active':''}"><small>CHECK-IN ONLINE</small><b>${dateTime(checkin)}</b><span>${checkinReady?'Làm ngay bây giờ':'Mở trước giờ bay 24h'}</span></div><div><small>RỜI ĐI</small><b>${dateTime(leave)}</b><span>Đã gồm ${travel} phút di chuyển</span></div><div><small>CÓ MẶT SÂN BAY</small><b>${dateTime(airport)}</b><span>Trước ${airportLead/60} giờ</span></div><div><small>CẤT CÁNH</small><b>${dep.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})}</b><span>${esc(f.terminal||'Kiểm tra lại nhà ga')}</span></div></div><div class="flight-actions">${f.checkinUrl&&safeUrl(f.checkinUrl)?`<a class="button-link" href="${escAttr(f.checkinUrl)}" target="_blank" rel="noopener">Mở check-in</a>`:''}<button class="outline" onclick="reviewFutureFlightsUi()">Rà email thay đổi</button></div></article>`;
+}
+function inferFlightType(f){const vn=['HAN','SGN','DAD','HPH','DIN','VCL','VCS','VTG','HUI','CXR','PQC','UIH','BMV','THD','VII'];return vn.includes(String(f.fromCode||'').toUpperCase())&&vn.includes(String(f.toCode||'').toUpperCase())?'domestic':'international'}
+function flightStatusBadge(status){const map={changed:['ĐỔI GIỜ','warning'],delayed:['DELAY','danger'],cancelled:['ĐÃ HUỶ','danger'],scheduled:['ĐÚNG LỊCH','ok']},v=map[status];return v?`<span class="status-badge ${v[1]}">${v[0]}</span>`:''}
+function countdownLabel(value){const ms=new Date(value)-new Date(),days=Math.floor(ms/86400000),hours=Math.floor(ms%86400000/3600000);return days>0?`Còn ${days} ngày ${hours} giờ`:`Còn ${Math.max(0,hours)} giờ`}
 function renderInstall(){
   const ios=$('iosProfileLink');
   if(ios)ios.href='https://datphm.github.io/my-assistant/My-Assistant.mobileconfig';
@@ -231,7 +263,7 @@ const fields={
  task:[['title','Việc cần làm','text'],['dueAt','Nhắc lúc','datetime-local'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Bắt đầu trong (phút)','number'],['chaseMode','Mức nhắc','select','normal,urgent'],['status','Trạng thái','select','todo,doing,blocked,done']],
  debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
  meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],
- flight:[['code','Mã chuyến bay','text'],['destination','Điểm đến / mã sân bay đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text'],['fromCode','Từ sân bay','text'],['toCode','Đến sân bay','text'],['distanceKm','Khoảng cách km','number'],['ticketPrice','Giá vé đã mua','number'],['depTime','Giờ bay dự kiến','text'],['arrTime','Giờ đến dự kiến','text'],['airline','Hãng bay','text'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
+ flight:[['code','Mã chuyến bay','text'],['bookingRef','Mã đặt chỗ / PNR','text'],['destination','Điểm đến / mã sân bay đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text'],['fromCode','Từ sân bay','text'],['toCode','Đến sân bay','text'],['flightType','Loại chuyến bay','select','domestic,international'],['airportTravelMinutes','Thời gian đi tới sân bay (phút)','number'],['checkinUrl','Link check-in online','url'],['status','Trạng thái','select','scheduled,changed,delayed,cancelled'],['distanceKm','Khoảng cách km','number'],['ticketPrice','Giá vé đã mua','number'],['depTime','Giờ bay dự kiến','text'],['arrTime','Giờ đến dự kiến','text'],['airline','Hãng bay','text'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
  hotel:[['name','Tên khách sạn','text'],['city','Thành phố','text'],['address','Địa chỉ đầy đủ','text'],['checkIn','Check-in','date'],['checkOut','Check-out','date'],['bookingRef','Mã đặt phòng','text'],['price','Giá đã đặt','number'],['notes','Ghi chú','textarea']],
  wallet:[['name','Tên ví / tài khoản','text'],['type','Loại','select','Tiền mặt,Tài khoản ngân hàng,Thẻ tín dụng,Tiết kiệm'],['balance','Số dư hiện tại','number']],
  balance:[['walletId','Ví / tài khoản','wallet'],['balance','Số dư mới','number']],
@@ -268,7 +300,8 @@ function fieldHtml(name,label,input,options,value){
   if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
   let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
   const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#245647"':'';
-  return `<div class="field"><label>${label}</label><input ${input==='color'||name==='terminal'||name==='airline'||name==='aircraft'||name==='seat'||name==='distanceKm'||name==='fromCode'||name==='toCode'?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
+  const optional=['terminal','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl'];
+  return `<div class="field"><label>${label}</label><input ${input==='color'||optional.includes(name)?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
 }
 function saveForm(event){
   event.preventDefault();
@@ -285,7 +318,7 @@ function saveForm(event){
   const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
-function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp'}[o]||o}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ'}[o]||o}
 function removeItem(type,id){if(!confirm('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
 function removeWallet(id){if(!confirm('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
 function saveCvForm(form,item){
@@ -304,15 +337,19 @@ function saveCvForm(form,item){
 function importExpenses(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(r=>{toast(`Đã nhập ${r.count} giao dịch${r.balanceUpdates?` · cập nhật ${r.balanceUpdates} số dư`:''}`);load()}).withFailureHandler(fail).importExpensesFromGmail(q,walletId)}
 function enableBankSync(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installBankSync(q,walletId)}
 function disableBankSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallBankSync()}
-function importTravel(){const q=$('travelQuery').value;google.script.run.withSuccessHandler(r=>{toast(`Đã nhập ${r.flights} chuyến bay · ${r.hotels} khách sạn`);load()}).withFailureHandler(fail).importTravelFromGmail(q)}
+function importTravel(){const q=$('travelQuery').value;google.script.run.withSuccessHandler(r=>{toast(`Đã thêm ${r.flights||0} chuyến · cập nhật ${r.updatedFlights||0} chuyến · ${r.hotels||0} khách sạn`);load()}).withFailureHandler(fail).importTravelFromGmail(q)}
+function reviewFutureFlightsUi(){google.script.run.withSuccessHandler(r=>{toast(`Đã rà ${r.futureFlights} chuyến tương lai · cập nhật ${r.updatedFlights} · đồng bộ ${r.calendarSynced} lịch`);load()}).withFailureHandler(fail).reviewFutureFlights()}
 function enableTravelSync(){const q=$('travelQuery').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installTravelSync(q)}
 function disableTravelSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallTravelSync()}
 function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}
 function connectReminderServices(){google.script.run.withSuccessHandler(toast).withFailureHandler(e=>fail((e.message||String(e))+' — Nếu Google yêu cầu quyền, mở Apps Script và chạy authorizeReminderServices một lần.')).authorizeReminderServices()}
+function enableSmartRemindersUi(){google.script.run.withSuccessHandler(msg=>{toast(msg);const el=$('notificationStatus');if(el)el.textContent='Đã bật: Calendar + email + nhắc việc/chuyến bay thông minh.'}).withFailureHandler(e=>fail((e.message||String(e))+' — Google có thể yêu cầu cấp quyền Calendar và email lần đầu.')).enableSmartReminders()}
 function disableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallReminderTrigger()}
 function syncCalendar(id){google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).syncTaskToCalendar(id)}
 function enableDeviceNotifications(){
-  if(!('Notification' in window)){toast('Thiết bị/trình duyệt này chưa hỗ trợ thông báo web. Dùng email nhắc sẽ ổn hơn.');updateNotificationStatus();return}
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  if(ios){toast('Bản Google dùng Calendar để nổ thông báo nền trên iPhone. Đang bật hệ thống nhắc…');enableSmartRemindersUi();return}
+  if(!('Notification' in window)){toast('Trình duyệt này chưa hỗ trợ thông báo web. Đang bật Calendar + email thay thế.');enableSmartRemindersUi();return}
   Notification.requestPermission().then(permission=>{
     updateNotificationStatus();
     if(permission==='granted'){
@@ -323,7 +360,8 @@ function enableDeviceNotifications(){
 }
 function updateNotificationStatus(){
   const el=$('notificationStatus'); if(!el)return;
-  if(!('Notification' in window)){el.textContent='Trình duyệt này không hỗ trợ Notification API.';return}
+  if(/iPad|iPhone|iPod/.test(navigator.userAgent)){el.textContent='iPhone: nhắc nền qua Google Calendar + email; không cần tải lại profile khi app cập nhật.';return}
+  if(!('Notification' in window)){el.textContent='Thông báo nền đang dùng Google Calendar + email.';return}
   el.textContent='Trạng thái thông báo: '+Notification.permission;
 }
 function copyAppLink(){
