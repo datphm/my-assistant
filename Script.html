@@ -12,7 +12,7 @@ function render(){
   const open=data.tasks.filter(t=>!truth(t.done)).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
   $('tasks').innerHTML=open.length?open.map(t=>`<article class="card"><div class="card-top"><div><h3>${esc(t.title)}</h3><p class="meta">${dateTime(t.dueAt)} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')}</p></div><button class="done" onclick="complete('${t.id}')">✓</button></div></article>`).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
-  renderProfile(); renderMoney(); renderCvs(); renderMeals(); renderTravel();
+  renderProfile(); renderMoney(); renderCvs(); renderMeals(); renderTravel(); renderInstall();
 }
 
 function renderProfile(){
@@ -89,11 +89,22 @@ function renderTravel(){
   $('flights').innerHTML=flights.map(f=>`<article class="card"><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}</article>`).join('')||'<div class="empty">Chưa có chuyến đi.</div>';
   $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}</p></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
 }
+function renderInstall(){
+  const ios=$('iosProfileLink'), android=$('androidApkLink');
+  if(ios)ios.href=location.origin+location.pathname+'?download=ios-profile';
+  if(android)android.href=location.origin+location.pathname+'?download=android-apk';
+  updateNotificationStatus();
+}
 function routeLabel(f){return f.fromCode||f.toCode?`${f.fromCode||'?'} → ${f.toCode||f.destination||'?'}`:(f.destination||'Chưa rõ điểm đến')}
 function topBy(list,fn){const m={};list.forEach(x=>{const k=fn(x);m[k]=(m[k]||0)+1});const e=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return {name:e?e[0]:'—',count:e?e[1]:0}}
 function airlineFromCode(code){const m=String(code||'').match(/^[A-Z0-9]{2}/);return m?m[0]:''}
 
 function complete(id){google.script.run.withSuccessHandler(load).withFailureHandler(fail).completeTask(id)}
+function createTaskFromMessage(){
+  const box=$('taskMessage'); const message=box.value.trim();
+  if(!message){toast('Nhập một câu công việc trước đã.');return}
+  google.script.run.withSuccessHandler(task=>{box.value='';toast(`Đã tạo việc: ${task.title}`);load()}).withFailureHandler(fail).createTaskFromMessage(message);
+}
 function truth(x){return x===true||x==='TRUE'}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function escAttr(s){return esc(s).replace(/`/g,'&#96;')}
@@ -167,8 +178,35 @@ function enableTravelSync(){const q=$('travelQuery').value;google.script.run.wit
 function disableTravelSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallTravelSync()}
 function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}
 function disableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallReminderTrigger()}
+function enableDeviceNotifications(){
+  if(!('Notification' in window)){toast('Thiết bị/trình duyệt này chưa hỗ trợ thông báo web. Dùng email nhắc sẽ ổn hơn.');updateNotificationStatus();return}
+  Notification.requestPermission().then(permission=>{
+    updateNotificationStatus();
+    if(permission==='granted'){
+      new Notification('My Assistant đã bật thông báo', {body:'Thông báo thử trên thiết bị này. Email nhắc vẫn là kênh chính.'});
+      toast('Đã bật thông báo trên thiết bị này.');
+    }else toast('Bạn chưa cấp quyền thông báo.');
+  }).catch(fail);
+}
+function updateNotificationStatus(){
+  const el=$('notificationStatus'); if(!el)return;
+  if(!('Notification' in window)){el.textContent='Trình duyệt này không hỗ trợ Notification API.';return}
+  el.textContent='Trạng thái thông báo: '+Notification.permission;
+}
+function copyAppLink(){
+  const link=location.origin+location.pathname;
+  navigator.clipboard?.writeText(link).then(()=>toast('Đã copy link app')).catch(()=>toast(link));
+}
+function activatePage(page){
+  const btn=document.querySelector(`nav button[data-page="${page}"]`);
+  const section=$(page);
+  if(!btn||!section)return;
+  document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active'); section.classList.add('active');
+}
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
 function fail(e){toast(e.message||String(e))}
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.page).classList.add('active')});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
+if(location.hash.replace('#','')) setTimeout(()=>activatePage(location.hash.replace('#','')),0);
 load();
 </script>
