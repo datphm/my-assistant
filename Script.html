@@ -39,6 +39,18 @@ function renderTimeAnchor(){
   countdown.textContent=past?`Quá ${hours}h ${mins}m ${secs}s`:`Còn ${hours}h ${mins}m ${secs}s`; title.textContent=next.title;
 }
 setInterval(()=>{renderTimeAnchor();renderActiveTime()},1000);
+setInterval(syncActiveTimeLog,15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncActiveTimeLog()});
+
+function syncActiveTimeLog(){
+  google.script.run.withSuccessHandler(server=>{
+    const before=activeTimeLog&&String(activeTimeLog.startAt),after=server&&String(server.startAt);
+    if(before===after)return;
+    activeTimeLog=server?{kind:server.kind,label:server.label,startAt:server.startAt}:null;
+    if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1');
+    if(before&&!after){load();return}renderActiveTime();
+  }).withFailureHandler(()=>{}).getActiveTimeLog();
+}
 
 function startTimeLog(kind,label){
   if(activeTimeLog){toast('Hãy dừng mục đang chạy trước.');return}
@@ -65,8 +77,12 @@ function renderTime(){
 
 function renderRoutine(){
   const r=(data.routinesettings||[])[0]||{};const el=$('routineSummary');if(!el)return;
-  el.innerHTML=`<span>🍳 Ăn sáng <b>${esc(r.breakfastTime||'08:00')}</b></span><span>🍱 Ăn trưa <b>${esc(r.lunchTime||'12:30')}</b></span><span>🍲 Ăn tối <b>${esc(r.dinnerTime||'19:00')}</b></span><span>🌙 Đi ngủ <b>${esc(r.bedtime||'23:30')}</b></span><span>☀️ Thức dậy <b>${esc(r.wakeTime||'07:30')}</b></span><span>⏱ Hỏi log mỗi <b>${esc(r.logIntervalMinutes||60)} phút</b></span>`;
+  el.innerHTML=`<span>🍳 Ăn sáng <b>${esc(clockValue(r.breakfastTime,'08:00:00'))}</b></span><span>🍱 Ăn trưa <b>${esc(clockValue(r.lunchTime,'12:30:00'))}</b></span><span>🍲 Ăn tối <b>${esc(clockValue(r.dinnerTime,'19:00:00'))}</b></span><span>🌙 Đi ngủ <b>${esc(clockValue(r.bedtime,'23:30:00'))}</b></span><span>☀️ Thức dậy <b>${esc(clockValue(r.wakeTime,'07:30:00'))}</b></span><span>⏱ Hỏi log mỗi <b>${esc(r.logIntervalMinutes||60)} phút</b></span>`;
   if($('sleepLatency'))$('sleepLatency').value=r.sleepLatencyMinutes||15;
+}
+function clockValue(value,fallback){
+  const raw=String(value||'');if(/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)){const p=raw.split(':');return `${p[0].padStart(2,'0')}:${p[1]}:${p[2]||'00'}`}
+  const date=new Date(raw);return isNaN(date)?fallback:date.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 }
 function openRoutineForm(){openForm('routine',(data.routinesettings||[])[0]||{})}
 function installRoutineCalendarUi(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installRoutineCalendar()}
@@ -252,7 +268,7 @@ function fieldHtml(name,label,input,options,value){
   if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
   let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
   const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#245647"':'';
-  return `<div class="field"><label>${label}</label><input ${input==='color'||name==='terminal'||name==='airline'||name==='aircraft'||name==='seat'||name==='distanceKm'||name==='fromCode'||name==='toCode'?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${defaults}></div>`;
+  return `<div class="field"><label>${label}</label><input ${input==='color'||name==='terminal'||name==='airline'||name==='aircraft'||name==='seat'||name==='distanceKm'||name==='fromCode'||name==='toCode'?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
 }
 function saveForm(event){
   event.preventDefault();

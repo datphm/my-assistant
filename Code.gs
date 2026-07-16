@@ -41,8 +41,8 @@ function ensureDefaultRoutine_(ss) {
   const sheet = ss.getSheetByName('RoutineSettings');
   if (readRows_(sheet).length) return;
   upsertRow_(sheet, {
-    id: 'default', breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '19:00',
-    bedtime: '23:30', wakeTime: '07:30', targetSleepHours: 8,
+    id: 'default', breakfastTime: '08:00:00', lunchTime: '12:30:00', dinnerTime: '19:00:00',
+    bedtime: '23:30:00', wakeTime: '07:30:00', targetSleepHours: 8,
     sleepLatencyMinutes: 15, logIntervalMinutes: 60, updatedAt: new Date()
   });
 }
@@ -75,6 +75,13 @@ function finishTimeLog() {
   });
   if (stateSheet.getLastRow() > 1) stateSheet.deleteRows(2, stateSheet.getLastRow() - 1);
   return { durationMinutes: Math.max(1, Math.round((end - start) / 60000)) };
+}
+
+function getActiveTimeLog() {
+  const id = PropertiesService.getUserProperties().getProperty('BOOK_ID');
+  if (!id) return null;
+  const sheet = SpreadsheetApp.openById(id).getSheetByName('TimeState');
+  return sheet ? (readRows_(sheet)[0] || null) : null;
 }
 
 function exportAllData() {
@@ -451,7 +458,7 @@ function sendRoutineReminders_(recipient, now) {
     ['bedtime', 'Chuẩn bị đi ngủ', 'Hạ ánh sáng, cất điện thoại và bắt đầu routine ngủ.']
   ];
   routines.forEach(function(rule) {
-    const target = String(settings[rule[0]] || '');
+    const target = String(settings[rule[0]] || '').slice(0, 5);
     if (target && hhmm >= target && lastRoutineSent[rule[0]] !== dateKey) {
       MailApp.sendEmail(recipient, 'My Assistant · ' + rule[1], rule[2] + '\n\nĐây là điểm neo sinh hoạt bạn đã đặt trong My Assistant.');
       lastRoutineSent[rule[0]] = dateKey;
@@ -502,7 +509,7 @@ function installRoutineCalendar() {
 function nextDateAt_(hhmm) {
   const parts = String(hhmm || '08:00').split(':').map(Number);
   const value = new Date();
-  value.setHours(parts[0] || 0, parts[1] || 0, 0, 0);
+  value.setHours(parts[0] || 0, parts[1] || 0, parts[2] || 0, 0);
   if (value <= new Date()) value.setDate(value.getDate() + 1);
   return value;
 }
@@ -756,7 +763,16 @@ function readRows_(sheet) {
   const headers = all[0];
   return all.slice(1).filter(row => row.some(value => value !== '')).map(row => Object.fromEntries(headers.map((h, i) => [h, serialize_(row[i])])));
 }
-function serialize_(value) { return value instanceof Date ? value.toISOString() : value; }
+function serialize_(value) {
+  if (!(value instanceof Date)) return value;
+  // Google Sheets stores a time-only cell on the epoch date 1899-12-30.
+  // Formatting it as ISO exposes the historical timezone offset (for example
+  // 00:53:30Z) instead of the user's intended 08:00:00.
+  if (value.getUTCFullYear() < 1902) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'HH:mm:ss');
+  }
+  return value.toISOString();
+}
 function parseVnd_(text) { const hit = text.match(/(?:VND|đ|₫)\s*([\d.,]+)|([\d.,]+)\s*(?:VND|đ|₫)/i); if (!hit) return 0; return Number((hit[1] || hit[2]).replace(/[^\d]/g, '')); }
 function parseBalanceVnd_(text) {
   const hit = text.match(/(?:số dư(?: khả dụng| cuối| hiện tại| tài khoản)?|available balance|account balance)[^\d]{0,45}([\d.,]+)\s*(?:VND|đ|₫)/i);
