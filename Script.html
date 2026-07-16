@@ -1,10 +1,99 @@
 <script>
-let data={tasks:[],debts:[],meals:[],flights:[],expenses:[]}; let currentType=''; const $=id=>document.getElementById(id); const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
-function load(){google.script.run.withSuccessHandler(d=>{data=d;render()}).withFailureHandler(fail).getData()};
-function render(){const open=data.tasks.filter(t=>!truth(t.done)).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));$('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;$('tasks').innerHTML=open.length?open.map(t=>`<article class="card"><div class="card-top"><div><h3>${esc(t.title)}</h3><p class="meta">${new Date(t.dueAt).toLocaleString('vi-VN',{dateStyle:'medium',timeStyle:'short'})} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')}</p></div><button class="done" onclick="complete('${t.id}')">✓</button></div></article>`).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';const total=data.debts.reduce((s,d)=>s+Number(d.balance||0),0);$('moneySummary').innerHTML=`<small>TỔNG DƯ NỢ</small><b>${vnd(total)}</b><span>Đây là bảng theo dõi, không phải tư vấn tài chính.</span>`;$('debts').innerHTML=data.debts.map(d=>`<article class="card"><h3>${esc(d.name)} <span style="float:right">${vnd(d.balance)}</span></h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay}</p></article>`).join('')||'<div class="empty">Chưa có khoản nợ.</div>';$('meals').innerHTML=data.meals.map(m=>`<article class="card"><h3>${esc(m.title)} <span style="float:right;color:#dc7b3e">${m.calories} kcal</span></h3><p class="meta">${esc(m.ingredients)}${m.notes?' · '+esc(m.notes):''}</p></article>`).join('')||'<div class="empty">Lưu các món bạn thích để khỏi phải nghĩ mỗi ngày.</div>';$('flights').innerHTML=data.flights.map(f=>`<article class="card"><h3>${esc(f.code)} — ${esc(f.destination)}</h3><p class="meta">${new Date(f.departure).toLocaleString('vi-VN',{dateStyle:'medium',timeStyle:'short'})} · ${esc(f.terminal)}</p></article>`).join('')||'<div class="empty">Chưa có chuyến đi.</div>'}
-function complete(id){google.script.run.withSuccessHandler(load).withFailureHandler(fail).completeTask(id)};function truth(x){return x===true||x==='TRUE'};function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))};
-const fields={task:[['title','Việc cần làm','text'],['dueAt','Nhắc lúc','datetime-local'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Bắt đầu trong (phút)','number']],debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],flight:[['code','Mã chuyến bay','text'],['destination','Điểm đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text']]};
-function openForm(type){currentType=type;$('formTitle').textContent=({task:'Thêm việc',debt:'Thêm khoản nợ',meal:'Lưu thực đơn',flight:'Thêm chuyến bay'})[type];$('formFields').innerHTML=fields[type].map(([name,label,input,options])=>`<div class="field"><label>${label}</label>${input==='select'?`<select name="${name}">${options.split(',').map(o=>`<option>${o}</option>`).join('')}</select>`:`<input required name="${name}" type="${input}" ${name==='minutes'?'value="15" min="1"':name==='dueDay'?'value="1" min="1" max="31"':''}>`}</div>`).join('');formDialog.showModal()};
-function saveForm(event){event.preventDefault();const item=Object.fromEntries(new FormData(event.target));if(item.dueAt||item.departure){const k=item.dueAt?'dueAt':'departure';item[k]=new Date(item[k]).toISOString()}google.script.run.withSuccessHandler(()=>{formDialog.close();toast('Đã lưu');load()}).withFailureHandler(fail).addItem(currentType==='task'?'Tasks':currentType==='debt'?'Debts':currentType==='meal'?'Meals':'Flights',item)}
-function importExpenses(){const q=$('gmailQuery').value;google.script.run.withSuccessHandler(r=>{toast(`Đã nhập ${r.count} giao dịch mới`);load()}).withFailureHandler(fail).importExpensesFromGmail(q)}function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}function fail(e){toast(e.message||String(e))};document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.page).classList.add('active')});load();
+let data={tasks:[],debts:[],meals:[],flights:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[]};
+let currentType=''; let editingId=''; const $=id=>document.getElementById(id);
+const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
+const colors=['#4f46e5','#f49b73','#2c9a72','#e5b44f','#e55d6f','#5795d0'];
+
+function load(){google.script.run.withSuccessHandler(d=>{data=d;render()}).withFailureHandler(fail).getData()}
+function render(){
+  const open=data.tasks.filter(t=>!truth(t.done)).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
+  $('tasks').innerHTML=open.length?open.map(t=>`<article class="card"><div class="card-top"><div><h3>${esc(t.title)}</h3><p class="meta">${dateTime(t.dueAt)} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')}</p></div><button class="done" onclick="complete('${t.id}')">✓</button></div></article>`).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
+  renderProfile(); renderMoney(); renderCvs(); renderMeals(); renderFlights();
+}
+
+function renderProfile(){
+  const p=data.profile[0];
+  $('profileCard').innerHTML=p?`<article class="card profile-card"><h3>${esc(p.fullName||'Hồ sơ của bạn')}</h3><div class="detail-grid"><span>Ngày sinh</span><b>${p.dateOfBirth?new Date(p.dateOfBirth).toLocaleDateString('vi-VN'):'Chưa lưu'}</b><span>Nhóm máu</span><b>${esc(p.bloodType||'Chưa lưu')}</b><span>Liên hệ khẩn cấp</span><b>${esc(p.emergencyContact||'Chưa lưu')}</b><span>Ghi chú sức khỏe</span><b>${esc(p.medicalNotes||'Chưa lưu')}</b></div><p class="hint">Thông tin này chỉ nằm trong Google Sheet riêng của tài khoản triển khai app.</p></article>`:'<div class="empty">Thêm ngày sinh, nhóm máu và liên hệ khẩn cấp để có sẵn khi cần.</div>';
+  $('walletsProfile').innerHTML=walletCards()||'<div class="empty">Thêm ví tiền mặt, tài khoản hoặc thẻ để theo dõi số dư.</div>';
+}
+
+function renderMoney(){
+  const totalDebt=data.debts.reduce((s,d)=>s+Number(d.balance||0),0);
+  const totalBalance=data.wallets.reduce((s,w)=>s+Number(w.balance||0),0);
+  $('moneySummary').innerHTML=`<small>TỔNG SỐ DƯ VÍ / TÀI KHOẢN</small><b>${vnd(totalBalance)}</b><span>Dư nợ đang theo dõi: ${vnd(totalDebt)}. Đây là bảng theo dõi, không phải tư vấn tài chính.</span>`;
+  $('walletsMoney').innerHTML=walletCards()||'<p class="meta">Chưa có ví hoặc tài khoản.</p>';
+  $('gmailWallet').innerHTML='<option value="">Không cập nhật số dư ví</option>'+data.wallets.map(w=>`<option value="${escAttr(w.id)}">${esc(w.name)} · ${vnd(w.balance)}</option>`).join('');
+  renderAllocation();
+  $('debts').innerHTML=data.debts.map(d=>`<article class="card"><h3>${esc(d.name)} <span class="amount">${vnd(d.balance)}</span></h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay}</p></article>`).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
+  const recent=data.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5);
+  $('expenses').innerHTML=recent.map(e=>`<article class="card"><h3>${esc(e.merchant)} <span class="amount">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
+}
+
+function walletCards(){return data.wallets.map(w=>`<article class="wallet-row"><div><b>${esc(w.name)}</b><span>${esc(w.type||'Ví')} ${w.lastUpdatedAt?'· cập nhật '+dateShort(w.lastUpdatedAt):''}</span></div><strong>${vnd(w.balance)}</strong></article>`).join('')}
+
+function renderAllocation(){
+  const now=new Date(); const monthly=data.expenses.filter(e=>{const d=new Date(e.date);return e.direction!=='income'&&d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()});
+  const grouped={}; monthly.forEach(e=>grouped[e.category||'Khác']=(grouped[e.category||'Khác']||0)+Number(e.amount||0));
+  let entries=Object.entries(grouped); let label='Chi tiêu thực tế tháng này';
+  if(!entries.length){entries=data.allocations.length?data.allocations.map(a=>[a.name,Number(a.percent)]):[['Thiết yếu',50],['Tiết kiệm / mục tiêu',20],['Nợ',20],['Linh hoạt',10]];label='Tỷ lệ bạn đặt (chưa có giao dịch tháng này)'}
+  const total=entries.reduce((s,[,n])=>s+n,0)||1;
+  let cursor=0; const segments=entries.map(([name,value],i)=>{const start=cursor;const end=cursor+value/total*100;cursor=end;return `${colors[i%colors.length]} ${start}% ${end}%`});
+  $('allocationChart').innerHTML=`<div class="chart-wrap"><div class="donut" style="background:conic-gradient(${segments.join(',')})"><div><b>${monthly.length?vnd(total):Math.round(total)+'%'}</b><span>${monthly.length?'đã chi':'mục tiêu'}</span></div></div><div class="legend"><p class="meta">${label}</p>${entries.map(([name,value],i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${esc(name)}</span><b>${monthly.length?vnd(value):Math.round(value/total*100)+'%'}</b></div>`).join('')}</div></div>`;
+}
+
+function renderCvs(){$('cvs').innerHTML=data.cvs.map(cv=>`<article class="card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><button class="outline small" onclick="editCv('${cv.id}')">Cập nhật</button></div>${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở bản Google Drive / Docs ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>'}
+function renderMeals(){$('meals').innerHTML=data.meals.map(m=>`<article class="card"><h3>${esc(m.title)} <span class="amount orange">${m.calories} kcal</span></h3><p class="meta">${esc(m.ingredients)}${m.notes?' · '+esc(m.notes):''}</p></article>`).join('')||'<div class="empty">Lưu các món bạn thích để khỏi phải nghĩ mỗi ngày.</div>'}
+function renderFlights(){$('flights').innerHTML=data.flights.map(f=>`<article class="card"><h3>${esc(f.code)} — ${esc(f.destination)}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.terminal)}</p></article>`).join('')||'<div class="empty">Chưa có chuyến đi.</div>'}
+
+function complete(id){google.script.run.withSuccessHandler(load).withFailureHandler(fail).completeTask(id)}
+function truth(x){return x===true||x==='TRUE'}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escAttr(s){return esc(s).replace(/`/g,'&#96;')}
+function dateTime(s){return s?new Date(s).toLocaleString('vi-VN',{dateStyle:'medium',timeStyle:'short'}):'Chưa đặt giờ'}
+function dateShort(s){return s?new Date(s).toLocaleDateString('vi-VN'):'vừa cập nhật'}
+function safeUrl(url){return /^https:\/\//i.test(url||'')}
+
+const fields={
+ task:[['title','Việc cần làm','text'],['dueAt','Nhắc lúc','datetime-local'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Bắt đầu trong (phút)','number']],
+ debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
+ meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],
+ flight:[['code','Mã chuyến bay','text'],['destination','Điểm đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text']],
+ wallet:[['name','Tên ví / tài khoản','text'],['type','Loại','select','Tiền mặt,Tài khoản ngân hàng,Thẻ tín dụng,Tiết kiệm'],['balance','Số dư hiện tại','number']],
+ expense:[['date','Ngày giao dịch','date'],['amount','Số tiền','number'],['merchant','Nơi chi / ghi chú','text'],['category','Nhóm','select','Ăn uống,Di chuyển,Hóa đơn,Mua sắm,Sức khỏe,Công việc,Khác'],['walletId','Từ ví / tài khoản','wallet']],
+ allocation:[['name','Tên mục tiêu','text'],['percent','Tỷ trọng (%)','number'],['color','Màu','color']],
+ cv:[['title','Tên CV / phiên bản','text'],['targetRole','Vai trò hướng tới','text'],['content','Nội dung hoặc ghi chú thay đổi','textarea'],['driveUrl','Link Google Drive / Docs (nếu có)','url']],
+ profile:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh','date'],['bloodType','Nhóm máu','select','Chưa rõ,A+,A−,B+,B−,AB+,AB−,O+,O−'],['emergencyContact','Liên hệ khẩn cấp','text'],['medicalNotes','Ghi chú sức khỏe','textarea']]
+};
+
+function openProfileForm(){openForm('profile',data.profile[0]||{})}
+function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
+function openForm(type,item={}){
+  currentType=type;editingId=item.id||'';
+  const names={task:'Thêm việc',debt:'Thêm khoản nợ',meal:'Lưu thực đơn',flight:'Thêm chuyến bay',wallet:'Thêm ví / tài khoản',expense:'Thêm chi tiêu',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ'};
+  $('formTitle').textContent=names[type];
+  $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join(''); formDialog.showModal();
+}
+function fieldHtml(name,label,input,options,value){
+  const val=value===undefined||value===null?'':value;
+  if(input==='select'){return `<div class="field"><label>${label}</label><select name="${name}">${options.split(',').map(o=>`<option ${String(o)===String(val)?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`}
+  if(input==='wallet'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Chưa chọn</option>${data.wallets.map(w=>`<option value="${escAttr(w.id)}" ${w.id===val?'selected':''}>${esc(w.name)}</option>`).join('')}</select></div>`}
+  if(input==='textarea')return `<div class="field"><label>${label}</label><textarea name="${name}">${esc(val)}</textarea></div>`;
+  let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
+  const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#4f46e5"':'';
+  return `<div class="field"><label>${label}</label><input ${input==='color'?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${defaults}></div>`;
+}
+function saveForm(event){
+  event.preventDefault(); const item=Object.fromEntries(new FormData(event.target)); if(editingId)item.id=editingId;
+  if(item.dueAt||item.departure){const k=item.dueAt?'dueAt':'departure';item[k]=new Date(item[k]).toISOString()}
+  if(item.date)item.date=new Date(item.date).toISOString();
+  let call='addItem',type=''; if(currentType==='profile'){call='saveProfile'}else if(currentType==='cv'){call='saveCv'}else{type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',wallet:'Wallets',expense:'Expenses',allocation:'Allocations'}[currentType]}
+  const runner=google.script.run.withSuccessHandler(()=>{formDialog.close();toast('Đã lưu');load()}).withFailureHandler(fail); call==='addItem'?runner.addItem(type,item):runner[call](item);
+}
+function importExpenses(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(r=>{toast(`Đã nhập ${r.count} giao dịch${r.balanceUpdates?` · cập nhật ${r.balanceUpdates} số dư`:''}`);load()}).withFailureHandler(fail).importExpensesFromGmail(q,walletId)}
+function enableBankSync(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installBankSync(q,walletId)}
+function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}
+function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
+function fail(e){toast(e.message||String(e))}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.page).classList.add('active')});load();
 </script>
