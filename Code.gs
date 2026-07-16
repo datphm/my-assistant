@@ -481,7 +481,8 @@ function saveProfile(item) {
 
 function saveCv(item) {
   const sheet = getBook_().getSheetByName('CVs');
-  const value = Object.assign({}, item, { id: item.id || Utilities.getUuid(), updatedAt: new Date() });
+  const existing = item.id ? (readRows_(sheet).find(function(row) { return row.id === item.id; }) || {}) : {};
+  const value = Object.assign({}, existing, item, { id: item.id || Utilities.getUuid(), updatedAt: new Date() });
   upsertRow_(sheet, value);
   return { ok: true, id: value.id };
 }

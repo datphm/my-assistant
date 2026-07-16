@@ -1,6 +1,7 @@
 <script>
 let data={tasks:[],debts:[],meals:[],healthprofile:[],weightlogs:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],reflectionprofile:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
+let viewingCvId='';
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
 const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
@@ -197,7 +198,7 @@ function renderAllocation(periodTx){
 }
 
 function renderCvs(){
-  $('cvs').innerHTML=data.cvs.map(cv=>`<article class="card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · ${esc(cv.fileName||'Bản text')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><button class="outline small" onclick="editCv('${cv.id}')">Cập nhật</button></div>${cv.content?`<p class="cv-preview">${esc(cv.content).slice(0,260)}${cv.content.length>260?'...':''}</p>`:''}${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở file CV trên Google Drive ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>';
+  $('cvs').innerHTML=data.cvs.map(cv=>`<article class="card cv-card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · ${esc(cv.fileName||'Bản text')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><div class="card-actions"><button class="outline small" onclick="viewCv('${cv.id}')">Xem toàn bộ</button><button class="outline small" onclick="editCv('${cv.id}')">Chỉnh sửa</button></div></div>${cv.content?`<p class="cv-preview">${esc(cv.content).slice(0,260)}${cv.content.length>260?'...':''}</p>`:'<p class="meta">CV này đang lưu dưới dạng file/link. Bấm Xem toàn bộ để mở.</p>'}${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở file CV trên Google Drive ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>';
   const p=(data.reflectionprofile||[])[0]||{},g=data.dailyguidance||{};
   $('dailyGuidance').innerHTML=`<article class="card guidance-card"><span class="pill">THÔNG ĐIỆP THỰC TẾ HÔM NAY</span><h2>${esc(g.headline||'Chốt một đầu ra trước khi mở việc mới')}</h2><div class="guidance-focus"><small>VIỆC ƯU TIÊN</small><b>${esc(g.focusTask||'Chọn một việc quan trọng')}</b><span>${esc(g.focusReason||'')}</span></div><ol>${(g.steps||[]).map(step=>`<li>${esc(step)}</li>`).join('')}</ol><div class="adhd-nudge"><b>Gợi ý ADHD</b><span>${esc(g.adhdPrompt||'Đặt hẹn giờ 10 phút và chỉ làm bước đầu tiên.')}</span></div>${g.focusTaskId?`<button onclick="activatePage('today')">Mở danh sách việc</button>`:''}</article>`;
   $('careerAnalysis').innerHTML=`<article class="card"><span class="section-kicker">PHÂN TÍCH NGHỀ NGHIỆP THEO DỮ LIỆU</span><h3>Nhóm vai trò nên kiểm chứng</h3><p class="meta">Dựa trên CV, sở thích và thế mạnh bạn nhập — không dựa trên tử vi.</p><div class="career-fits">${(g.careerFits||[]).map(f=>`<div><b>${esc(f.role)}</b><span>${esc(f.reason)}</span></div>`).join('')||'<p class="meta">Cập nhật hồ sơ để nhận gợi ý.</p>'}</div></article>`;
@@ -327,6 +328,14 @@ function openProfileForm(){openForm('profile',data.profile[0]||{})}
 function openHealthForm(){openForm('healthProfile',(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',exerciseTime:'18:30'})}
 function openReflectionForm(){openForm('reflection',(data.reflectionprofile||[])[0]||{fullName:'Phạm Nguyễn Gia Đạt',dateOfBirth:'2003-05-12',birthTime:'10:25',dailyGuidanceEnabled:'yes'})}
 function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
+function viewCv(id){
+  const cv=data.cvs.find(item=>item.id===id);if(!cv){toast('Không tìm thấy CV.');return}
+  viewingCvId=id;$('cvViewTitle').textContent=cv.title||'CV';$('cvViewMeta').textContent=`${cv.targetRole||'Chưa chọn vai trò'} · ${cv.fileName||'Bản nội dung'} · cập nhật ${dateShort(cv.updatedAt)}`;
+  const fileLink=cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="button-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở PDF / Google Drive ↗</a>`:'';
+  $('cvViewBody').innerHTML=`${fileLink}${cv.content?`<pre>${esc(cv.content)}</pre>`:'<div class="empty">CV này chưa có nội dung văn bản. Bạn có thể mở file Drive hoặc bấm Chỉnh sửa để dán toàn bộ nội dung.</div>'}`;
+  cvViewDialog.showModal();
+}
+function editViewedCv(){const id=viewingCvId;cvViewDialog.close();if(id)editCv(id)}
 function editItem(kind,id){
   const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans]};
   const found=map[kind]?.[1].find(x=>x.id===id);
@@ -335,6 +344,7 @@ function editItem(kind,id){
 }
 function openForm(type,item={}){
   currentType=type;editingId=item.id||'';
+  formDialog.classList.toggle('cv-editor-dialog',type==='cv');
   const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',weightLog:'Ghi cân nặng',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');

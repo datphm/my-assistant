@@ -237,6 +237,13 @@
     </section>
   </main>
   <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()">×</button></div><div id="formFields"></div><button class="save" value="default">Lưu</button></form></dialog>
+  <dialog id="cvViewDialog" class="cv-view-dialog">
+    <div class="cv-view-shell">
+      <div class="dialog-head"><div><span class="section-kicker">CV ĐẦY ĐỦ</span><h2 id="cvViewTitle">CV</h2><p id="cvViewMeta" class="meta"></p></div><button type="button" class="close" onclick="cvViewDialog.close()">×</button></div>
+      <div id="cvViewBody" class="cv-view-body"></div>
+      <div class="cv-view-actions"><button class="outline" onclick="cvViewDialog.close()">Đóng</button><button onclick="editViewedCv()">Chỉnh sửa CV này</button></div>
+    </div>
+  </dialog>
   <div id="toast"></div>
   <?!= include('Script'); ?>
 </body>
