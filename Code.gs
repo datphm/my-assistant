@@ -4,7 +4,7 @@ const HEADERS = {
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'note', 'source', 'gmailMessageId'],
   Hotels: ['id', 'name', 'city', 'checkIn', 'checkOut', 'bookingRef', 'source', 'gmailMessageId', 'notes'],
-  Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId'],
+  Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
@@ -45,7 +45,7 @@ function addItem(type, item) {
     return item[key] === undefined ? '' : item[key];
   });
   sheet.appendRow(row);
-  if (type === 'Expenses' && item.walletId) adjustWalletByTransaction_(item.walletId, Number(item.amount || 0), item.direction || 'expense', item.date ? new Date(item.date) : new Date());
+  if (type === 'Expenses') applyExpenseImpact_(item, 1);
   return { ok: true };
 }
 
@@ -55,7 +55,21 @@ function updateItem(type, item) {
   if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
   const sheet = getBook_().getSheetByName(type);
   const existing = readRows_(sheet).find(row => row.id === item.id) || {};
+  if (type === 'Expenses') applyExpenseImpact_(existing, -1);
   upsertRow_(sheet, Object.assign({}, existing, item));
+  if (type === 'Expenses') applyExpenseImpact_(Object.assign({}, existing, item), 1);
+  return { ok: true };
+}
+
+function deleteItem(type, id) {
+  if (!HEADERS[type] || !id) throw new Error('Thiếu thông tin xoá.');
+  const sheet = getBook_().getSheetByName(type);
+  const values = sheet.getDataRange().getValues();
+  const row = values.findIndex((r, i) => i > 0 && r[0] === id);
+  if (row < 1) throw new Error('Không tìm thấy mục cần xoá.');
+  const existing = readRows_(sheet).find(r => r.id === id) || {};
+  if (type === 'Expenses') applyExpenseImpact_(existing, -1);
+  sheet.deleteRow(row + 1);
   return { ok: true };
 }
 
@@ -185,6 +199,32 @@ function updateWalletBalanceManual(item) {
   if (!item.walletId) throw new Error('Hãy chọn ví / tài khoản.');
   updateWalletBalance_(item.walletId, Number(item.balance || 0), new Date());
   return { ok: true };
+}
+
+function adjustWalletManual(item) {
+  if (!item.walletId) throw new Error('Hãy chọn ví / tài khoản.');
+  const amount = Math.abs(Number(item.amount || 0));
+  if (!amount) throw new Error('Nhập số tiền khác 0.');
+  adjustWalletByTransaction_(item.walletId, amount, item.direction || 'expense', new Date());
+  return { ok: true };
+}
+
+function applyExpenseImpact_(item, sign) {
+  if (!item || !item.id) return;
+  const amount = Number(item.amount || 0) * Number(sign || 1);
+  if (item.walletId) adjustWalletByTransaction_(item.walletId, amount, item.direction || 'expense', item.date ? new Date(item.date) : new Date());
+  if (item.debtId && (item.direction || 'expense') !== 'income') adjustDebtBalance_(item.debtId, -amount);
+}
+
+function adjustDebtBalance_(debtId, delta) {
+  const sheet = getBook_().getSheetByName('Debts');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const rows = sheet.getDataRange().getValues();
+  const row = rows.findIndex((value, index) => index > 0 && value[0] === debtId);
+  if (row < 1) return;
+  const col = headers.indexOf('balance') + 1;
+  const current = Number(sheet.getRange(row + 1, col).getValue() || 0);
+  sheet.getRange(row + 1, col).setValue(Math.max(0, current + Number(delta || 0)));
 }
 
 function importTravelFromGmail(query) {
