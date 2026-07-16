@@ -90,7 +90,7 @@ function setMoneyPeriod(p){
   document.querySelectorAll('[data-money-period]').forEach(b=>b.classList.toggle('active',b.dataset.moneyPeriod===p));
   renderMoney();
 }
-function walletCards(){return data.wallets.map(w=>`<article class="wallet-row"><div><b>${esc(w.name)}</b><span>${esc(w.type||'Ví')} ${w.lastUpdatedAt?'· cập nhật '+dateShort(w.lastUpdatedAt):''}</span></div><strong>${vnd(w.balance)}</strong><div class="wallet-actions"><button class="outline small" onclick="editItem('wallet','${w.id}')">Sửa</button><button class="outline small" onclick="openForm('walletAdjust',{walletId:'${w.id}',direction:'income'})">+ / −</button><button class="outline small danger" onclick="removeItem('Wallets','${w.id}')">Xoá</button></div></article>`).join('')}
+function walletCards(){return data.wallets.map(w=>`<article class="wallet-row"><div><b>${esc(w.name)}</b><span>${esc(w.type||'Ví')} ${w.lastUpdatedAt?'· cập nhật '+dateShort(w.lastUpdatedAt):''}</span></div><strong>${vnd(w.balance)}</strong><div class="wallet-actions"><button class="outline small" onclick="editItem('wallet','${w.id}')">Sửa</button><button class="outline small" onclick="openForm('walletAdjust',{walletId:'${w.id}',direction:'income'})">+ / − tiền</button><button class="outline small danger" onclick="removeWallet('${w.id}')">Xoá ví</button></div></article>`).join('')}
 function metricCard(label,value,hint){return `<article class="card mini"><small>${esc(label)}</small><b>${esc(value)}</b><span>${esc(hint)}</span></article>`}
 
 function renderAllocation(periodTx){
@@ -220,6 +220,7 @@ function saveForm(event){
 }
 function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút'}[o]||o}
 function removeItem(type,id){if(!confirm('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
+function removeWallet(id){if(!confirm('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
 function saveCvForm(form,item){
   const file=form.querySelector('input[name="cvFile"]').files[0];
   const done=()=>{formDialog.close();toast('Đã lưu CV');load()};
