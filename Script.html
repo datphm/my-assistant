@@ -60,7 +60,12 @@ function startTimeLog(kind,label){
 function startCustomTimeLog(){const input=$('customTimeLabel'),label=input.value.trim();if(!label){toast('Nhập tên hoạt động trước.');return}startTimeLog('custom',label);input.value=''}
 function stopTimeLog(){
   if(!activeTimeLog)return;
-  google.script.run.withSuccessHandler(result=>{activeTimeLog=null;localStorage.removeItem('my-assistant-active-time-v1');toast(`Đã lưu ${result.durationMinutes} phút`);load()}).withFailureHandler(fail).finishTimeLog();
+  google.script.run.withSuccessHandler(result=>{
+    activeTimeLog=null;localStorage.removeItem('my-assistant-active-time-v1');
+    if(result.log&&!(data.timelogs||[]).some(log=>log.id===result.log.id))data.timelogs.push(result.log);
+    const picker=$('timeDate');if(picker&&result.log)picker.value=localDateKey(result.log.startAt);
+    renderTime();toast(`Đã lưu và xác nhận ${result.durationMinutes} phút trên Google Sheet`);load();
+  }).withFailureHandler(fail).finishTimeLog();
 }
 function renderActiveTime(){
   const label=$('activeTimeLabel'),clock=$('activeTimeClock'),button=$('stopTimeButton');if(!label||!clock||!button)return;
@@ -68,8 +73,8 @@ function renderActiveTime(){
   const seconds=Math.max(0,Math.floor((Date.now()-new Date(activeTimeLog.startAt))/1000)),h=String(Math.floor(seconds/3600)).padStart(2,'0'),m=String(Math.floor(seconds%3600/60)).padStart(2,'0'),s=String(seconds%60).padStart(2,'0');label.textContent=activeTimeLog.label;clock.textContent=`${h}:${m}:${s}`;button.disabled=false;
 }
 function renderTime(){
-  const picker=$('timeDate');if(!picker)return;if(!picker.value)picker.value=new Date().toISOString().slice(0,10);renderActiveTime();
-  const selected=picker.value,logs=(data.timelogs||[]).filter(log=>log.startAt&&new Date(log.startAt).toLocaleDateString('en-CA')===selected).sort((a,b)=>new Date(b.startAt)-new Date(a.startAt));
+  const picker=$('timeDate');if(!picker)return;if(!picker.value)picker.value=localDateKey(new Date());renderActiveTime();
+  const selected=picker.value,logs=(data.timelogs||[]).filter(log=>log.startAt&&localDateKey(log.startAt)===selected).sort((a,b)=>new Date(b.startAt)-new Date(a.startAt));
   const total=logs.reduce((sum,log)=>sum+Number(log.durationMinutes||0),0),groups={};logs.forEach(log=>{const key=log.label||log.kind||'Khác';groups[key]=(groups[key]||0)+Number(log.durationMinutes||0)});
   const top=Object.entries(groups).sort((a,b)=>b[1]-a[1]);$('timeStats').innerHTML=[metricCard('Đã log',`${Math.floor(total/60)}h ${total%60}m`,`${logs.length} hoạt động`),...top.slice(0,3).map(([name,minutes])=>metricCard(name,`${Math.floor(minutes/60)}h ${minutes%60}m`,total?`${Math.round(minutes/total*100)}% trong ngày`:'0%'))].join('');
   $('timeEntries').innerHTML=logs.map(log=>`<article class="card"><div class="card-top"><div><h3>${esc(log.label||log.kind||'Hoạt động')}</h3><p class="meta">${new Date(log.startAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})} → ${new Date(log.endAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})} · ${log.durationMinutes||0} phút</p></div><button class="outline small danger" onclick="removeItem('TimeLogs','${log.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa log thời gian trong ngày này.</div>';
@@ -294,6 +299,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function escAttr(s){return esc(s).replace(/`/g,'&#96;')}
 function dateTime(s){return s?new Date(s).toLocaleString('vi-VN',{dateStyle:'medium',timeStyle:'short'}):'Chưa đặt giờ'}
 function dateShort(s){return s?new Date(s).toLocaleDateString('vi-VN'):'vừa cập nhật'}
+function localDateKey(value){const d=new Date(value);if(isNaN(d))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function safeUrl(url){return /^https:\/\//i.test(url||'')}
 
 const fields={

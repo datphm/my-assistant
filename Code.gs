@@ -190,27 +190,50 @@ function saveRoutineSettings(item) {
 }
 
 function beginTimeLog(kind, label) {
-  const sheet = getBook_().getSheetByName('TimeState');
-  const current = readRows_(sheet)[0];
-  if (current) throw new Error('Đang có một phiên thời gian chạy. Hãy dừng phiên đó trước.');
-  const active = { id: 'active', kind: kind || 'custom', label: label || 'Hoạt động', startAt: new Date() };
-  upsertRow_(sheet, active);
-  return Object.assign({}, active, { startAt: active.startAt.toISOString() });
+  const lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = getBook_().getSheetByName('TimeState');
+    const current = readRows_(sheet)[0];
+    if (current) throw new Error('Đang có một phiên thời gian chạy. Hãy dừng phiên đó trước.');
+    const active = { id: 'active', kind: kind || 'custom', label: label || 'Hoạt động', startAt: new Date() };
+    upsertRow_(sheet, active);
+    SpreadsheetApp.flush();
+    return Object.assign({}, active, { startAt: active.startAt.toISOString() });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function finishTimeLog() {
-  const ss = getBook_();
-  const stateSheet = ss.getSheetByName('TimeState');
-  const active = readRows_(stateSheet)[0];
-  if (!active) throw new Error('Không tìm thấy phiên đang chạy.');
-  const end = new Date();
-  const start = new Date(active.startAt);
-  addItem('TimeLogs', {
-    kind: active.kind, label: active.label, startAt: start, endAt: end,
-    durationMinutes: Math.max(1, Math.round((end - start) / 60000)), note: ''
-  });
-  if (stateSheet.getLastRow() > 1) stateSheet.deleteRows(2, stateSheet.getLastRow() - 1);
-  return { durationMinutes: Math.max(1, Math.round((end - start) / 60000)) };
+  const lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getBook_();
+    const stateSheet = ss.getSheetByName('TimeState');
+    const active = readRows_(stateSheet)[0];
+    if (!active) throw new Error('Không tìm thấy phiên đang chạy. Hãy tải lại trang để đồng bộ trạng thái.');
+    const end = new Date();
+    const start = new Date(active.startAt);
+    if (isNaN(start)) throw new Error('Giờ bắt đầu không hợp lệ; phiên vẫn được giữ để bạn thử lại.');
+    const durationMinutes = Math.max(1, Math.round((end - start) / 60000));
+    const log = {
+      id: Utilities.getUuid(), kind: active.kind || 'custom', label: active.label || 'Hoạt động',
+      startAt: start, endAt: end, durationMinutes: durationMinutes, note: ''
+    };
+    const logSheet = ss.getSheetByName('TimeLogs');
+    logSheet.appendRow(HEADERS.TimeLogs.map(function(key) { return log[key] === undefined ? '' : log[key]; }));
+    SpreadsheetApp.flush();
+    const saved = readRows_(logSheet).some(function(row) { return row.id === log.id; });
+    if (!saved) throw new Error('Google Sheet chưa xác nhận lưu; phiên vẫn được giữ để thử lại.');
+    if (stateSheet.getLastRow() > 1) stateSheet.deleteRows(2, stateSheet.getLastRow() - 1);
+    return {
+      durationMinutes: durationMinutes,
+      log: Object.assign({}, log, { startAt: start.toISOString(), endAt: end.toISOString() })
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getActiveTimeLog() {
