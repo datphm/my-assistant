@@ -2,7 +2,8 @@ const HEADERS = {
   Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
-  Flights: ['id', 'code', 'destination', 'departure', 'terminal'],
+  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'note', 'source', 'gmailMessageId'],
+  Hotels: ['id', 'name', 'city', 'checkIn', 'checkOut', 'bookingRef', 'source', 'gmailMessageId', 'notes'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId'],
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
@@ -21,6 +22,7 @@ function include(file) { return HtmlService.createHtmlOutputFromFile(file).getCo
 function getData() {
   const ss = getBook_();
   ensureDefaultCv_(ss);
+  ensureDefaultFlights_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   return result;
@@ -29,6 +31,7 @@ function getData() {
 function addItem(type, item) {
   if (!HEADERS[type]) throw new Error('Loại dữ liệu không hợp lệ.');
   const sheet = getBook_().getSheetByName(type);
+  if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
   const row = HEADERS[type].map(key => {
     if (key === 'id') return Utilities.getUuid();
     if (key === 'done') return false;
@@ -39,6 +42,7 @@ function addItem(type, item) {
     return item[key] === undefined ? '' : item[key];
   });
   sheet.appendRow(row);
+  if (type === 'Expenses' && item.walletId) adjustWalletByTransaction_(item.walletId, Number(item.amount || 0), item.direction || 'expense', item.date ? new Date(item.date) : new Date());
   return { ok: true };
 }
 
@@ -88,7 +92,7 @@ function importExpensesFromGmail(query, walletId) {
   if (!query || query.length < 5) throw new Error('Hãy nhập truy vấn Gmail, ví dụ from:alerts@yourbank.com newer_than:30d');
   const sheet = getBook_().getSheetByName('Expenses');
   const imported = new Set(readRows_(sheet).map(row => row.gmailMessageId).filter(Boolean));
-  const messages = GmailApp.search(query, 0, 100).flatMap(thread => thread.getMessages());
+  const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
   let count = 0, balanceUpdates = 0;
   messages.forEach(message => {
     const body = message.getPlainBody();
@@ -97,7 +101,9 @@ function importExpensesFromGmail(query, walletId) {
     if (!imported.has(message.getId())) {
       const amount = parseVnd_(body);
       if (!amount) return;
-      sheet.appendRow([Utilities.getUuid(), message.getDate(), amount, cleanMerchant_(message.getSubject()), 'Gmail import', message.getId(), categorize_(message.getSubject() + ' ' + body), guessDirection_(message.getSubject() + ' ' + body), walletId || '']);
+      const direction = guessDirection_(message.getSubject() + ' ' + body);
+      sheet.appendRow([Utilities.getUuid(), message.getDate(), amount, cleanMerchant_(message.getSubject()), 'Gmail import', message.getId(), categorize_(message.getSubject() + ' ' + body), direction, walletId || '']);
+      if (walletId && !balance) adjustWalletByTransaction_(walletId, amount, direction, message.getDate());
       count++;
     }
   });
@@ -121,6 +127,62 @@ function syncBankEmailsAutomatically() {
   return importExpensesFromGmail(query, props.getProperty('BANK_SYNC_WALLET_ID'));
 }
 
+function uninstallBankSync() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncBankEmailsAutomatically').forEach(t => ScriptApp.deleteTrigger(t));
+  return 'Đã tắt đồng bộ email ngân hàng.';
+}
+
+function updateWalletBalanceManual(item) {
+  if (!item.walletId) throw new Error('Hãy chọn ví / tài khoản.');
+  updateWalletBalance_(item.walletId, Number(item.balance || 0), new Date());
+  return { ok: true };
+}
+
+function importTravelFromGmail(query) {
+  if (!query || query.length < 5) throw new Error('Hãy nhập truy vấn Gmail, ví dụ (from:vietjetair.com OR from:booking.com) newer_than:730d');
+  const ss = getBook_();
+  const flightSheet = ss.getSheetByName('Flights');
+  const hotelSheet = ss.getSheetByName('Hotels');
+  const importedFlights = new Set(readRows_(flightSheet).map(row => row.gmailMessageId).filter(Boolean));
+  const importedHotels = new Set(readRows_(hotelSheet).map(row => row.gmailMessageId).filter(Boolean));
+  const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
+  let flights = 0, hotels = 0;
+  messages.forEach(message => {
+    const body = message.getPlainBody();
+    const text = message.getSubject() + '\n' + body;
+    const flight = parseFlightEmail_(text, message);
+    if (flight && !importedFlights.has(message.getId())) {
+      flightSheet.appendRow(HEADERS.Flights.map(key => flight[key] === undefined ? '' : flight[key]));
+      flights++;
+    }
+    const hotel = parseHotelEmail_(text, message);
+    if (hotel && !importedHotels.has(message.getId())) {
+      hotelSheet.appendRow(HEADERS.Hotels.map(key => hotel[key] === undefined ? '' : hotel[key]));
+      hotels++;
+    }
+  });
+  return { flights, hotels };
+}
+
+function installTravelSync(query) {
+  if (!query || query.length < 5) throw new Error('Hãy nhập truy vấn Gmail vé máy bay / khách sạn.');
+  PropertiesService.getUserProperties().setProperty('TRAVEL_SYNC_QUERY', query);
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncTravelEmailsAutomatically').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('syncTravelEmailsAutomatically').timeBased().everyHours(2).create();
+  return 'Đã bật đồng bộ email chuyến bay / khách sạn mỗi 2 tiếng.';
+}
+
+function syncTravelEmailsAutomatically() {
+  const query = PropertiesService.getUserProperties().getProperty('TRAVEL_SYNC_QUERY');
+  if (!query) return { flights: 0, hotels: 0 };
+  return importTravelFromGmail(query);
+}
+
+function uninstallTravelSync() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncTravelEmailsAutomatically').forEach(t => ScriptApp.deleteTrigger(t));
+  return 'Đã tắt đồng bộ email chuyến bay / khách sạn.';
+}
+
 function sendDueTaskReminders() {
   const sheet = getBook_().getSheetByName('Tasks');
   const rows = readRows_(sheet);
@@ -142,6 +204,11 @@ function installReminderTrigger() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('sendDueTaskReminders').timeBased().everyHours(2).create();
   return 'Đã bật email nhắc việc mỗi 2 tiếng cho các việc quá hạn chưa hoàn thành.';
+}
+
+function uninstallReminderTrigger() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
+  return 'Đã tắt email nhắc việc.';
 }
 
 function getBook_() {
@@ -175,6 +242,45 @@ function ensureDefaultCv_(ss) {
   props.setProperty('DEFAULT_CV_SEEDED', '1');
 }
 
+function ensureDefaultFlights_(ss) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('DEFAULT_FLIGHTS_SEEDED')) return;
+  const sheet = ss.getSheetByName('Flights');
+  const existing = readRows_(sheet);
+  if (existing.some(row => row.source === 'PDF flight tracking import')) { props.setProperty('DEFAULT_FLIGHTS_SEEDED', '1'); return; }
+  defaultFlightCsv_().split('\n').filter(Boolean).forEach(line => {
+    const p = line.split('|');
+    const value = {
+      id: Utilities.getUuid(),
+      code: p[1],
+      destination: p[4],
+      departure: flightDateTime_(p[0], p[6]),
+      terminal: '',
+      reg: p[2],
+      fromCode: p[3],
+      toCode: p[4],
+      distanceKm: Number(String(p[5]).replace(/[^\d]/g, '')),
+      depTime: p[6],
+      arrTime: p[7],
+      airline: p[8],
+      aircraft: p[9],
+      seat: p[10],
+      note: p[11],
+      source: 'PDF flight tracking import',
+      gmailMessageId: ''
+    };
+    sheet.appendRow(HEADERS.Flights.map(key => value[key] === undefined ? '' : value[key]));
+  });
+  props.setProperty('DEFAULT_FLIGHTS_SEEDED', '1');
+}
+
+function flightDateTime_(date, time) {
+  if (!date) return '';
+  const parts = date.split('-').map(Number);
+  const t = String(time || '00:00').split(':').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2], t[0] || 0, t[1] || 0);
+}
+
 function ensureHeaders_(sheet, expected) {
   if (sheet.getLastRow() === 0) { sheet.appendRow(expected); return; }
   const current = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].filter(String);
@@ -201,6 +307,89 @@ function updateWalletBalance_(walletId, balance, updatedAt) {
   sheet.getRange(row + 1, headers.indexOf('lastUpdatedAt') + 1).setValue(updatedAt || new Date());
 }
 
+function adjustWalletByTransaction_(walletId, amount, direction, updatedAt) {
+  const sheet = getBook_().getSheetByName('Wallets');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const rows = sheet.getDataRange().getValues();
+  const row = rows.findIndex((value, index) => index > 0 && value[0] === walletId);
+  if (row < 1) return;
+  const col = headers.indexOf('balance') + 1;
+  const current = Number(sheet.getRange(row + 1, col).getValue() || 0);
+  const delta = direction === 'income' ? Number(amount || 0) : -Number(amount || 0);
+  sheet.getRange(row + 1, col).setValue(current + delta);
+  sheet.getRange(row + 1, headers.indexOf('lastUpdatedAt') + 1).setValue(updatedAt || new Date());
+}
+
+function parseFlightEmail_(text, message) {
+  const flight = text.match(/\b([A-Z0-9]{2}\s?\d{2,4})\b/);
+  if (!flight) return null;
+  const airports = (text.match(/\b[A-Z]{3}\b/g) || []).filter(code => knownAirports_().includes(code));
+  const date = parseTravelDate_(text) || message.getDate();
+  const fromCode = airports[0] || '';
+  const toCode = airports.find(code => code !== fromCode) || '';
+  const distance = fromCode && toCode ? distanceForRoute_(fromCode, toCode) : 0;
+  return {
+    id: Utilities.getUuid(),
+    code: flight[1].replace(/\s+/g, ''),
+    destination: toCode || cleanMerchant_(message.getSubject()),
+    departure: date,
+    terminal: '',
+    reg: '',
+    fromCode,
+    toCode,
+    distanceKm: distance,
+    depTime: '',
+    arrTime: '',
+    airline: airlineFromCode_(flight[1]),
+    aircraft: '',
+    seat: '',
+    note: 'Imported from Gmail',
+    source: 'Gmail travel import',
+    gmailMessageId: message.getId()
+  };
+}
+
+function parseHotelEmail_(text, message) {
+  if (!/(hotel|khách sạn|booking|agoda|expedia|reservation|đặt phòng|check.?in)/i.test(text)) return null;
+  const subject = cleanMerchant_(message.getSubject());
+  const ref = (text.match(/(?:booking|reservation|mã đặt phòng|confirmation|ref(?:erence)?)[^\w]{0,20}([A-Z0-9-]{5,})/i) || [])[1] || '';
+  return {
+    id: Utilities.getUuid(),
+    name: subject || 'Hotel booking',
+    city: '',
+    checkIn: parseTravelDate_(text) || message.getDate(),
+    checkOut: '',
+    bookingRef: ref,
+    source: 'Gmail travel import',
+    gmailMessageId: message.getId(),
+    notes: message.getSubject()
+  };
+}
+
+function parseTravelDate_(text) {
+  const iso = text.match(/\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const dmy = text.match(/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](20\d{2})\b/);
+  if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+  return null;
+}
+
+function knownAirports_() {
+  return ['HAN','SGN','DAD','HPH','DIN','VCL','VCS','VTG','HUI','BKK','DMK','SIN','KUL','JHB','PEN','ALA','CGK','DPS'];
+}
+
+function distanceForRoute_(fromCode, toCode) {
+  const key = [fromCode, toCode].sort().join('-');
+  const map = {'HAN-SGN':722,'HAN-ALA':2253,'HAN-KUL':1308,'JHB-KUL':156,'HAN-SIN':1379,'VCS-VTG':118,'SGN-VCS':144,'BKK-HAN':619,'DMK-JHB':874,'DAD-SGN':376,'HAN-VCL':445,'HAN-HPH':692,'HUI-SGN':392,'KUL-SIN':185,'KUL-SGN':654,'PEN-SIN':374,'KUL-PEN':202,'CGK-SGN':1172,'CGK-DPS':611};
+  return map[key] || '';
+}
+
+function airlineFromCode_(flightCode) {
+  const prefix = (String(flightCode || '').match(/^[A-Z0-9]{2}/) || [''])[0].toUpperCase();
+  const map = {VJ:'VJC', VN:'HVN', QH:'BAV', AK:'AXM', MH:'MAS', TR:'TGW', FD:'AIQ', OD:'MXD', GA:'GIA', BL:'PIC', VU:'VAG', VH:'', '3K':'JSA', '9G':'SPQ'};
+  return map[prefix] || prefix;
+}
+
 function readRows_(sheet) {
   const all = sheet.getDataRange().getValues();
   if (all.length < 2) return [];
@@ -222,6 +411,102 @@ function categorize_(text) {
   return 'Khác';
 }
 function cleanMerchant_(subject) { return subject.replace(/^.*?(?:thanh toán|giao dịch|payment)[:\-]?/i, '').trim().slice(0, 120) || 'Giao dịch từ email'; }
+
+function defaultFlightCsv_() {
+  return `2026-10-21|VJ161||HAN|SGN|722|20:55|23:05|VJC|A321|W|E L
+2026-10-21|VJ032||ALA|HAN|2,253|08:10|16:20|VJC|A330||E L
+2026-10-17|VJ031||HAN|ALA|2,253|08:25|12:50|VJC|A330||E L
+2026-10-16|VJ196||SGN|HAN|722|10:30|12:40|VJC|A321|W|E L
+2026-08-15|VJ169||HAN|SGN|722|23:25|01:35|VJC|A321|W 12A|E L
+2026-08-11|MH752||KUL|HAN|1,308|09:35|12:15|MAS|B38M||E L
+2026-08-08|MH1058||JHB|KUL|156|19:45|20:45|MAS|B38M||E L
+2026-08-07|TR533||HAN|SIN|1,379|20:15|00:35|TGW|B788||E L
+2026-06-22|VJ194|VN-A203|SGN|HAN|722|16:50|19:00|VJC|A21N|W 31A|E L
+2026-05-14|VU787|VN-A138|HAN|SGN|722|20:00|22:10|VUN|A321|W 36A|E L
+2026-05-05|VJ150|VN-A810|SGN|HAN|722|17:40|19:50|VJC|A333|W 17A|E L
+2026-05-01|VH02|VN-8427|VCS|VTG|118|15:05|16:05||MI14|W 3A|E L
+2026-04-30|VN8059|VN-B219|SGN|VCS|144|06:40|07:30|HVN|AT75|W 1A|E L
+2026-04-22|VJ151|VN-A629|HAN|SGN|722|18:10|20:20|VJC|A321|W 12A|E L
+2026-02-09|VN680|VN-A507|KUL|HAN|1,308|20:10|22:15|HVN|A21N|W|E L
+2026-02-08|AK6033|9M-RAV|JHB|KUL|156|21:00|21:50|AXM|A320||E L
+2026-02-06|TR301|9V-NCB|HAN|SIN|1,379|09:40|14:15|TGW|A21N||E L
+2025-12-17|VJ138|VN-A653|SGN|HAN|722|12:30|14:40|VJC|A21N|W|E L
+2025-12-17|9G805|VN-A279|HAN|SGN|722|06:30|08:40|SPQ|A321|W 50A|E L
+2025-12-16|VJ182|VN-A644|SGN|HAN|722|23:20|01:30|VJC|A321|W|E L
+2025-12-15|QH211|PK-BBK|HAN|SGN|722|10:10|12:25|LYN|B739|W 39A|E L
+2025-12-14|VN7803|VN-A614|DIN|HAN|181|20:10|21:15|HVN|A321|W 36G|E L
+2025-12-12|VN7802|VN-A396|HAN|DIN|181|18:35|19:35|HVN|A321|W 30G|E L
+2025-11-19|VN616|VN-A508|BKK|HAN|619|22:10|00:05|HVN|A21N|W 38G|E L
+2025-11-17|FD511|HS-BBT|JHB|DMK|874|15:45|17:05|AIQ|A320|W 12A|E L
+2025-11-15|TR301|9V-OFC|HAN|SIN|1,379|09:40|14:15|TGW|B788|W 25K|E L
+2025-10-08|VN6002|VN-A359|SGN|HAN|722|04:55|07:05|HVN|A321|W 36G|E L
+2025-10-04|VN101|VN-A622|DAD|SGN|376|06:00|06:55|HVN|A21N|W 38A|E L
+2025-10-02|VN1641|VN-A324|HAN|VCL|445|07:15|08:40|HVN|A321|W 30G|E L
+2025-03-05|VJ904|VN-A546|BKK|HAN|619|18:35|20:25|VJC|A21N||
+2025-03-02|VJ901|VN-A684|HAN|BKK|619|12:15|14:05|VJC|A321|W 17A|E L
+2025-02-10|VN240|VN-A899|SGN|HAN|722|07:00|09:10|HVN|A359|W|E L
+2025-01-08|VJ1285||HPH|SGN|692|17:05|19:05|VJC|A320|W 36F|E L
+2024-10-17|VJ198|VN-A812|SGN|HAN|722|05:25|07:35|VJC|A333||E
+2024-10-12|VJ159|VN-A637|HAN|SGN|722|19:35|22:10|VJC|A321|W 36A|E L
+2024-09-05|VJ156|VN-A631|SGN|HAN|722|19:40|22:35|VJC|A321|A 3C|E B
+2024-06-25|VJ165|VN-A811|HAN|SGN|722|23:05|01:15|VJC|A333|W|E L
+2024-02-18|VJ124|VN-A816|SGN|HAN|722|07:00|09:10|VJC|A333|W 48A|E L
+2024-01-17|QH1103|VN-A262|HUI|SGN|392|21:30|23:00|BAV|E190|W|E L
+2023-08-11|AK512|9M-AHY|KUL|HAN|1,308|12:40|15:00|AXM|A320||E
+2023-08-10|MH1058|9M-MSB|JHB|KUL|156|19:45|20:45|MAS|B738||E
+2023-08-07|TR301|9V-TNF|HAN|SIN|1,379|13:10|17:45|TGW|A20N|W 3A|E L
+2023-05-30|VN216|VN-A869|SGN|HAN|722|16:00|18:15|HVN|B789|W 29A|E L
+2023-05-30|VN676|VN-A339|KUL|SGN|654|12:30|14:00|HVN|A321|W 36A|E L
+2023-05-30|AK702|9M-AGH|SIN|KUL|185|09:10|10:25|AXM|A20N|W 9F|E L
+2023-05-27|OD807|9M-LRC|KUL|SIN|185|15:05|16:10|MXD|B38M||E L
+2023-05-27|VN677|VN-A396|SGN|KUL|654|07:55|11:25|HVN|A321||E L
+2023-05-26|VN6025|VN-A572|HAN|SGN|722|06:20|08:50|HVN|A320|W 08A|E L
+2023-04-02|VJ164|VN-A684|SGN|HAN|722|22:45|00:55|VJC|A321|W|E L
+2023-03-29|VJ165|VN-A685|HAN|SGN|722|23:00|01:10|VJC|A321|W|E L
+2023-02-02|QH244|VN-A819|SGN|HAN|722|18:50|21:05|LYN|B789||E
+2023-01-15|VN261|VN-A888|HAN|SGN|722|16:30|18:45|HVN|A359||EL
+2022-11-27|VJ916|VN-A629|SIN|HAN|1,379|14:55|17:25|VJC|A321|W|EL
+2022-11-25|AK1721|9M-AHZ|PEN|SIN|374|09:55|11:20|AXM|A320||EL
+2022-11-23|AK6128|9M-RCH|KUL|PEN|202|18:20|19:20|AXM|A320|W|EL
+2022-11-21|AK513|9M-AJZ|HAN|KUL|1,308|14:50|19:10|AXM|A320|W|EL
+2022-08-30|VN260|VN-A874|SGN|HAN|722|21:00|23:05|HVN|B78X|W|EB
+2022-06-30|AK520||KUL|SGN|654|06:55|08:05|AXM|A320|W|EL
+2022-06-28|3K687||SIN|KUL|185|19:30|20:40|JSA|A320|W|EL
+2022-06-27|TR301||HAN|SIN|1,379|13:10|17:45|TGW|A21N|W|EL
+2022-05-04|VJ158||SGN|HAN|722|21:40|23:50|VJC|A330|W|EL
+2022-04-28|VJ155||HAN|SGN|722|22:15|00:15|VJC|A330|W48A|EL
+2022-02-10|VN214||SGN|HAN|722|14:00|16:10|HVN|B787|W|EB
+2022-01-17|VN6009||HAN|SGN|722|11:40|13:55|HVN|A320|W|EB
+2021-11-19|VN246||SGN|HAN|722|11:00|13:10|HVN|B787|W|EB
+2021-01-31|VN215||HAN|SGN|722|15:00|17:15|HVN|A359|W|E+L
+2021-01-30|VU780||SGN|HAN|722|17:45|19:55|VAG|A321|W|EL
+2020-12-27|VJ155||HAN|SGN|722|22:15|00:15|VJC|A21N|W|EL
+2020-12-24|VJ158||SGN|HAN|722|21:40|23:50|VJC|A321|W|EL
+2020-03-02|VN205||HAN|SGN|722|05:00|07:15|HVN|A321|W|EL
+2020-02-03|VN7238||SGN|HAN|722|22:00|00:10|HVN|A21N|W|EL
+2020-02-01|VN273||HAN|SGN|722|13:00|15:10|HVN|A359|W|EL
+2020-01-31|VN263||HAN|SGN|722|20:00|22:15|HVN|A350|W|E+L
+2020-01-20|VN216|VN-A871|SGN|HAN|722|07:01|09:10|HVN|B789|W|EL
+2019-06-02|BL697||DAD|SGN|376|15:00|16:30|PIC|A320|W|EL
+2019-05-28|BL697||SGN|DAD|376|15:00||PIC|A320|W|EL
+2018-06-07|BL678||SGN|DAD|376|15:35|16:55|PIC|A320|W|EL
+2018-02-19|VJ137||HAN|SGN|722|11:40|13:50|VJC|A321|W|EL
+2018-02-11|VJ136||SGN|HAN|722|08:30|10:40|VJC|A321|W1A|BL
+2017-02-04|VN243||HAN|SGN|722|06:00|08:10|HVN|A350|W|EL
+2017-01-22|VN7240||SGN|HAN|722|05:00|07:00|HVN|A321|W|EL
+2016-06-23|VN239||HAN|SGN|722|12:45|14:45|HVN|B789|W|E+L
+2015-06-07|VN7226||SGN|HAN|722|19:00|21:00|HVN|B787|W|E+L
+2014-07-12|VN630||CGK|SGN|1,172|14:40|18:05|HVN|A321|W|EL
+2014-07-10|GA407||DPS|CGK|611|12:00|12:55|GIA|B735|W|EL
+2014-07-07|GA426||CGK|DPS|611|17:15|20:15|GIA|A333|M|EL
+2014-07-07|VN631||SGN|CGK|1,172|10:30|13:50|HVN|A321|W|EL
+2014-02-14|VN208||SGN|HAN|722|19:00||HVN|A321|W|EL
+2014-01-30|VN285||SGN|HAN|722|17:00|19:10|HVN|A321|W|EL
+2013-01-30|VN285||HAN|SGN|722|15:00|17:00|||W|EL
+2013-01-10|VN208||SGN|HAN|722|08:00|10:10|HVN|A330||E
+2007-08-12|VN285||HAN|SGN|722|21:00|23:15|HVN|A332|W|EL
+2007-07-14|VN208||SGN|HAN|722|06:00|08:10|HVN|B77E|M|EL`;
+}
 
 function defaultCvContent_() {
   return `DAT PHAM NGUYEN GIA
