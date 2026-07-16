@@ -33,13 +33,29 @@
 
     <section id="today" class="page active">
       <div class="section-head"><h2>Việc kế tiếp</h2><button onclick="openForm('task')">+ Thêm việc</button></div>
+      <article class="card think-deep">
+        <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
+        <h2>Đừng chỉ nhận việc. Hãy chốt đầu ra.</h2>
+        <p>Mỗi nhiệm vụ mới phải đi qua 6 câu hỏi trước khi bạn rời màn hình này.</p>
+        <div class="deep-grid">
+          <label><input data-deep type="checkbox"> Đầu ra cụ thể là gì?</label>
+          <label><input data-deep type="checkbox"> Deadline và giờ báo lại?</label>
+          <label><input data-deep type="checkbox"> Cần hỏi/gọi ai ngay?</label>
+          <label><input data-deep type="checkbox"> Ràng buộc: người, tiền, di chuyển?</label>
+          <label><input data-deep type="checkbox"> File/lịch nào phải cập nhật?</label>
+          <label><input data-deep type="checkbox"> Khi nào gửi recap cho người giao?</label>
+        </div>
+        <p class="deep-mantra">Hỏi rõ → gọi người quyết định → chốt → cập nhật tài liệu → báo lại.</p>
+      </article>
       <article class="card quick-capture">
-        <h3>Nhập nhanh bằng câu bình thường</h3>
-        <p class="hint">Ví dụ: “Đạt thông báo cho nhân viên về tình hình công việc trước 19h00 ngày 01/8/2026”.</p>
+        <h3>Dán nguyên nhiệm vụ bạn vừa nhận</h3>
+        <p class="hint">App sẽ gợi ý chuỗi hành động để bạn chủ động chốt việc, cập nhật tài liệu và báo lại.</p>
         <div class="inline wrap">
           <textarea id="taskMessage" placeholder="Nhập tin nhắn công việc ở đây..."></textarea>
-          <button onclick="createTaskFromMessage()">Tạo việc</button>
+          <button class="outline" onclick="createTaskFromMessage()">Tạo 1 việc</button>
+          <button onclick="suggestTaskPlan()">Phân rã nhiệm vụ</button>
         </div>
+        <div id="taskSuggestions" class="task-suggestions"></div>
       </article>
       <div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div>
       <div id="kanban" class="kanban"></div>
