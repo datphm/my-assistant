@@ -28,10 +28,19 @@
       <button data-page="cv">CV</button>
       <button data-page="food">Ăn uống</button>
       <button data-page="travel">Chuyến đi</button>
+      <button data-page="install">Cài app</button>
     </nav>
 
     <section id="today" class="page active">
       <div class="section-head"><h2>Việc kế tiếp</h2><button onclick="openForm('task')">+ Thêm việc</button></div>
+      <article class="card quick-capture">
+        <h3>Nhập nhanh bằng câu bình thường</h3>
+        <p class="hint">Ví dụ: “Đạt thông báo cho nhân viên về tình hình công việc trước 19h00 ngày 01/8/2026”.</p>
+        <div class="inline wrap">
+          <textarea id="taskMessage" placeholder="Nhập tin nhắn công việc ở đây..."></textarea>
+          <button onclick="createTaskFromMessage()">Tạo việc</button>
+        </div>
+      </article>
       <div id="tasks" class="cards"></div>
     </section>
 
@@ -105,6 +114,37 @@
       <div id="flights" class="cards"></div>
       <h3>Khách sạn</h3>
       <div id="hotels" class="cards"></div>
+    </section>
+
+    <section id="install" class="page">
+      <div class="section-head"><h2>Cài trên điện thoại</h2><button onclick="copyAppLink()">Copy link app</button></div>
+      <div class="install-grid">
+        <article class="card install-card">
+          <span class="pill">iPhone / iPad</span>
+          <h3>Hồ sơ iPhone</h3>
+          <p class="meta">Tải file cấu hình để thêm My Assistant như một icon riêng trên màn hình chính.</p>
+          <a class="button-link" id="iosProfileLink" href="?download=ios-profile" target="_blank" rel="noopener">Tải hồ sơ iPhone</a>
+          <p class="hint">Nếu iPhone hỏi: Settings → Profile Downloaded → Install.</p>
+        </article>
+        <article class="card install-card">
+          <span class="pill">Android</span>
+          <h3>APK / cài nhanh</h3>
+          <p class="meta">Bản web dùng được ngay bằng Chrome → Add to Home screen. APK native cần build riêng từ repo.</p>
+          <a class="button-link" id="androidApkLink" href="?download=android-apk" target="_blank" rel="noopener">Chỗ tải APK / hướng dẫn</a>
+          <p class="hint">Mình đã để sẵn “chỗ tải”; khi build APK thật, nút này sẽ trỏ sang file APK.</p>
+        </article>
+        <article class="card install-card">
+          <span class="pill">Thông báo</span>
+          <h3>Bật thông báo trên máy này</h3>
+          <p class="meta">Cho phép thông báo trình duyệt nếu thiết bị hỗ trợ. Nhắc việc chắc chắn nhất hiện vẫn là email mỗi 2 tiếng.</p>
+          <div class="actions stacked">
+            <button onclick="enableDeviceNotifications()">Bật thông báo thiết bị</button>
+            <button class="outline" onclick="enableEmails()">Bật email nhắc</button>
+            <button class="outline danger" onclick="disableEmails()">Tắt email nhắc</button>
+          </div>
+          <p id="notificationStatus" class="hint"></p>
+        </article>
+      </div>
     </section>
   </main>
   <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()">×</button></div><div id="formFields"></div><button class="save" value="default">Lưu</button></form></dialog>
