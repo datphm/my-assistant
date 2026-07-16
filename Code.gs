@@ -526,44 +526,8 @@ function uninstallReminderTrigger() {
 }
 
 function buildIosProfile_() {
-  const appUrl = ScriptApp.getService().getUrl() || 'https://script.google.com/';
-  const uuid1 = Utilities.getUuid().toUpperCase();
-  const uuid2 = Utilities.getUuid().toUpperCase();
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>PayloadContent</key><array><dict>
-    <key>FullScreen</key><true/>
-    <key>IsRemovable</key><true/>
-    <key>Label</key><string>My Assistant</string>
-    <key>PayloadDescription</key><string>My Assistant web app shortcut</string>
-    <key>PayloadDisplayName</key><string>My Assistant</string>
-    <key>PayloadIdentifier</key><string>com.datpham.myassistant.webclip</string>
-    <key>PayloadType</key><string>com.apple.webClip.managed</string>
-    <key>PayloadUUID</key><string>${uuid1}</string>
-    <key>PayloadVersion</key><integer>1</integer>
-    <key>Precomposed</key><false/>
-    <key>URL</key><string>${escapeXml_(appUrl)}</string>
-  </dict></array>
-  <key>PayloadDescription</key><string>Thêm My Assistant ra màn hình chính iPhone.</string>
-  <key>PayloadDisplayName</key><string>My Assistant iPhone Profile</string>
-  <key>PayloadIdentifier</key><string>com.datpham.myassistant.profile</string>
-  <key>PayloadOrganization</key><string>My Assistant</string>
-  <key>PayloadRemovalDisallowed</key><false/>
-  <key>PayloadType</key><string>Configuration</string>
-  <key>PayloadUUID</key><string>${uuid2}</string>
-  <key>PayloadVersion</key><integer>1</integer>
-</dict></plist>`;
-  // Apps Script cannot set Apple's custom mobileconfig MIME type directly.
-  // Serve a tiny download page that creates the profile as a Blob; this avoids
-  // Safari/in-app browsers rendering a blank XML page instead of downloading it.
-  const payload = JSON.stringify(xml).replace(/</g, '\\u003c');
-  const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Tải hồ sơ My Assistant</title>
-  <style>body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;padding:28px;line-height:1.5;background:#f4f7f6;color:#173b46}a{display:inline-block;padding:14px 18px;background:#176b63;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>
-  <h2>Hồ sơ My Assistant iPhone</h2><p>Nếu tệp chưa tự tải, bấm nút bên dưới rồi mở bằng Safari.</p>
-  <a id="download" download="My-Assistant-iPhone.mobileconfig">Tải hồ sơ</a>
-  <script>const xml=${payload};const blob=new Blob([xml],{type:'application/x-apple-aspen-config'});const a=document.getElementById('download');a.href=URL.createObjectURL(blob);setTimeout(()=>a.click(),250);</script>`;
+  const profileUrl = 'https://datphm.github.io/my-assistant/My-Assistant.mobileconfig';
+  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="0;url=${profileUrl}"><title>Mở hồ sơ My Assistant</title></head><body style="font:16px -apple-system,sans-serif;padding:28px;background:#0e203c;color:white"><h2>Đang mở hồ sơ My Assistant…</h2><p>Nếu Safari chưa chuyển trang, bấm nút bên dưới.</p><a style="display:inline-block;padding:14px 18px;background:#28624d;color:white;border-radius:12px;text-decoration:none" href="${profileUrl}">Tải hồ sơ iPhone</a></body></html>`;
   return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 

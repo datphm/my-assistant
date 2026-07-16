@@ -171,11 +171,11 @@ function renderTravel(){
   $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
 }
 function renderInstall(){
-  const ios=$('iosProfileLink'), android=$('androidApkLink');
-  if(ios)ios.href=location.origin+location.pathname+'?download=ios-profile';
-  if(android)android.href=location.origin+location.pathname+'?download=android-apk';
+  const ios=$('iosProfileLink');
+  if(ios)ios.href='https://datphm.github.io/my-assistant/My-Assistant.mobileconfig';
   updateNotificationStatus();
 }
+function showInstallHelp(){alert('iPhone / iPad:\n1. Mở My Assistant bằng Safari.\n2. Bấm Tải hồ sơ iPhone.\n3. Mở Cài đặt → Đã tải về hồ sơ → Cài đặt.\n\nAndroid:\n1. Mở bằng Chrome.\n2. Bấm menu ⋮ → Thêm vào màn hình chính.');}
 function routeLabel(f){return f.fromCode||f.toCode?`${f.fromCode||'?'} → ${f.toCode||f.destination||'?'}`:(f.destination||'Chưa rõ điểm đến')}
 function topBy(list,fn){const m={};list.forEach(x=>{const k=fn(x);m[k]=(m[k]||0)+1});const e=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return {name:e?e[0]:'—',count:e?e[1]:0}}
 function airlineFromCode(code){const m=String(code||'').match(/^[A-Z0-9]{2}/);return m?m[0]:''}

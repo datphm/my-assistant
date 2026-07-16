@@ -29,7 +29,7 @@
       <button data-page="food">Ăn uống</button>
       <button data-page="travel">Chuyến đi</button>
       <button data-page="time">Thời gian</button>
-      <button data-page="install">Cài app</button>
+      <button data-page="install">Cài đặt</button>
     </nav>
 
     <section id="today" class="page active">
@@ -173,26 +173,26 @@
     </section>
 
     <section id="install" class="page">
-      <div class="section-head"><h2>Cài trên điện thoại</h2><div class="actions"><button onclick="copyAppLink()">Copy link app</button><button class="outline" onclick="exportAllDataFile()">Xuất dữ liệu JSON</button></div></div>
+      <div class="section-head"><h2>Cài đặt & điện thoại</h2><div class="actions"><button onclick="copyAppLink()">Copy link app</button><button class="outline" onclick="exportAllDataFile()">Xuất dữ liệu JSON</button></div></div>
       <div class="install-grid">
         <article class="card install-card">
           <span class="pill">iPhone / iPad</span>
-          <h3>Hồ sơ iPhone</h3>
-          <p class="meta">Tải file cấu hình để thêm My Assistant như một icon riêng trên màn hình chính.</p>
-          <a class="button-link" id="iosProfileLink" href="?download=ios-profile" target="_blank" rel="noopener">Tải hồ sơ iPhone</a>
-          <p class="hint">Nếu iPhone hỏi: Settings → Profile Downloaded → Install.</p>
+          <h3>Hồ sơ My Assistant</h3>
+          <p class="meta">Hồ sơ tạo một icon My Assistant trên Màn hình chính và mở thẳng đúng bản Google Apps Script này.</p>
+          <a class="button-link" id="iosProfileLink" href="https://datphm.github.io/my-assistant/My-Assistant.mobileconfig" target="_top">Tải hồ sơ iPhone</a>
+          <p class="hint"><b>Phải mở link bằng Safari.</b> Sau khi tải: Cài đặt iPhone → Đã tải về hồ sơ → My Assistant → Cài đặt. File không còn trường Icon rỗng từng gây lỗi trước đây.</p>
         </article>
         <article class="card install-card">
           <span class="pill">Android</span>
-          <h3>APK / cài nhanh</h3>
-          <p class="meta">Bản web dùng được ngay bằng Chrome → Add to Home screen. APK native cần build riêng từ repo.</p>
-          <a class="button-link" id="androidApkLink" href="?download=android-apk" target="_blank" rel="noopener">Chỗ tải APK / hướng dẫn</a>
-          <p class="hint">Mình đã để sẵn “chỗ tải”; khi build APK thật, nút này sẽ trỏ sang file APK.</p>
+          <h3>Thêm vào màn hình chính</h3>
+          <p class="meta">Trên Android: mở trang này bằng Chrome → menu ⋮ → Thêm vào màn hình chính.</p>
+          <button class="button-link" onclick="showInstallHelp()">Xem hướng dẫn cài</button>
+          <p class="hint">Đây là web app; chưa có APK native ký riêng.</p>
         </article>
         <article class="card install-card">
           <span class="pill">Thông báo</span>
           <h3>Bật thông báo trên máy này</h3>
-          <p class="meta">Calendar phát pop-up trước 60/30/10/5 phút. Việc bật Bám đuổi sẽ email lại mỗi 15 phút cho đến khi bạn bấm Đã bắt đầu.</p>
+          <p class="meta">Trên iPhone, thông báo nền ổn định sẽ đi qua ứng dụng Google Calendar/Gmail. Hồ sơ iPhone tạo icon mở app; bản thân hồ sơ không tự sinh thông báo.</p>
           <div class="actions stacked">
             <button onclick="connectReminderServices()">Kết nối Calendar + nhắc</button>
             <button onclick="enableDeviceNotifications()">Bật thông báo thiết bị</button>
