@@ -54,6 +54,14 @@ Thiết lập một lần (mình có thể làm cùng bạn):
 
 Không đưa ba giá trị này vào source code, chat công khai hay repository. `CLASPRC_JSON` có quyền truy cập Apps Script của bạn.
 
+Nếu GitHub báo `Unexpected end of JSON input` ở bước `clasp push`, gần như chắc chắn secret `CLASPRC_JSON` đang rỗng hoặc không phải JSON đầy đủ. Xóa secret đó rồi tạo lại:
+
+1. Trên Mac mở Terminal, chạy `npx @google/clasp login`.
+2. Sau khi đăng nhập xong, chạy `open ~/.clasprc.json`.
+3. Copy toàn bộ nội dung file, bắt đầu bằng `{` và kết thúc bằng `}`.
+4. Vào GitHub repository → **Settings → Secrets and variables → Actions** → `CLASPRC_JSON` → **Update**.
+5. Dán đúng nội dung JSON vừa copy, không thêm dấu nháy ngoài, không dán vào chat.
+
 ## Bản native iPhone
 
 Thư mục `../NhipSong` là bản SwiftUI native trước đó. Để phát hành nó lên iPhone cần Mac có Xcode và Apple Developer account/TestFlight; GitHub không thể thay thế bước ký ứng dụng đó. Bản Web App này là cách dùng được ngay trên cả hai thiết bị.
