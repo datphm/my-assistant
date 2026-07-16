@@ -233,6 +233,9 @@ function copyAppLink(){
   const link=location.origin+location.pathname;
   navigator.clipboard?.writeText(link).then(()=>toast('Đã copy link app')).catch(()=>toast(link));
 }
+function exportAllDataFile(){
+  google.script.run.withSuccessHandler(payload=>{const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='my-assistant-google-data.json';a.click();toast('Đã xuất dữ liệu JSON.');}).withFailureHandler(fail).exportAllData();
+}
 function activatePage(page){
   const btn=document.querySelector(`nav button[data-page="${page}"]`);
   const section=$(page);

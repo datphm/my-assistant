@@ -31,6 +31,11 @@ function getData() {
   return result;
 }
 
+function exportAllData() {
+  const data = getData();
+  return { exportedAt: new Date().toISOString(), source: 'My Assistant Google Apps Script', data };
+}
+
 function addItem(type, item) {
   if (!HEADERS[type]) throw new Error('Loại dữ liệu không hợp lệ.');
   const sheet = getBook_().getSheetByName(type);
