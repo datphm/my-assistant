@@ -78,6 +78,18 @@ Thiết lập một lần (mình có thể làm cùng bạn):
 
 Không đưa ba giá trị này vào source code, chat công khai hay repository. `CLASPRC_JSON` có quyền truy cập Apps Script của bạn.
 
+### Tự push GitHub trên máy Mac
+
+Codex luôn commit thay đổi vào máy trước. Nếu môi trường Codex không truy cập được GitHub, một lần push vào buổi sáng vẫn gửi toàn bộ commit đã tạo trong đêm. Để các lần sau không phải mở Terminal sau mỗi commit, chạy trình cài tự đồng bộ đúng một lần:
+
+```bash
+cd "/Users/datpham/Documents/Codex/2026-07-16/to/outputs/MyAssistant"
+git push origin main
+./scripts/install-auto-sync.sh
+```
+
+macOS sẽ chạy một tác vụ nền mỗi 5 phút. Tác vụ chỉ push khi working tree sạch và remote không có commit mới; nếu có xung đột, nó dừng an toàn thay vì tự merge. Log nằm trong `.git/auto-sync.log`.
+
 Nếu GitHub báo `Unexpected end of JSON input` ở bước `clasp push`, gần như chắc chắn secret `CLASPRC_JSON` đang rỗng hoặc không phải JSON đầy đủ. Xóa secret đó rồi tạo lại:
 
 1. Trên Mac mở Terminal, chạy `npx @google/clasp login`.
