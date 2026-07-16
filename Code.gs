@@ -19,6 +19,10 @@ const HEADERS = {
   Notifications: ['id', 'type', 'title', 'message', 'targetType', 'targetId', 'priority', 'dedupeKey', 'createdAt', 'readAt']
 };
 
+// Avoid re-reading and re-writing every sheet header on every mobile action.
+// Bump this value only when HEADERS changes.
+const SCHEMA_VERSION = '2026-07-17-task-capture-v2';
+
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
   if (download === 'ios-profile') return buildIosProfile_();
@@ -363,7 +367,9 @@ function buildJsonExport_() {
 function suggestTaskPlan(message) {
   const text = String(message || '').trim();
   if (!text) throw new Error('Hãy dán nhiệm vụ bạn vừa nhận.');
+  const parsed = parseTaskMessage_(text);
   const isEvent = /sinh nhật|escape|phòng chơi|đặt phòng|booking|sự kiện/i.test(text);
+  const isReport = /báo cáo|report|biên bản|tổng hợp.*họp|họp/i.test(text);
   const steps = isEvent ? [
     'Chốt số người tham gia: hỏi ngay người chưa xác nhận',
     'Cập nhật số lượng vào file Docs và báo lại người giao việc',
@@ -372,30 +378,55 @@ function suggestTaskPlan(message) {
     'Gọi trực tiếp nơi cung cấp: báo số người, yêu cầu và hỏi giới hạn phát sinh',
     'Thảo luận rồi chốt thời lượng, chi phí và người thanh toán',
     'Xác nhận booking; cập nhật Docs/lịch; gửi recap kết quả và bước tiếp theo'
+  ] : isReport ? [
+    'Chốt đầu ra của “' + parsed.title + '”: mẫu, phạm vi và người nhận',
+    'Mở biên bản/tài liệu họp; gom số liệu và các ý còn thiếu',
+    'Hỏi ngay người đang giữ thông tin còn thiếu; ghi rõ giờ cần phản hồi',
+    'Soạn bản nháp, nêu kết luận, đầu việc, người phụ trách và thời hạn',
+    'Kiểm tra lại số liệu rồi cập nhật file Docs/Sheet bản cuối',
+    'Gửi báo cáo và báo lại người giao việc trước ' + formatPlanDeadline_(parsed.dueAt)
   ] : [
-    'Viết lại đầu ra phải bàn giao và deadline chính xác',
+    'Chốt đầu ra phải bàn giao của “' + parsed.title + '” và tiêu chí hoàn thành',
     'Liệt kê người cần hỏi; nhắn hoặc gọi ngay người đang giữ thông tin',
     'Chốt các ràng buộc: số người, ngân sách, địa điểm, di chuyển hoặc quyền quyết định',
     'Đưa ra một phương án đề xuất và một phương án dự phòng',
     'Thực hiện hành động chốt; cập nhật file Docs/Sheet/Calendar liên quan',
     'Gửi recap cho người giao việc: đã chốt gì, còn kẹt gì, khi nào xong'
   ];
-  const now = Date.now();
+  const due = new Date(parsed.dueAt).getTime();
+  const start = Date.now() + 5 * 60 * 1000;
+  const finish = Math.max(due, start + steps.length * 10 * 60 * 1000);
   return steps.map(function(title, index) {
+    const stepDue = new Date(start + ((finish - start) * (index + 1) / steps.length));
     return {
       title: title,
       area: 'Công việc',
       minutes: index < 2 ? 10 : 20,
       status: 'todo',
-      dueAt: new Date(now + (index + 1) * 30 * 60 * 1000).toISOString()
+      dueAt: stepDue.toISOString()
     };
   });
 }
 
+function formatPlanDeadline_(value) {
+  return Utilities.formatDate(new Date(value), Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'HH:mm dd/MM/yyyy');
+}
+
 function addSuggestedTasks(items) {
   if (!Array.isArray(items) || !items.length) throw new Error('Chưa chọn bước nào để thêm.');
-  items.forEach(function(item) { addItem('Tasks', item); });
-  return { count: items.length };
+  const sheet = getBook_().getSheetByName('Tasks');
+  const created = items.map(function(item) {
+    const task = Object.assign({}, item, {
+      id: Utilities.getUuid(), done: false, lastEmailedAt: '', calendarEventId: '',
+      chaseMode: item.chaseMode || 'normal', startedAt: '', snoozedUntil: ''
+    });
+    return task;
+  });
+  const rows = created.map(function(task) {
+    return HEADERS.Tasks.map(function(key) { return task[key] === undefined ? '' : task[key]; });
+  });
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, HEADERS.Tasks.length).setValues(rows);
+  return { count: created.length, items: created };
 }
 
 function addItem(type, item) {
@@ -537,6 +568,7 @@ function createTaskFromMessage(message) {
   const result = addItem('Tasks', parsed);
   parsed.id = result.id;
   parsed.calendarWarning = result.calendarWarning;
+  parsed.suggestions = suggestTaskPlan(message);
   return parsed;
 }
 
@@ -1090,13 +1122,20 @@ function getBook_() {
   const props = PropertiesService.getUserProperties();
   let id = props.getProperty('BOOK_ID');
   let ss = id ? SpreadsheetApp.openById(id) : null;
-  if (!ss) { ss = SpreadsheetApp.create('My Assistant — dữ liệu riêng'); props.setProperty('BOOK_ID', ss.getId()); }
-  Object.entries(HEADERS).forEach(([name, headers]) => {
-    let sheet = ss.getSheetByName(name);
-    if (!sheet) sheet = ss.insertSheet(name);
-    ensureHeaders_(sheet, headers);
-    sheet.setFrozenRows(1);
-  });
+  if (!ss) {
+    ss = SpreadsheetApp.create('My Assistant — dữ liệu riêng');
+    props.setProperty('BOOK_ID', ss.getId());
+    props.deleteProperty('SCHEMA_VERSION');
+  }
+  if (props.getProperty('SCHEMA_VERSION') !== SCHEMA_VERSION) {
+    Object.entries(HEADERS).forEach(([name, headers]) => {
+      let sheet = ss.getSheetByName(name);
+      if (!sheet) sheet = ss.insertSheet(name);
+      ensureHeaders_(sheet, headers);
+      if (sheet.getFrozenRows() !== 1) sheet.setFrozenRows(1);
+    });
+    props.setProperty('SCHEMA_VERSION', SCHEMA_VERSION);
+  }
   return ss;
 }
 
@@ -1277,27 +1316,60 @@ function parseTaskMessage_(message) {
   const text = String(message || '').trim();
   if (!text) throw new Error('Hãy nhập nội dung công việc.');
   const lower = text.toLowerCase();
-  const timeMatch = lower.match(/\b(?:trước|lúc|vào|sau)\s*(\d{1,2})[h:](\d{2})?\b/) || lower.match(/\b(\d{1,2})[h:](\d{2})\b/);
-  const dateMatch = lower.match(/\b(?:ngày\s*)?(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](20\d{2})\b/);
   const now = new Date();
-  const day = dateMatch ? Number(dateMatch[1]) : now.getDate();
-  const month = dateMatch ? Number(dateMatch[2]) - 1 : now.getMonth();
-  const year = dateMatch ? Number(dateMatch[3]) : now.getFullYear();
-  const hour = timeMatch ? Number(timeMatch[1]) : 18;
+  const dueAt = new Date(now);
+  dueAt.setSeconds(0, 0);
+
+  const dateMatch = lower.match(/\b(?:ngày\s*)?(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?\b/);
+  let hasDate = false;
+  if (dateMatch) {
+    let year = dateMatch[3] ? Number(dateMatch[3]) : now.getFullYear();
+    if (year < 100) year += 2000;
+    dueAt.setFullYear(year, Number(dateMatch[2]) - 1, Number(dateMatch[1]));
+    if (!dateMatch[3] && dueAt < now) dueAt.setFullYear(year + 1);
+    hasDate = true;
+  } else if (/\b(?:ngày\s*)?(?:kia|mốt)\b/.test(lower)) {
+    dueAt.setDate(dueAt.getDate() + 2); hasDate = true;
+  } else if (/\b(?:ngày\s*)?mai\b/.test(lower)) {
+    dueAt.setDate(dueAt.getDate() + 1); hasDate = true;
+  } else if (/\b(?:hôm\s*nay|nay)\b/.test(lower)) {
+    hasDate = true;
+  } else {
+    const weekdayMatch = lower.match(/\b(?:thứ\s*([2-7])|chủ\s*nhật)\b/);
+    if (weekdayMatch) {
+      const target = weekdayMatch[1] ? Number(weekdayMatch[1]) - 1 : 0;
+      let delta = (target - now.getDay() + 7) % 7;
+      if (delta === 0) delta = 7;
+      dueAt.setDate(dueAt.getDate() + delta); hasDate = true;
+    }
+  }
+
+  const timeMatch = lower.match(/\b(\d{1,2})\s*(?:h|giờ|:)(?:\s*(\d{1,2}))?\b/);
+  const period = /\b(sáng|trưa|chiều|tối|đêm)\b/.exec(lower);
+  let hour = timeMatch ? Number(timeMatch[1]) : period ? ({sáng: 9, trưa: 12, chiều: 17, tối: 20, đêm: 22})[period[1]] : 18;
   const minute = timeMatch ? Number(timeMatch[2] || 0) : 0;
-  const dueAt = new Date(year, month, day, hour, minute);
+  if (period && /chiều|tối|đêm/.test(period[1]) && hour < 12) hour += 12;
+  if (hour > 23 || minute > 59) throw new Error('Giờ trong nhiệm vụ chưa hợp lệ. Hãy dùng dạng 10h00 hoặc 10:00.');
+  dueAt.setHours(hour, minute, 0, 0);
+  if (!hasDate && dueAt <= now) dueAt.setDate(dueAt.getDate() + 1);
+
   const title = text
-    .replace(/\b(?:trước|lúc|vào|sau)\s*\d{1,2}[h:]\d{0,2}/ig, '')
-    .replace(/\b(?:ngày\s*)?\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]20\d{2}\b/ig, '')
+    .replace(/\b(?:trước|lúc|vào|sau|hạn|deadline)?\s*\d{1,2}\s*(?:h|giờ|:)\s*\d{0,2}\s*(?:sáng|trưa|chiều|tối|đêm)?\b/ig, '')
+    .replace(/\b(?:trước|hạn|deadline)?\s*(?:sáng|trưa|chiều|tối|đêm)?\s*(?:hôm\s*nay|nay|ngày\s*mai|mai|ngày\s*kia|kia|mốt)\b/ig, '')
+    .replace(/\b(?:vào|trước|hạn|deadline)?\s*(?:thứ\s*[2-7]|chủ\s*nhật)\b/ig, '')
+    .replace(/\b(?:ngày\s*)?\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?\b/ig, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(/[.,;:]+$/g, '');
+    .replace(/^(?:trước|hạn|deadline)\s+/i, '')
+    .replace(/[.,;:\-]+$/g, '');
   const area = /nhân viên|công việc|team|khách|deadline|báo cáo|vận hành/i.test(text) ? 'Công việc' : 'Cá nhân';
   return {
     title: title || text,
     dueAt,
     area,
-    minutes: 15
+    minutes: /báo cáo|report|tổng hợp/i.test(text) ? 45 : 15,
+    status: 'todo',
+    chaseMode: 'normal'
   };
 }
 

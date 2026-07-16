@@ -41,7 +41,10 @@ function renderTimeAnchor(){
   countdown.textContent=past?`Quá ${hours}h ${mins}m ${secs}s`:`Còn ${hours}h ${mins}m ${secs}s`; title.textContent=next.title;
 }
 setInterval(()=>{renderTimeAnchor();renderActiveTime()},1000);
-setInterval(syncActiveTimeLog,15000);
+// Keep the local counter smooth without continuously competing with save calls
+// for an Apps Script execution slot. Cross-device state still refreshes when
+// the app becomes visible and once per minute in the background.
+setInterval(syncActiveTimeLog,60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncActiveTimeLog()});
 
 function syncActiveTimeLog(){
@@ -278,7 +281,11 @@ function toggleChase(id){google.script.run.withSuccessHandler(msg=>{toast(msg);l
 function createTaskFromMessage(){
   const box=$('taskMessage'); const message=box.value.trim();
   if(!message){toast('Nhập một câu công việc trước đã.');return}
-  google.script.run.withSuccessHandler(task=>{box.value='';toast(`Đã tạo việc: ${task.title}`);load()}).withFailureHandler(fail).createTaskFromMessage(message);
+  google.script.run.withSuccessHandler(task=>{
+    data.tasks=data.tasks||[];data.tasks.push(task);
+    suggestedTasks=task.suggestions||[];renderTaskSuggestions();render();
+    toast(`Đã tạo: ${task.title} · hạn ${dateTime(task.dueAt)}. Chọn các bước bên dưới.`);
+  }).withFailureHandler(fail).createTaskFromMessage(message);
 }
 let suggestedTasks=[];
 function suggestTaskPlan(){
@@ -293,7 +300,7 @@ function renderTaskSuggestions(){
 function addSuggestedTasks(){
   const selected=[...document.querySelectorAll('[data-suggestion]:checked')].map(el=>suggestedTasks[Number(el.dataset.suggestion)]);
   if(!selected.length){toast('Hãy chọn ít nhất một bước.');return}
-  google.script.run.withSuccessHandler(result=>{$('taskMessage').value='';$('taskSuggestions').innerHTML='';suggestedTasks=[];toast(`Đã thêm ${result.count} bước vào Kanban`);load()}).withFailureHandler(fail).addSuggestedTasks(selected);
+  google.script.run.withSuccessHandler(result=>{data.tasks=(data.tasks||[]).concat(result.items||[]);$('taskMessage').value='';$('taskSuggestions').innerHTML='';suggestedTasks=[];toast(`Đã thêm ${result.count} bước vào Kanban`);render()}).withFailureHandler(fail).addSuggestedTasks(selected);
 }
 function resetDeepChecklist(){document.querySelectorAll('[data-deep]').forEach(box=>box.checked=false);toast('Đã làm mới checklist Think Deep.')}
 function truth(x){return x===true||x==='TRUE'}
