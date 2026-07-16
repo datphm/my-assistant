@@ -1,5 +1,5 @@
 const HEADERS = {
-  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId'],
+  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId'],
@@ -85,8 +85,9 @@ function addItem(type, item) {
   if (!HEADERS[type]) throw new Error('Loại dữ liệu không hợp lệ.');
   const sheet = getBook_().getSheetByName(type);
   if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
+  const id = item.id || Utilities.getUuid();
   const row = HEADERS[type].map(key => {
-    if (key === 'id') return Utilities.getUuid();
+    if (key === 'id') return id;
     if (key === 'done') return false;
     if (key === 'lastEmailedAt' || key === 'gmailMessageId' || key === 'lastUpdatedAt') return '';
     if (key === 'updatedAt') return new Date();
@@ -96,7 +97,11 @@ function addItem(type, item) {
   });
   sheet.appendRow(row);
   if (type === 'Expenses') applyExpenseImpact_(item, 1);
-  return { ok: true };
+  let calendarWarning = '';
+  if (type === 'Tasks' && item.dueAt) {
+    try { syncTaskToCalendar(id); } catch (error) { calendarWarning = error.message || String(error); }
+  }
+  return { ok: true, id: id, calendarWarning: calendarWarning };
 }
 
 function updateItem(type, item) {
@@ -108,7 +113,11 @@ function updateItem(type, item) {
   if (type === 'Expenses') applyExpenseImpact_(existing, -1);
   upsertRow_(sheet, Object.assign({}, existing, item));
   if (type === 'Expenses') applyExpenseImpact_(Object.assign({}, existing, item), 1);
-  return { ok: true };
+  let calendarWarning = '';
+  if (type === 'Tasks' && item.dueAt) {
+    try { syncTaskToCalendar(item.id); } catch (error) { calendarWarning = error.message || String(error); }
+  }
+  return { ok: true, calendarWarning: calendarWarning };
 }
 
 function deleteItem(type, id) {
@@ -166,9 +175,29 @@ function completeTask(id) {
   return { ok: true };
 }
 
+function startTask(id) {
+  const sheet = getBook_().getSheetByName('Tasks');
+  const task = readRows_(sheet).find(row => row.id === id);
+  if (!task) throw new Error('Không tìm thấy việc.');
+  upsertRow_(sheet, Object.assign({}, task, { status: 'doing', startedAt: new Date(), snoozedUntil: '' }));
+  return { ok: true };
+}
+
+function toggleTaskChase(id) {
+  const sheet = getBook_().getSheetByName('Tasks');
+  const task = readRows_(sheet).find(row => row.id === id);
+  if (!task) throw new Error('Không tìm thấy việc.');
+  const next = task.chaseMode === 'urgent' ? 'normal' : 'urgent';
+  upsertRow_(sheet, Object.assign({}, task, { chaseMode: next, startedAt: '', lastEmailedAt: '' }));
+  installReminderTrigger();
+  return next === 'urgent' ? 'Đã bật Bám đuổi: nhắc lại mỗi 15 phút khi đến hạn.' : 'Đã chuyển về nhắc thường mỗi 2 giờ.';
+}
+
 function createTaskFromMessage(message) {
   const parsed = parseTaskMessage_(message);
-  addItem('Tasks', parsed);
+  const result = addItem('Tasks', parsed);
+  parsed.id = result.id;
+  parsed.calendarWarning = result.calendarWarning;
   return parsed;
 }
 
@@ -195,8 +224,11 @@ function syncTaskToCalendar(id) {
       description: `Area: ${task.area || ''}\nCreated from My Assistant`
     });
   }
+  event.removeAllReminders();
+  [60, 30, 10, 5].forEach(function(minutes) { event.addPopupReminder(minutes); });
+  event.addEmailReminder(30);
   upsertRow_(sheet, Object.assign({}, task, { calendarEventId: event.getId(), status: task.status || 'todo' }));
-  return 'Đã đưa việc này lên Google Calendar.';
+  return 'Đã đưa lên Google Calendar với nhắc trước 60, 30, 10 và 5 phút.';
 }
 
 // One-click import is deliberately restricted to bank/payment emails chosen by you.
@@ -326,23 +358,26 @@ function sendDueTaskReminders() {
   const sheet = getBook_().getSheetByName('Tasks');
   const rows = readRows_(sheet);
   const now = new Date();
-  const recipient = Session.getActiveUser().getEmail();
+  const recipient = Session.getEffectiveUser().getEmail();
   if (!recipient) throw new Error('Hãy triển khai app trong tài khoản Google Workspace của bạn để gửi email nhắc việc.');
   rows.forEach((task, i) => {
     const due = new Date(task.dueAt);
     const last = task.lastEmailedAt ? new Date(task.lastEmailedAt) : null;
-    const overdue = !task.done && due <= now;
-    const canRepeat = !last || (now - last) >= 2 * 60 * 60 * 1000;
+    const snoozed = task.snoozedUntil && new Date(task.snoozedUntil) > now;
+    const overdue = !task.done && !task.startedAt && !snoozed && due <= now;
+    const interval = task.chaseMode === 'urgent' ? 15 * 60 * 1000 : 2 * 60 * 60 * 1000;
+    const canRepeat = !last || (now - last) >= interval;
     if (!overdue || !canRepeat) return;
-    GmailApp.sendEmail(recipient, `My Assistant: ${task.title}`, `Đến giờ: ${task.title}\n\nChỉ cần bắt đầu ${task.minutes || 10} phút. Mở My Assistant để hoàn thành hoặc dời việc.`);
+    const urgent = task.chaseMode === 'urgent';
+    MailApp.sendEmail(recipient, `${urgent ? 'KHẨN · ' : ''}My Assistant: ${task.title}`, `Đến giờ: ${task.title}\n\nBước duy nhất lúc này: mở việc và làm ${task.minutes || 10} phút.\n\nBấm “Đã bắt đầu” trong My Assistant để dừng chuỗi nhắc, hoặc ✓ khi hoàn thành.`);
     sheet.getRange(i + 2, 7).setValue(now);
   });
 }
 
 function installReminderTrigger() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('sendDueTaskReminders').timeBased().everyHours(2).create();
-  return 'Đã bật email nhắc việc mỗi 2 tiếng cho các việc quá hạn chưa hoàn thành.';
+  ScriptApp.newTrigger('sendDueTaskReminders').timeBased().everyMinutes(15).create();
+  return 'Đã bật nhắc chủ động: việc thường mỗi 2 giờ, việc Bám đuổi mỗi 15 phút.';
 }
 
 function uninstallReminderTrigger() {
