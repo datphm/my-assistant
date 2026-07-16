@@ -28,6 +28,7 @@
       <button data-page="cv">CV</button>
       <button data-page="food">Ăn uống</button>
       <button data-page="travel">Chuyến đi</button>
+      <button data-page="time">Thời gian</button>
       <button data-page="install">Cài app</button>
     </nav>
 
@@ -136,6 +137,21 @@
       <div id="flights" class="cards"></div>
       <div class="section-head subhead"><h3>Khách sạn</h3><button class="outline" onclick="openForm('hotel')">+ Khách sạn</button></div>
       <div id="hotels" class="cards"></div>
+    </section>
+
+    <section id="time" class="page">
+      <div class="section-head"><h2>Nhật ký thời gian</h2><input id="timeDate" type="date" onchange="renderTime()"></div>
+      <article class="card time-tracker">
+        <div><span>ĐANG LÀM</span><b id="activeTimeLabel">Chưa bắt đầu</b><small id="activeTimeClock">00:00:00</small></div>
+        <button id="stopTimeButton" class="stop-time" onclick="stopTimeLog()" disabled>Dừng & lưu</button>
+      </article>
+      <div class="time-kinds">
+        <button onclick="startTimeLog('work','Công việc')">💼 Công việc</button><button onclick="startTimeLog('dead','Thời gian chết')">🫥 Thời gian chết</button><button onclick="startTimeLog('travel','Di chuyển')">🚗 Di chuyển</button><button onclick="startTimeLog('sleep','Ngủ')">😴 Ngủ</button><button onclick="startTimeLog('play','Đi chơi')">🎉 Đi chơi</button><button onclick="startTimeLog('personal','Cá nhân')">🧍 Cá nhân</button><button onclick="startTimeLog('walk','Đi bộ')">🚶 Đi bộ</button><button onclick="startTimeLog('exercise','Thể dục')">🏃 Thể dục</button><button onclick="startTimeLog('meal','Ăn uống')">🍜 Ăn uống</button>
+      </div>
+      <article class="card custom-time"><h3>Mục riêng</h3><div class="inline wrap"><input id="customTimeLabel" placeholder="Ví dụ: đọc sách, gọi điện, học tiếng Trung"><button onclick="startCustomTimeLog()">Bắt đầu</button></div></article>
+      <div id="timeStats" class="insight-grid"></div>
+      <div class="section-head subhead"><h2>Dòng thời gian</h2></div>
+      <div id="timeEntries" class="cards"></div>
     </section>
 
     <section id="install" class="page">
