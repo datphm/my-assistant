@@ -6,7 +6,7 @@ const HEADERS = {
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId'],
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
-  CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'updatedAt'],
+  CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt']
 };
 
@@ -20,6 +20,7 @@ function include(file) { return HtmlService.createHtmlOutputFromFile(file).getCo
 
 function getData() {
   const ss = getBook_();
+  ensureDefaultCv_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   return result;
@@ -55,6 +56,21 @@ function saveCv(item) {
   const value = Object.assign({}, item, { id: item.id || Utilities.getUuid(), updatedAt: new Date() });
   upsertRow_(sheet, value);
   return { ok: true, id: value.id };
+}
+
+function saveCvWithFile(item, file) {
+  const value = Object.assign({}, item);
+  if (file && file.dataUrl) {
+    const match = String(file.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) throw new Error('File CV không hợp lệ.');
+    const bytes = Utilities.base64Decode(match[2]);
+    const name = file.name || 'Dat Pham Nguyen Gia - CV.pdf';
+    const blob = Utilities.newBlob(bytes, match[1] || 'application/pdf', name);
+    const driveFile = DriveApp.createFile(blob);
+    value.driveUrl = driveFile.getUrl();
+    value.fileName = name;
+  }
+  return saveCv(value);
 }
 
 function completeTask(id) {
@@ -142,6 +158,23 @@ function getBook_() {
   return ss;
 }
 
+function ensureDefaultCv_(ss) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('DEFAULT_CV_SEEDED')) return;
+  const sheet = ss.getSheetByName('CVs');
+  if (readRows_(sheet).length) { props.setProperty('DEFAULT_CV_SEEDED', '1'); return; }
+  sheet.appendRow([
+    'default-cv-dat-pham-nguyen-gia',
+    'Dat Pham Nguyen Gia - CV',
+    'Operations / Strategy / Business Development',
+    defaultCvContent_(),
+    '',
+    'Pham Nguyen Gia Dat_CV (3).pdf',
+    new Date()
+  ]);
+  props.setProperty('DEFAULT_CV_SEEDED', '1');
+}
+
 function ensureHeaders_(sheet, expected) {
   if (sheet.getLastRow() === 0) { sheet.appendRow(expected); return; }
   const current = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].filter(String);
@@ -189,3 +222,59 @@ function categorize_(text) {
   return 'Khác';
 }
 function cleanMerchant_(subject) { return subject.replace(/^.*?(?:thanh toán|giao dịch|payment)[:\-]?/i, '').trim().slice(0, 120) || 'Giao dịch từ email'; }
+
+function defaultCvContent_() {
+  return `DAT PHAM NGUYEN GIA
+Email: pngd.23@gmail.com
+Phone: +84 395 764 331
+Location: Hanoi, Viet Nam
+
+EDUCATION
+Diplomatic Academy of Viet Nam | Bachelor in International Relations | Sep 2021 - Aug 2025
+Relevant coursework: Foreign Policy Analysis, Negotiation and Protocols, Global Management, EU/China/U.S. Studies, International Events Analysis.
+
+WORK EXPERIENCE
+MXiao Chinese | Chief Operating Officer (COO) | Apr 2026 - Present
+- Designed and managed the core operating system for an education startup specializing in Chinese language training.
+- Standardized workflows across Academic, Student Affairs, Marketing, Sales, HR, and Finance.
+- Built KPI frameworks and tracking dashboards to evaluate team performance and improve operations.
+
+CMC Telecom, Global Service Provider BU | Business Development Strategy & GTM Planning Specialist | Jan 2026 - Apr 2026
+- Authored 10+ policy briefs and RIAs on cross-border data flows for C-suite advisory.
+- Led GTM intelligence across 3 regions and 8 target markets; researched 30+ competitors and technology-policy landscapes.
+- Built a database of 300+ global stakeholders and identified 30+ high-potential B2B prospects.
+
+CMC Corporation | Strategic External Relations Assistant | Apr 2025 - Jan 2026
+- Supported 50+ strategic policy and external affairs activities per month.
+- Contributed data and recommendations for legislative drafts, state-funded IT investment decrees, and the 2026-2030 SME Digital Transformation framework.
+- Supported high-profile events with the Prime Minister, Ministers, and 200+ leaders.
+- Drafted speeches, policy briefs, official correspondence, briefing books, and external affairs frameworks.
+
+Office of National Assembly of S.R. Viet Nam | Foreign Affairs Trainee | Jul 2023 - Sep 2023
+- Served as secretariat and content sub-committee assistant for the 9th Global Young Parliamentarians Conference.
+- Drafted and translated 30+ parliamentary documents and briefing notes.
+
+Faculty of International Politics and Diplomacy | Student Lead & Faculty Intern | May 2022 - Dec 2024
+- Coordinated 65+ students for communications and event operations.
+- Organized 25+ major events including FIPAD+ Forum and supported diplomatic activities with ambassadors and international leaders.
+
+Business Executive Network | Event Assistant (Freelance) | May 2024 - Feb 2025
+- Supported high-level B2B networking events, guest relations, hybrid logistics, and on-site operations.
+
+Foreign Affairs Department of Ba Ria-Vung Tau | Intern | Jul 2022 - Sep 2022
+- Researched local immigration and import/export policies; translated official state documents and diplomatic correspondence.
+
+PROJECTS
+Research on Vietnamese Youth Nationalism through the "Viet Phuc" Movement | Co-author
+- Synthesized quantitative data, conducted interviews, and proposed policy recommendations for youth heritage engagement.
+
+Me and Myself Organization | Founder and President | 2018 - 2021
+- Founded a student-run non-profit focused on anti-bullying and body-shaming prevention for 500+ students.
+- Developed surveys with 200+ respondents and organized 8+ events across 5+ high schools.
+
+SKILLS
+Languages: Native Vietnamese; Fluent English (IELTS 7.0)
+Research & Analysis: OSINT, policy research, qualitative and quantitative analysis, market intelligence, survey design, data synthesis, strategic GTM planning, policy advocacy, diplomatic protocol, stakeholder management, event orchestration, translation.
+Leadership & Soft Skills: Team management, crisis communication, problem-solving, cross-departmental coordination, speechwriting, stakeholder management.
+Technical: MS Office Suite, Google Workspace, Canva, CapCut, basic Adobe Photoshop, Google Gemini, NotebookLM, AI Studio, ChatGPT.`;
+}
