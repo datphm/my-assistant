@@ -35,8 +35,15 @@ jobs:
           fi
           node -e "require('fs').writeFileSync('.clasp.json', JSON.stringify({ scriptId: process.env.SCRIPT_ID, rootDir: '.' }))"
       - name: Push source and update Web App
+        env:
+          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
         run: |
+          if [ -z "$DEPLOYMENT_ID" ]; then
+            echo "Missing GitHub secret: APPS_SCRIPT_DEPLOYMENT_ID"
+            echo "Add the existing Web App deployment ID so the URL stays unchanged."
+            exit 1
+          fi
           clasp push --force
-          clasp deploy --description "GitHub automatic update $GITHUB_SHA"
+          clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub automatic update $GITHUB_SHA"
           echo "Current deployments:"
           clasp deployments
