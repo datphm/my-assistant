@@ -1,6 +1,13 @@
 # My Assistant
 
-Một web app riêng cho bạn, mở được trên máy tính và iPhone; dữ liệu nằm trong Google Sheets riêng của tài khoản Google Workspace. App gửi email nhắc các việc đã đến hạn, lưu nợ, thực đơn, chuyến bay và có thể nhập chi tiêu từ **các email ngân hàng mà bạn chủ động chọn**.
+Một web app riêng cho bạn, mở được trên máy tính và iPhone; dữ liệu nằm trong Google Sheets riêng của tài khoản Google Workspace. App gửi email nhắc việc, lưu hồ sơ cá nhân, ví/tài khoản, CV, nợ, thực đơn, chuyến bay và có thể nhập chi tiêu từ **các email ngân hàng mà bạn chủ động chọn**.
+
+## Hồ sơ, CV và dòng tiền
+
+- Tab **Hồ sơ** lưu ngày sinh, nhóm máu, liên hệ khẩn cấp và ghi chú sức khỏe. Đây là dữ liệu riêng tư, nên Web App phải luôn để quyền truy cập là **Only myself**.
+- Tab **CV** lưu nhiều phiên bản CV, vai trò hướng tới, ghi chú chỉnh sửa và link Google Docs/Drive. Bấm **Cập nhật** để thay đổi một CV đã lưu.
+- Tab **Tiền** cho phép thêm ví, tài khoản ngân hàng hoặc thẻ; nhập chi tiêu thủ công; và hiển thị biểu đồ phân bổ chi tiêu tháng hiện tại. Email ngân hàng được gán nhóm chi tiêu tự động theo từ khóa phổ biến; bạn nên kiểm tra lại những giao dịch gán vào nhóm `Khác`.
+- Bạn có thể đặt tỷ trọng riêng qua nút **Thiết lập %**. Các tỷ trọng này là mục tiêu do bạn đặt, không phải khuyến nghị tài chính của app.
 
 ## Cách dùng đơn giản nhất
 
@@ -18,7 +25,9 @@ App không thể đọc notification của iPhone hoặc inbox Zalo. Với Gmail
 
 `from:alerts@ten-ngan-hang.com newer_than:30d`
 
-App chỉ lấy số tiền từ email khớp truy vấn. Hãy thử với ít email trước và kiểm tra kết quả; mỗi ngân hàng có mẫu nội dung khác nhau nên đây là tiện ích nhập liệu, không phải sổ kế toán chính xác. Không dùng truy vấn rộng như `newer_than:30d` vì nó sẽ có nguy cơ lấy nhầm email.
+Chọn ví/tài khoản tương ứng nếu muốn app cập nhật số dư. App chỉ cập nhật số dư khi email có cụm như `Số dư`, `Available balance` hoặc `Account balance`; nếu ngân hàng dùng mẫu khác, số dư sẽ không tự đổi nhưng giao dịch vẫn có thể được nhập.
+
+Nút **Nhập ngay** quét thủ công. Nút **Bật tự động** lưu truy vấn đó và quét mỗi 2 tiếng. Hãy thử với ít email trước và kiểm tra kết quả; mỗi ngân hàng có mẫu nội dung khác nhau nên đây là tiện ích nhập liệu, không phải sổ kế toán chính xác. Không dùng truy vấn rộng như `newer_than:30d` vì nó sẽ có nguy cơ lấy nhầm email.
 
 ## Bảo mật
 
