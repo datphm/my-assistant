@@ -81,6 +81,7 @@
           <button class="outline" onclick="openForm('balance')">+ Số dư</button>
           <button class="outline" onclick="openForm('expense')">+ Giao dịch</button>
           <button onclick="openForm('debt')">+ Nợ</button>
+          <button class="outline" onclick="openForm('plan')">+ Kế hoạch lớn</button>
         </div>
       </div>
       <div id="moneySummary" class="metric"></div>
@@ -107,6 +108,9 @@
       <div id="expenses" class="cards compact-cards"></div>
       <h3>Khoản nợ</h3>
       <div id="debts" class="cards"></div>
+      <div class="section-head subhead"><h3>Kế hoạch chi lớn / chuyến đi sắp tới</h3><button class="outline" onclick="openForm('plan')">+ Kế hoạch</button></div>
+      <div id="moneyCoach" class="cards"></div>
+      <div id="plans" class="cards"></div>
     </section>
 
     <section id="cv" class="page">
@@ -149,6 +153,20 @@
         <button onclick="startTimeLog('work','Công việc')">💼 Công việc</button><button onclick="startTimeLog('dead','Thời gian chết')">🫥 Thời gian chết</button><button onclick="startTimeLog('travel','Di chuyển')">🚗 Di chuyển</button><button onclick="startTimeLog('sleep','Ngủ')">😴 Ngủ</button><button onclick="startTimeLog('play','Đi chơi')">🎉 Đi chơi</button><button onclick="startTimeLog('personal','Cá nhân')">🧍 Cá nhân</button><button onclick="startTimeLog('walk','Đi bộ')">🚶 Đi bộ</button><button onclick="startTimeLog('exercise','Thể dục')">🏃 Thể dục</button><button onclick="startTimeLog('meal','Ăn uống')">🍜 Ăn uống</button>
       </div>
       <article class="card custom-time"><h3>Mục riêng</h3><div class="inline wrap"><input id="customTimeLabel" placeholder="Ví dụ: đọc sách, gọi điện, học tiếng Trung"><button onclick="startCustomTimeLog()">Bắt đầu</button></div></article>
+      <div class="two-col routine-grid">
+        <article class="card">
+          <div class="section-head compact"><h3>Điểm neo sinh hoạt</h3><button class="outline small" onclick="openRoutineForm()">Sửa giờ</button></div>
+          <div id="routineSummary" class="routine-summary"></div>
+          <div class="actions stacked"><button onclick="installRoutineCalendarUi()">Tạo nhắc Google Calendar</button><button class="outline" onclick="enableEmails()">Bật email + nhắc log</button></div>
+          <p class="hint">Mỗi khoảng bạn chọn, app sẽ hỏi “Bạn đang làm gì?” nếu chưa có bộ đếm chạy. Các nhắc ăn/ngủ chỉ gửi một lần mỗi ngày.</p>
+        </article>
+        <article class="card sleep-calculator">
+          <h3>Máy tính giấc ngủ</h3>
+          <p class="hint">Ước tính theo chu kỳ trung bình 90 phút; chu kỳ thực tế có thể khoảng 80–100 phút.</p>
+          <div class="inline wrap"><label>Ngủ lúc <input id="sleepStart" type="time" value="23:30"></label><label>Mất <input id="sleepLatency" type="number" min="0" max="90" value="15"> phút để ngủ</label><button onclick="calculateSleepWindow()">Tính giờ dậy</button></div>
+          <div id="sleepSuggestions" class="sleep-suggestions"></div>
+        </article>
+      </div>
       <div id="timeStats" class="insight-grid"></div>
       <div class="section-head subhead"><h2>Dòng thời gian</h2></div>
       <div id="timeEntries" class="cards"></div>

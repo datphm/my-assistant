@@ -1,5 +1,5 @@
 <script>
-let data={tasks:[],debts:[],meals:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[]};
+let data={tasks:[],debts:[],meals:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
@@ -8,7 +8,7 @@ const num=n=>new Intl.NumberFormat('vi-VN').format(Number(n||0));
 const colors=['#203a66','#245647','#87aa99','#e5b44f','#e55d6f','#5795d0'];
 const periodLabels={week:'tuần này',month:'tháng này',year:'năm nay',twoYears:'2 năm gần đây'};
 
-function load(){google.script.run.withSuccessHandler(d=>{data=Object.assign(data,d);render()}).withFailureHandler(fail).getData()}
+function load(){google.script.run.withSuccessHandler(d=>{data=Object.assign(data,d);const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1');render()}).withFailureHandler(fail).getData()}
 function render(){
   const open=data.tasks.filter(t=>!truth(t.done)).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
@@ -42,12 +42,12 @@ setInterval(()=>{renderTimeAnchor();renderActiveTime()},1000);
 
 function startTimeLog(kind,label){
   if(activeTimeLog){toast('Hãy dừng mục đang chạy trước.');return}
-  activeTimeLog={kind,label,startAt:new Date().toISOString()}; localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog)); renderTime();
+  google.script.run.withSuccessHandler(active=>{activeTimeLog=active;localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(active));renderTime();toast('Đã bắt đầu · tập trung vào đúng việc này')}).withFailureHandler(fail).beginTimeLog(kind,label);
 }
 function startCustomTimeLog(){const input=$('customTimeLabel'),label=input.value.trim();if(!label){toast('Nhập tên hoạt động trước.');return}startTimeLog('custom',label);input.value=''}
 function stopTimeLog(){
-  if(!activeTimeLog)return; const end=new Date(),start=new Date(activeTimeLog.startAt); const item={kind:activeTimeLog.kind,label:activeTimeLog.label,startAt:start.toISOString(),endAt:end.toISOString(),durationMinutes:Math.max(1,Math.round((end-start)/60000)),note:''};
-  google.script.run.withSuccessHandler(()=>{activeTimeLog=null;localStorage.removeItem('my-assistant-active-time-v1');toast('Đã lưu thời gian');load()}).withFailureHandler(fail).addItem('TimeLogs',item);
+  if(!activeTimeLog)return;
+  google.script.run.withSuccessHandler(result=>{activeTimeLog=null;localStorage.removeItem('my-assistant-active-time-v1');toast(`Đã lưu ${result.durationMinutes} phút`);load()}).withFailureHandler(fail).finishTimeLog();
 }
 function renderActiveTime(){
   const label=$('activeTimeLabel'),clock=$('activeTimeClock'),button=$('stopTimeButton');if(!label||!clock||!button)return;
@@ -60,6 +60,21 @@ function renderTime(){
   const total=logs.reduce((sum,log)=>sum+Number(log.durationMinutes||0),0),groups={};logs.forEach(log=>{const key=log.label||log.kind||'Khác';groups[key]=(groups[key]||0)+Number(log.durationMinutes||0)});
   const top=Object.entries(groups).sort((a,b)=>b[1]-a[1]);$('timeStats').innerHTML=[metricCard('Đã log',`${Math.floor(total/60)}h ${total%60}m`,`${logs.length} hoạt động`),...top.slice(0,3).map(([name,minutes])=>metricCard(name,`${Math.floor(minutes/60)}h ${minutes%60}m`,total?`${Math.round(minutes/total*100)}% trong ngày`:'0%'))].join('');
   $('timeEntries').innerHTML=logs.map(log=>`<article class="card"><div class="card-top"><div><h3>${esc(log.label||log.kind||'Hoạt động')}</h3><p class="meta">${new Date(log.startAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})} → ${new Date(log.endAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})} · ${log.durationMinutes||0} phút</p></div><button class="outline small danger" onclick="removeItem('TimeLogs','${log.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa log thời gian trong ngày này.</div>';
+  renderRoutine();
+}
+
+function renderRoutine(){
+  const r=(data.routinesettings||[])[0]||{};const el=$('routineSummary');if(!el)return;
+  el.innerHTML=`<span>🍳 Ăn sáng <b>${esc(r.breakfastTime||'08:00')}</b></span><span>🍱 Ăn trưa <b>${esc(r.lunchTime||'12:30')}</b></span><span>🍲 Ăn tối <b>${esc(r.dinnerTime||'19:00')}</b></span><span>🌙 Đi ngủ <b>${esc(r.bedtime||'23:30')}</b></span><span>☀️ Thức dậy <b>${esc(r.wakeTime||'07:30')}</b></span><span>⏱ Hỏi log mỗi <b>${esc(r.logIntervalMinutes||60)} phút</b></span>`;
+  if($('sleepLatency'))$('sleepLatency').value=r.sleepLatencyMinutes||15;
+}
+function openRoutineForm(){openForm('routine',(data.routinesettings||[])[0]||{})}
+function installRoutineCalendarUi(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installRoutineCalendar()}
+function calculateSleepWindow(){
+  const value=$('sleepStart').value||'23:30',latency=Number($('sleepLatency').value||15),parts=value.split(':').map(Number),start=new Date();start.setHours(parts[0],parts[1],0,0);if(start<Date.now()-3600000)start.setDate(start.getDate()+1);
+  const wake=cycles=>new Date(start.getTime()+(latency+cycles*90)*60000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+  const routine=(data.routinesettings||[])[0]||{},target=routine.wakeTime||'07:30';
+  $('sleepSuggestions').innerHTML=`<div><b>${wake(5)}</b><span>5 chu kỳ · khoảng 7 giờ 30 phút</span></div><div class="best"><b>${wake(6)}</b><span>6 chu kỳ · khoảng 9 giờ</span></div><p class="hint">Nếu phải dậy lúc ${esc(target)}, hãy ưu tiên đủ ít nhất 7 giờ ngủ. Đây là ước tính, không phải chẩn đoán y khoa.</p>`;
 }
 function renderKanban(){
   const now=new Date();
@@ -96,6 +111,15 @@ function renderMoney(){
   $('debts').innerHTML=data.debts.map(d=>`<article class="card"><div class="card-top"><div><h3>${esc(d.name)} <span class="amount">${vnd(d.balance)}</span></h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('debt','${d.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Debts','${d.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
   const recent=data.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,12);
   $('expenses').innerHTML=recent.map(e=>`<article class="card"><div class="card-top"><div><h3>${esc(e.merchant)} <span class="amount ${e.direction==='income'?'positive':''}">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')}${e.debtId?' · đã trừ vào khoản nợ':''} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('expense','${e.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Expenses','${e.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
+  renderPlans(totalBalance,totalDebt);
+}
+
+function renderPlans(totalBalance,totalDebt){
+  const plans=data.plans||[],cutoff=new Date(Date.now()-90*86400000),recent=data.expenses.filter(e=>e.date&&new Date(e.date)>=cutoff),income=recent.filter(e=>e.direction==='income').reduce((s,e)=>s+Number(e.amount||0),0),out=recent.filter(e=>e.direction!=='income').reduce((s,e)=>s+Number(e.amount||0),0),monthlyNet=(income-out)/3;
+  const coach=$('moneyCoach'),list=$('plans');if(!coach||!list)return;
+  const available=Math.max(0,totalBalance-totalDebt);
+  coach.innerHTML=`<article class="card"><h3>Gợi ý ưu tiên tiền lúc này</h3><p class="meta">Sau khi trừ dư nợ khỏi số dư hiện có: <b>${vnd(available)}</b>. Dòng tiền ròng bình quân 90 ngày: <b>${vnd(monthlyNet)}/tháng</b>.</p><p class="hint">Giữ một khoản dự phòng phù hợp với rủi ro thực tế của bạn trước khi cam kết khoản chi lớn; số tiền phù hợp phụ thuộc hoàn cảnh.</p></article>`;
+  list.innerHTML=plans.map(p=>{const remain=Math.max(0,Number(p.estimatedCost||0)-Number(p.savedAmount||0)),days=Math.max(1,Math.ceil((new Date(p.targetDate)-Date.now())/86400000)),months=Math.max(1,days/30.4),need=remain/months,ratio=monthlyNet>0?Math.round(need/monthlyNet*100):null,warning=remain===0?'Đã đủ tiền dành sẵn.':monthlyNet<=0?'Dòng tiền 90 ngày đang không dương: nên giảm chi phí, dời ngày hoặc tăng tiền dành sẵn.':need>monthlyNet?'Mức cần dành vượt dòng tiền ròng gần đây: nên dời ngày hoặc giảm ngân sách.':`Cần dành khoảng ${vnd(need)}/tháng${ratio!==null?` · ${ratio}% dòng tiền ròng`:''}.`;return `<article class="card"><div class="card-top"><div><h3>${esc(p.name)}</h3><p class="meta">${labelForOption(p.type)} · cần ${vnd(p.estimatedCost)} · đã có ${vnd(p.savedAmount)} · hạn ${dateShort(p.targetDate)}</p><p class="hint">${warning}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('plan','${p.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Plans','${p.id}')">Xoá</button></div></div></article>`}).join('')||'<div class="empty">Thêm chuyến đi hoặc khoản mua lớn để app tính số tiền cần dành mỗi tháng.</div>';
 }
 
 function expensesInPeriod(){
@@ -199,20 +223,22 @@ const fields={
  expense:[['date','Ngày giao dịch','date'],['amount','Số tiền','number'],['direction','Loại','select','expense,income'],['merchant','Nơi chi / ghi chú','text'],['category','Nhóm','select','Ăn uống,Di chuyển,Hóa đơn,Mua sắm,Sức khỏe,Công việc,Trả nợ,Khác'],['walletId','Từ ví / tài khoản','wallet'],['debtId','Khoản nợ được trả (nếu có)','debt']],
  allocation:[['name','Tên mục tiêu','text'],['percent','Tỷ trọng (%)','number'],['color','Màu','color']],
  cv:[['title','Tên CV / phiên bản','text'],['targetRole','Vai trò hướng tới','text'],['content','Nội dung hoặc ghi chú thay đổi','textarea'],['driveUrl','Link Google Drive / Docs (nếu có)','url'],['cvFile','Upload file PDF CV','file']],
- profile:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh','date'],['bloodType','Nhóm máu','select','Chưa rõ,A+,A−,B+,B−,AB+,AB−,O+,O−'],['emergencyContact','Liên hệ khẩn cấp','text'],['medicalNotes','Ghi chú sức khỏe','textarea']]
+ profile:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh','date'],['bloodType','Nhóm máu','select','Chưa rõ,A+,A−,B+,B−,AB+,AB−,O+,O−'],['emergencyContact','Liên hệ khẩn cấp','text'],['medicalNotes','Ghi chú sức khỏe','textarea']],
+ routine:[['breakfastTime','Giờ ăn sáng','time'],['lunchTime','Giờ ăn trưa','time'],['dinnerTime','Giờ ăn tối','time'],['bedtime','Giờ bắt đầu đi ngủ','time'],['wakeTime','Giờ thức dậy mục tiêu','time'],['targetSleepHours','Mục tiêu ngủ mỗi đêm (giờ)','number'],['sleepLatencyMinutes','Thời gian để ngủ (phút)','number'],['logIntervalMinutes','Hỏi log lại sau (phút)','number']],
+ plan:[['name','Tên kế hoạch','text'],['type','Loại','select','trip,purchase,education,health,other'],['targetDate','Ngày cần tiền','date'],['estimatedCost','Tổng chi phí dự kiến','number'],['savedAmount','Đã dành sẵn','number'],['priority','Ưu tiên','select','high,medium,low'],['notes','Ghi chú / các khoản cấu thành','textarea']]
 };
 
 function openProfileForm(){openForm('profile',data.profile[0]||{})}
 function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
 function editItem(kind,id){
-  const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets]};
+  const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans]};
   const found=map[kind]?.[1].find(x=>x.id===id);
   if(!found){toast('Không tìm thấy mục để sửa.');return}
   openForm(map[kind][0],found);
 }
 function openForm(type,item={}){
   currentType=type;editingId=item.id||'';
-  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
@@ -237,12 +263,13 @@ function saveForm(event){
   if(currentType==='cv'){saveCvForm(event.target,item);return}
   const runner=google.script.run.withSuccessHandler(result=>{formDialog.close();toast(result&&result.calendarWarning?'Đã lưu việc; hãy bấm Calendar để cấp lại quyền Google.':'Đã lưu và đồng bộ');load()}).withFailureHandler(fail);
   if(currentType==='profile'){runner.saveProfile(item);return}
+  if(currentType==='routine'){runner.saveRoutineSettings(item);return}
   if(currentType==='balance'){runner.updateWalletBalanceManual(item);return}
   if(currentType==='walletAdjust'){runner.adjustWalletManual(item);return}
-  const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations'}[currentType];
+  const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
-function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút'}[o]||o}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp'}[o]||o}
 function removeItem(type,id){if(!confirm('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
 function removeWallet(id){if(!confirm('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
 function saveCvForm(form,item){

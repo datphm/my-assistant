@@ -9,7 +9,10 @@ const HEADERS = {
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt'],
-  TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note']
+  TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
+  TimeState: ['id', 'kind', 'label', 'startAt'],
+  RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'updatedAt'],
+  Plans: ['id', 'name', 'type', 'targetDate', 'estimatedCost', 'savedAmount', 'priority', 'notes']
 };
 
 function doGet(e) {
@@ -28,9 +31,50 @@ function getData() {
   const ss = getBook_();
   ensureDefaultCv_(ss);
   ensureDefaultFlights_(ss);
+  ensureDefaultRoutine_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   return result;
+}
+
+function ensureDefaultRoutine_(ss) {
+  const sheet = ss.getSheetByName('RoutineSettings');
+  if (readRows_(sheet).length) return;
+  upsertRow_(sheet, {
+    id: 'default', breakfastTime: '08:00', lunchTime: '12:30', dinnerTime: '19:00',
+    bedtime: '23:30', wakeTime: '07:30', targetSleepHours: 8,
+    sleepLatencyMinutes: 15, logIntervalMinutes: 60, updatedAt: new Date()
+  });
+}
+
+function saveRoutineSettings(item) {
+  const sheet = getBook_().getSheetByName('RoutineSettings');
+  upsertRow_(sheet, Object.assign({}, item, { id: 'default', updatedAt: new Date() }));
+  return 'Đã lưu lịch sinh hoạt. Bấm “Tạo nhắc Calendar” để cập nhật lịch Google.';
+}
+
+function beginTimeLog(kind, label) {
+  const sheet = getBook_().getSheetByName('TimeState');
+  const current = readRows_(sheet)[0];
+  if (current) throw new Error('Đang có một phiên thời gian chạy. Hãy dừng phiên đó trước.');
+  const active = { id: 'active', kind: kind || 'custom', label: label || 'Hoạt động', startAt: new Date() };
+  upsertRow_(sheet, active);
+  return Object.assign({}, active, { startAt: active.startAt.toISOString() });
+}
+
+function finishTimeLog() {
+  const ss = getBook_();
+  const stateSheet = ss.getSheetByName('TimeState');
+  const active = readRows_(stateSheet)[0];
+  if (!active) throw new Error('Không tìm thấy phiên đang chạy.');
+  const end = new Date();
+  const start = new Date(active.startAt);
+  addItem('TimeLogs', {
+    kind: active.kind, label: active.label, startAt: start, endAt: end,
+    durationMinutes: Math.max(1, Math.round((end - start) / 60000)), note: ''
+  });
+  if (stateSheet.getLastRow() > 1) stateSheet.deleteRows(2, stateSheet.getLastRow() - 1);
+  return { durationMinutes: Math.max(1, Math.round((end - start) / 60000)) };
 }
 
 function exportAllData() {
@@ -388,6 +432,79 @@ function sendDueTaskReminders() {
     MailApp.sendEmail(recipient, `${urgent ? 'KHẨN · ' : ''}My Assistant: ${task.title}`, `Đến giờ: ${task.title}\n\nBước duy nhất lúc này: mở việc và làm ${task.minutes || 10} phút.\n\nBấm “Đã bắt đầu” trong My Assistant để dừng chuỗi nhắc, hoặc ✓ khi hoàn thành.`);
     sheet.getRange(i + 2, 7).setValue(now);
   });
+  sendRoutineReminders_(recipient, now);
+}
+
+function sendRoutineReminders_(recipient, now) {
+  const ss = getBook_();
+  ensureDefaultRoutine_(ss);
+  const settings = readRows_(ss.getSheetByName('RoutineSettings'))[0];
+  const props = PropertiesService.getUserProperties();
+  const tz = Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh';
+  const dateKey = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  const hhmm = Utilities.formatDate(now, tz, 'HH:mm');
+  const lastRoutineSent = JSON.parse(props.getProperty('ROUTINE_LAST_SENT') || '{}');
+  const routines = [
+    ['breakfastTime', 'Ăn sáng đúng giờ', 'Ăn một bữa đơn giản và uống nước.'],
+    ['lunchTime', 'Đến giờ ăn trưa', 'Dừng việc, ăn trưa và tránh bỏ bữa.'],
+    ['dinnerTime', 'Đến giờ ăn tối', 'Khép lại việc đang làm và ăn tối.'],
+    ['bedtime', 'Chuẩn bị đi ngủ', 'Hạ ánh sáng, cất điện thoại và bắt đầu routine ngủ.']
+  ];
+  routines.forEach(function(rule) {
+    const target = String(settings[rule[0]] || '');
+    if (target && hhmm >= target && lastRoutineSent[rule[0]] !== dateKey) {
+      MailApp.sendEmail(recipient, 'My Assistant · ' + rule[1], rule[2] + '\n\nĐây là điểm neo sinh hoạt bạn đã đặt trong My Assistant.');
+      lastRoutineSent[rule[0]] = dateKey;
+    }
+  });
+  props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
+  const active = readRows_(ss.getSheetByName('TimeState'))[0];
+  const interval = Math.max(30, Number(settings.logIntervalMinutes || 60)) * 60000;
+  const lastPrompt = Number(props.getProperty('LAST_TIME_LOG_PROMPT') || 0);
+  if (!active && isAwakeTime_(hhmm, settings.wakeTime, settings.bedtime) && now.getTime() - lastPrompt >= interval) {
+    MailApp.sendEmail(recipient, 'My Assistant · Bạn đang làm gì?', 'Mở My Assistant và bấm đúng một nút để log hoạt động hiện tại. Nếu đang trôi thời gian, chọn “Thời gian chết” — ghi nhận, không tự trách.');
+    props.setProperty('LAST_TIME_LOG_PROMPT', String(now.getTime()));
+  }
+}
+
+function isAwakeTime_(nowTime, wakeTime, bedtime) {
+  const toMinutes = function(value) { const p = String(value || '00:00').split(':').map(Number); return p[0] * 60 + p[1]; };
+  const now = toMinutes(nowTime), wake = toMinutes(wakeTime || '07:30'), bed = toMinutes(bedtime || '23:30');
+  return wake <= bed ? now >= wake && now < bed : now >= wake || now < bed;
+}
+
+function installRoutineCalendar() {
+  const ss = getBook_();
+  ensureDefaultRoutine_(ss);
+  const settings = readRows_(ss.getSheetByName('RoutineSettings'))[0];
+  const calendar = CalendarApp.getDefaultCalendar();
+  const props = PropertiesService.getUserProperties();
+  const oldIds = JSON.parse(props.getProperty('ROUTINE_EVENT_IDS') || '[]');
+  oldIds.forEach(function(id) { try { const series = calendar.getEventSeriesById(id); if (series) series.deleteEventSeries(); } catch (e) {} });
+  const recurrence = CalendarApp.newRecurrence().addDailyRule().until(new Date(Date.now() + 366 * 86400000));
+  const definitions = [
+    ['Ăn sáng · My Assistant', settings.breakfastTime, 30],
+    ['Ăn trưa · My Assistant', settings.lunchTime, 45],
+    ['Ăn tối · My Assistant', settings.dinnerTime, 45],
+    ['Chuẩn bị ngủ · My Assistant', settings.bedtime, 30]
+  ];
+  const ids = definitions.map(function(def) {
+    const start = nextDateAt_(def[1]);
+    const end = new Date(start.getTime() + def[2] * 60000);
+    const series = calendar.createEventSeries(def[0], start, end, recurrence, { description: 'Điểm neo sinh hoạt cho ADHD. Nếu trễ, làm phiên bản nhỏ nhất ngay bây giờ.' });
+    series.addPopupReminder(10);
+    return series.getId();
+  });
+  props.setProperty('ROUTINE_EVENT_IDS', JSON.stringify(ids));
+  return 'Đã tạo 4 điểm neo hằng ngày trong Google Calendar trong 1 năm.';
+}
+
+function nextDateAt_(hhmm) {
+  const parts = String(hhmm || '08:00').split(':').map(Number);
+  const value = new Date();
+  value.setHours(parts[0] || 0, parts[1] || 0, 0, 0);
+  if (value <= new Date()) value.setDate(value.getDate() + 1);
+  return value;
 }
 
 function installReminderTrigger() {
