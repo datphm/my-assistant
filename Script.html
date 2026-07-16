@@ -109,8 +109,8 @@ function renderTravel(){
     metricCard('Top route / hãng',`${esc(topRoute.name)} · ${esc(topAirline.name)}`,`${topRoute.count} lần · ${topAirline.count} lần`)
   ].join('');
   const visibleFlights=flights.slice(0,flightLimit);
-  $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
-  $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}</p></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
+  $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
+  $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
 }
 function renderInstall(){
   const ios=$('iosProfileLink'), android=$('androidApkLink');
@@ -139,7 +139,8 @@ const fields={
  task:[['title','Việc cần làm','text'],['dueAt','Nhắc lúc','datetime-local'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Bắt đầu trong (phút)','number'],['status','Trạng thái','select','todo,doing,blocked,done']],
  debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
  meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],
- flight:[['code','Mã chuyến bay','text'],['destination','Điểm đến / mã sân bay đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text'],['fromCode','Từ sân bay','text'],['toCode','Đến sân bay','text'],['distanceKm','Khoảng cách km','number'],['depTime','Giờ bay dự kiến','text'],['arrTime','Giờ đến dự kiến','text'],['airline','Hãng bay','text'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
+ flight:[['code','Mã chuyến bay','text'],['destination','Điểm đến / mã sân bay đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text'],['fromCode','Từ sân bay','text'],['toCode','Đến sân bay','text'],['distanceKm','Khoảng cách km','number'],['ticketPrice','Giá vé đã mua','number'],['depTime','Giờ bay dự kiến','text'],['arrTime','Giờ đến dự kiến','text'],['airline','Hãng bay','text'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
+ hotel:[['name','Tên khách sạn','text'],['city','Thành phố','text'],['address','Địa chỉ đầy đủ','text'],['checkIn','Check-in','date'],['checkOut','Check-out','date'],['bookingRef','Mã đặt phòng','text'],['price','Giá đã đặt','number'],['notes','Ghi chú','textarea']],
  wallet:[['name','Tên ví / tài khoản','text'],['type','Loại','select','Tiền mặt,Tài khoản ngân hàng,Thẻ tín dụng,Tiết kiệm'],['balance','Số dư hiện tại','number']],
  balance:[['walletId','Ví / tài khoản','wallet'],['balance','Số dư mới','number']],
  walletAdjust:[['walletId','Ví / tài khoản','wallet'],['amount','Số tiền điều chỉnh','number'],['direction','Cộng hay trừ','select','income,expense'],['merchant','Ghi chú','text']],
@@ -152,14 +153,14 @@ const fields={
 function openProfileForm(){openForm('profile',data.profile[0]||{})}
 function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
 function editItem(kind,id){
-  const map={task:['task',data.tasks],flight:['flight',data.flights],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets]};
+  const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets]};
   const found=map[kind]?.[1].find(x=>x.id===id);
   if(!found){toast('Không tìm thấy mục để sửa.');return}
   openForm(map[kind][0],found);
 }
 function openForm(type,item={}){
   currentType=type;editingId=item.id||'';
-  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
@@ -186,7 +187,7 @@ function saveForm(event){
   if(currentType==='profile'){runner.saveProfile(item);return}
   if(currentType==='balance'){runner.updateWalletBalanceManual(item);return}
   if(currentType==='walletAdjust'){runner.adjustWalletManual(item);return}
-  const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',wallet:'Wallets',expense:'Expenses',allocation:'Allocations'}[currentType];
+  const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
 function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong'}[o]||o}
