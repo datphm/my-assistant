@@ -59,9 +59,9 @@ function renderMoney(){
   $('walletsMoney').innerHTML=walletCards()||'<p class="meta">Chưa có ví hoặc tài khoản.</p>';
   $('gmailWallet').innerHTML='<option value="">Không cập nhật số dư ví</option>'+data.wallets.map(w=>`<option value="${escAttr(w.id)}">${esc(w.name)} · ${vnd(w.balance)}</option>`).join('');
   renderAllocation(tx);
-  $('debts').innerHTML=data.debts.map(d=>`<article class="card"><h3>${esc(d.name)} <span class="amount">${vnd(d.balance)}</span></h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay}</p></article>`).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
+  $('debts').innerHTML=data.debts.map(d=>`<article class="card"><div class="card-top"><div><h3>${esc(d.name)} <span class="amount">${vnd(d.balance)}</span></h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('debt','${d.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Debts','${d.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
   const recent=data.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,12);
-  $('expenses').innerHTML=recent.map(e=>`<article class="card"><div class="card-top"><div><h3>${esc(e.merchant)} <span class="amount ${e.direction==='income'?'positive':''}">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></div><button class="outline small" onclick="editItem('expense','${e.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
+  $('expenses').innerHTML=recent.map(e=>`<article class="card"><div class="card-top"><div><h3>${esc(e.merchant)} <span class="amount ${e.direction==='income'?'positive':''}">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')}${e.debtId?' · đã trừ vào khoản nợ':''} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('expense','${e.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Expenses','${e.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
 }
 
 function expensesInPeriod(){
@@ -80,7 +80,7 @@ function setMoneyPeriod(p){
   document.querySelectorAll('[data-money-period]').forEach(b=>b.classList.toggle('active',b.dataset.moneyPeriod===p));
   renderMoney();
 }
-function walletCards(){return data.wallets.map(w=>`<article class="wallet-row"><div><b>${esc(w.name)}</b><span>${esc(w.type||'Ví')} ${w.lastUpdatedAt?'· cập nhật '+dateShort(w.lastUpdatedAt):''}</span></div><strong>${vnd(w.balance)}</strong></article>`).join('')}
+function walletCards(){return data.wallets.map(w=>`<article class="wallet-row"><div><b>${esc(w.name)}</b><span>${esc(w.type||'Ví')} ${w.lastUpdatedAt?'· cập nhật '+dateShort(w.lastUpdatedAt):''}</span></div><strong>${vnd(w.balance)}</strong><div class="wallet-actions"><button class="outline small" onclick="editItem('wallet','${w.id}')">Sửa</button><button class="outline small" onclick="openForm('walletAdjust',{walletId:'${w.id}',direction:'income'})">+ / −</button><button class="outline small danger" onclick="removeItem('Wallets','${w.id}')">Xoá</button></div></article>`).join('')}
 function metricCard(label,value,hint){return `<article class="card mini"><small>${esc(label)}</small><b>${esc(value)}</b><span>${esc(hint)}</span></article>`}
 
 function renderAllocation(periodTx){
@@ -142,7 +142,8 @@ const fields={
  flight:[['code','Mã chuyến bay','text'],['destination','Điểm đến / mã sân bay đến','text'],['departure','Khởi hành','datetime-local'],['terminal','Nhà ga','text'],['fromCode','Từ sân bay','text'],['toCode','Đến sân bay','text'],['distanceKm','Khoảng cách km','number'],['depTime','Giờ bay dự kiến','text'],['arrTime','Giờ đến dự kiến','text'],['airline','Hãng bay','text'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
  wallet:[['name','Tên ví / tài khoản','text'],['type','Loại','select','Tiền mặt,Tài khoản ngân hàng,Thẻ tín dụng,Tiết kiệm'],['balance','Số dư hiện tại','number']],
  balance:[['walletId','Ví / tài khoản','wallet'],['balance','Số dư mới','number']],
- expense:[['date','Ngày giao dịch','date'],['amount','Số tiền','number'],['direction','Loại','select','expense,income'],['merchant','Nơi chi / ghi chú','text'],['category','Nhóm','select','Ăn uống,Di chuyển,Hóa đơn,Mua sắm,Sức khỏe,Công việc,Khác'],['walletId','Từ ví / tài khoản','wallet']],
+ walletAdjust:[['walletId','Ví / tài khoản','wallet'],['amount','Số tiền điều chỉnh','number'],['direction','Cộng hay trừ','select','income,expense'],['merchant','Ghi chú','text']],
+ expense:[['date','Ngày giao dịch','date'],['amount','Số tiền','number'],['direction','Loại','select','expense,income'],['merchant','Nơi chi / ghi chú','text'],['category','Nhóm','select','Ăn uống,Di chuyển,Hóa đơn,Mua sắm,Sức khỏe,Công việc,Trả nợ,Khác'],['walletId','Từ ví / tài khoản','wallet'],['debtId','Khoản nợ được trả (nếu có)','debt']],
  allocation:[['name','Tên mục tiêu','text'],['percent','Tỷ trọng (%)','number'],['color','Màu','color']],
  cv:[['title','Tên CV / phiên bản','text'],['targetRole','Vai trò hướng tới','text'],['content','Nội dung hoặc ghi chú thay đổi','textarea'],['driveUrl','Link Google Drive / Docs (nếu có)','url'],['cvFile','Upload file PDF CV','file']],
  profile:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh','date'],['bloodType','Nhóm máu','select','Chưa rõ,A+,A−,B+,B−,AB+,AB−,O+,O−'],['emergencyContact','Liên hệ khẩn cấp','text'],['medicalNotes','Ghi chú sức khỏe','textarea']]
@@ -158,7 +159,7 @@ function editItem(kind,id){
 }
 function openForm(type,item={}){
   currentType=type;editingId=item.id||'';
-  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',profile:'Cập nhật hồ sơ'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
@@ -167,6 +168,7 @@ function fieldHtml(name,label,input,options,value){
   const val=value===undefined||value===null?'':value;
   if(input==='select'){return `<div class="field"><label>${label}</label><select name="${name}">${options.split(',').map(o=>`<option value="${escAttr(o)}" ${String(o)===String(val)?'selected':''}>${esc(labelForOption(o))}</option>`).join('')}</select></div>`}
   if(input==='wallet'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Chưa chọn</option>${data.wallets.map(w=>`<option value="${escAttr(w.id)}" ${w.id===val?'selected':''}>${esc(w.name)}</option>`).join('')}</select></div>`}
+  if(input==='debt'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Không liên kết khoản nợ</option>${data.debts.map(d=>`<option value="${escAttr(d.id)}" ${d.id===val?'selected':''}>${esc(d.name)} · ${vnd(d.balance)}</option>`).join('')}</select></div>`}
   if(input==='textarea')return `<div class="field"><label>${label}</label><textarea name="${name}">${esc(val)}</textarea></div>`;
   if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
   let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
@@ -183,10 +185,12 @@ function saveForm(event){
   const runner=google.script.run.withSuccessHandler(()=>{formDialog.close();toast('Đã lưu');load()}).withFailureHandler(fail);
   if(currentType==='profile'){runner.saveProfile(item);return}
   if(currentType==='balance'){runner.updateWalletBalanceManual(item);return}
+  if(currentType==='walletAdjust'){runner.adjustWalletManual(item);return}
   const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',wallet:'Wallets',expense:'Expenses',allocation:'Allocations'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
 function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong'}[o]||o}
+function removeItem(type,id){if(!confirm('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
 function saveCvForm(form,item){
   const file=form.querySelector('input[name="cvFile"]').files[0];
   const done=()=>{formDialog.close();toast('Đã lưu CV');load()};
