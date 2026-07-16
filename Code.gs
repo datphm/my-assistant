@@ -11,7 +11,10 @@ const HEADERS = {
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt']
 };
 
-function doGet() {
+function doGet(e) {
+  const download = e && e.parameter && e.parameter.download;
+  if (download === 'ios-profile') return buildIosProfile_();
+  if (download === 'android-apk') return buildAndroidApkNote_();
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('My Assistant')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -84,6 +87,12 @@ function completeTask(id) {
   if (row < 1) throw new Error('Không tìm thấy việc.');
   sheet.getRange(row + 1, 6).setValue(true);
   return { ok: true };
+}
+
+function createTaskFromMessage(message) {
+  const parsed = parseTaskMessage_(message);
+  addItem('Tasks', parsed);
+  return parsed;
 }
 
 // One-click import is deliberately restricted to bank/payment emails chosen by you.
@@ -209,6 +218,49 @@ function installReminderTrigger() {
 function uninstallReminderTrigger() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
   return 'Đã tắt email nhắc việc.';
+}
+
+function buildIosProfile_() {
+  const appUrl = ScriptApp.getService().getUrl() || 'https://script.google.com/';
+  const uuid1 = Utilities.getUuid().toUpperCase();
+  const uuid2 = Utilities.getUuid().toUpperCase();
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>PayloadContent</key><array><dict>
+    <key>FullScreen</key><true/>
+    <key>Icon</key><data></data>
+    <key>IsRemovable</key><true/>
+    <key>Label</key><string>My Assistant</string>
+    <key>PayloadDescription</key><string>My Assistant web app shortcut</string>
+    <key>PayloadDisplayName</key><string>My Assistant</string>
+    <key>PayloadIdentifier</key><string>com.datpham.myassistant.webclip</string>
+    <key>PayloadType</key><string>com.apple.webClip.managed</string>
+    <key>PayloadUUID</key><string>${uuid1}</string>
+    <key>PayloadVersion</key><integer>1</integer>
+    <key>Precomposed</key><false/>
+    <key>URL</key><string>${escapeXml_(appUrl)}</string>
+  </dict></array>
+  <key>PayloadDescription</key><string>Thêm My Assistant ra màn hình chính iPhone.</string>
+  <key>PayloadDisplayName</key><string>My Assistant iPhone Profile</string>
+  <key>PayloadIdentifier</key><string>com.datpham.myassistant.profile</string>
+  <key>PayloadOrganization</key><string>My Assistant</string>
+  <key>PayloadRemovalDisallowed</key><false/>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>${uuid2}</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict></plist>`;
+  return ContentService.createTextOutput(xml)
+    .setMimeType(ContentService.MimeType.XML)
+    .downloadAsFile('My-Assistant-iPhone.mobileconfig');
+}
+
+function buildAndroidApkNote_() {
+  const appUrl = ScriptApp.getService().getUrl() || 'https://script.google.com/';
+  const text = `My Assistant Android\n\nBản hiện tại là Google Apps Script web app, chưa phải APK native.\n\nCách dùng ngay trên Android:\n1. Mở link app: ${appUrl}\n2. Chrome > menu ⋮ > Add to Home screen / Thêm vào màn hình chính.\n\nĐể có APK thật, cần build một bản Android wrapper/TWA riêng từ repo GitHub rồi ký file APK.`;
+  return ContentService.createTextOutput(text)
+    .setMimeType(ContentService.MimeType.TEXT)
+    .downloadAsFile('My-Assistant-Android-APK-note.txt');
 }
 
 function getBook_() {
@@ -388,6 +440,38 @@ function airlineFromCode_(flightCode) {
   const prefix = (String(flightCode || '').match(/^[A-Z0-9]{2}/) || [''])[0].toUpperCase();
   const map = {VJ:'VJC', VN:'HVN', QH:'BAV', AK:'AXM', MH:'MAS', TR:'TGW', FD:'AIQ', OD:'MXD', GA:'GIA', BL:'PIC', VU:'VAG', VH:'', '3K':'JSA', '9G':'SPQ'};
   return map[prefix] || prefix;
+}
+
+function parseTaskMessage_(message) {
+  const text = String(message || '').trim();
+  if (!text) throw new Error('Hãy nhập nội dung công việc.');
+  const lower = text.toLowerCase();
+  const timeMatch = lower.match(/\b(?:trước|lúc|vào|sau)\s*(\d{1,2})[h:](\d{2})?\b/) || lower.match(/\b(\d{1,2})[h:](\d{2})\b/);
+  const dateMatch = lower.match(/\b(?:ngày\s*)?(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](20\d{2})\b/);
+  const now = new Date();
+  const day = dateMatch ? Number(dateMatch[1]) : now.getDate();
+  const month = dateMatch ? Number(dateMatch[2]) - 1 : now.getMonth();
+  const year = dateMatch ? Number(dateMatch[3]) : now.getFullYear();
+  const hour = timeMatch ? Number(timeMatch[1]) : 18;
+  const minute = timeMatch ? Number(timeMatch[2] || 0) : 0;
+  const dueAt = new Date(year, month, day, hour, minute);
+  const title = text
+    .replace(/\b(?:trước|lúc|vào|sau)\s*\d{1,2}[h:]\d{0,2}/ig, '')
+    .replace(/\b(?:ngày\s*)?\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]20\d{2}\b/ig, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.,;:]+$/g, '');
+  const area = /nhân viên|công việc|team|khách|deadline|báo cáo|vận hành/i.test(text) ? 'Công việc' : 'Cá nhân';
+  return {
+    title: title || text,
+    dueAt,
+    area,
+    minutes: 15
+  };
+}
+
+function escapeXml_(value) {
+  return String(value || '').replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c]));
 }
 
 function readRows_(sheet) {
