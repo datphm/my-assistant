@@ -1,5 +1,5 @@
 const HEADERS = {
-  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt'],
+  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'note', 'source', 'gmailMessageId'],
@@ -49,6 +49,16 @@ function addItem(type, item) {
   return { ok: true };
 }
 
+function updateItem(type, item) {
+  if (!HEADERS[type]) throw new Error('Loại dữ liệu không hợp lệ.');
+  if (!item || !item.id) throw new Error('Thiếu ID để cập nhật.');
+  if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
+  const sheet = getBook_().getSheetByName(type);
+  const existing = readRows_(sheet).find(row => row.id === item.id) || {};
+  upsertRow_(sheet, Object.assign({}, existing, item));
+  return { ok: true };
+}
+
 function saveProfile(item) {
   const sheet = getBook_().getSheetByName('Profile');
   const rows = readRows_(sheet);
@@ -86,6 +96,9 @@ function completeTask(id) {
   const row = values.findIndex((r, i) => i > 0 && r[0] === id);
   if (row < 1) throw new Error('Không tìm thấy việc.');
   sheet.getRange(row + 1, 6).setValue(true);
+  const headers = values[0];
+  const statusCol = headers.indexOf('status') + 1;
+  if (statusCol > 0) sheet.getRange(row + 1, statusCol).setValue('done');
   return { ok: true };
 }
 
@@ -93,6 +106,33 @@ function createTaskFromMessage(message) {
   const parsed = parseTaskMessage_(message);
   addItem('Tasks', parsed);
   return parsed;
+}
+
+function syncTaskToCalendar(id) {
+  const ss = getBook_();
+  const sheet = ss.getSheetByName('Tasks');
+  const tasks = readRows_(sheet);
+  const task = tasks.find(row => row.id === id);
+  if (!task) throw new Error('Không tìm thấy việc để đưa lên Google Calendar.');
+  const due = task.dueAt ? new Date(task.dueAt) : new Date();
+  const minutes = Number(task.minutes || 15);
+  const end = new Date(due.getTime() + Math.max(minutes, 15) * 60 * 1000);
+  const cal = CalendarApp.getDefaultCalendar();
+  let event;
+  if (task.calendarEventId) {
+    try { event = cal.getEventById(task.calendarEventId); } catch (e) { event = null; }
+  }
+  if (event) {
+    event.setTitle(task.title || 'My Assistant task');
+    event.setTime(due, end);
+    event.setDescription(`Area: ${task.area || ''}\nCreated from My Assistant`);
+  } else {
+    event = cal.createEvent(task.title || 'My Assistant task', due, end, {
+      description: `Area: ${task.area || ''}\nCreated from My Assistant`
+    });
+  }
+  upsertRow_(sheet, Object.assign({}, task, { calendarEventId: event.getId(), status: task.status || 'todo' }));
+  return 'Đã đưa việc này lên Google Calendar.';
 }
 
 // One-click import is deliberately restricted to bank/payment emails chosen by you.
@@ -229,7 +269,6 @@ function buildIosProfile_() {
 <plist version="1.0"><dict>
   <key>PayloadContent</key><array><dict>
     <key>FullScreen</key><true/>
-    <key>Icon</key><data></data>
     <key>IsRemovable</key><true/>
     <key>Label</key><string>My Assistant</string>
     <key>PayloadDescription</key><string>My Assistant web app shortcut</string>
