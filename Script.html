@@ -240,6 +240,7 @@ function importTravel(){const q=$('travelQuery').value;google.script.run.withSuc
 function enableTravelSync(){const q=$('travelQuery').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installTravelSync(q)}
 function disableTravelSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallTravelSync()}
 function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}
+function connectReminderServices(){google.script.run.withSuccessHandler(toast).withFailureHandler(e=>fail((e.message||String(e))+' — Nếu Google yêu cầu quyền, mở Apps Script và chạy authorizeReminderServices một lần.')).authorizeReminderServices()}
 function disableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallReminderTrigger()}
 function syncCalendar(id){google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).syncTaskToCalendar(id)}
 function enableDeviceNotifications(){
