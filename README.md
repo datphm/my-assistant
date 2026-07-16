@@ -64,4 +64,12 @@ Nếu GitHub báo `Unexpected end of JSON input` ở bước `clasp push`, gần
 
 ## Bản native iPhone
 
+## Bản offline trên điện thoại và máy tính
+
+Thư mục `docs/` là bản offline/PWA đầy đủ các tab. Bạn có thể mở trực tiếp `docs/index.html` bằng Safari/Chrome trên máy tính hoặc iPhone; dữ liệu bản này lưu trong `localStorage` của từng thiết bị. Trên máy tính, nên dùng Chrome/Edge và chọn **Install app / Add to desktop** khi mở từ GitHub Pages. Bản offline không đọc Gmail và không gửi email; các tính năng đó vẫn dùng Web App Apps Script.
+
+Để đưa dữ liệu cũ sang bản offline: Apps Script → **Cài app → Xuất file JSON**, sau đó trên bản offline chọn **Nhập dữ liệu JSON**. Không commit file JSON lên GitHub vì có thể chứa thông tin tài chính, hồ sơ và CV.
+
+## Bản native iPhone
+
 Thư mục `../NhipSong` là bản SwiftUI native trước đó. Để phát hành nó lên iPhone cần Mac có Xcode và Apple Developer account/TestFlight; GitHub không thể thay thế bước ký ứng dụng đó. Bản Web App này là cách dùng được ngay trên cả hai thiết bị.
