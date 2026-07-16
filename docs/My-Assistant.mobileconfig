@@ -13,8 +13,8 @@
       <key>PayloadDisplayName</key><string>My Assistant</string>
       <key>PayloadIdentifier</key><string>com.datpham.myassistant.webclip</string>
       <key>PayloadType</key><string>com.apple.webClip.managed</string>
-      <key>PayloadUUID</key><string>EF442836-1DF5-4F72-A6E8-D17823DB770D</string>
-      <key>PayloadVersion</key><integer>2</integer>
+      <key>PayloadUUID</key><string>88E8AD0B-06D0-4FB8-92F6-3CC71FB2BDC8</string>
+      <key>PayloadVersion</key><integer>1</integer>
       <key>Precomposed</key><false/>
       <key>URL</key><string>https://script.google.com/macros/s/AKfycbzbU9s1CSHeRPmjRMSUTrCXw_gA6_l9JX3RbGvTMdT1Cfzx0UDZ0eU0-rTEAWoa8WVJSA/exec</string>
     </dict>
@@ -25,7 +25,7 @@
   <key>PayloadOrganization</key><string>My Assistant</string>
   <key>PayloadRemovalDisallowed</key><false/>
   <key>PayloadType</key><string>Configuration</string>
-  <key>PayloadUUID</key><string>9C1DA8D8-A43B-4F9F-A92F-53D684D6252C</string>
-  <key>PayloadVersion</key><integer>2</integer>
+  <key>PayloadUUID</key><string>4CF6190C-F9E1-45F0-BCE4-D52EE744669A</string>
+  <key>PayloadVersion</key><integer>1</integer>
 </dict>
 </plist>
