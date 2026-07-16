@@ -128,6 +128,22 @@ function createTaskFromMessage(){
   if(!message){toast('Nhập một câu công việc trước đã.');return}
   google.script.run.withSuccessHandler(task=>{box.value='';toast(`Đã tạo việc: ${task.title}`);load()}).withFailureHandler(fail).createTaskFromMessage(message);
 }
+let suggestedTasks=[];
+function suggestTaskPlan(){
+  const message=$('taskMessage').value.trim();
+  if(!message){toast('Dán nhiệm vụ bạn vừa nhận trước đã.');return}
+  google.script.run.withSuccessHandler(plan=>{suggestedTasks=plan;renderTaskSuggestions()}).withFailureHandler(fail).suggestTaskPlan(message);
+}
+function renderTaskSuggestions(){
+  const box=$('taskSuggestions');
+  box.innerHTML=`<div class="suggestion-head"><div><b>Chuỗi hành động đề xuất</b><p class="hint">Bỏ chọn bước không cần. Deadline có thể sửa trong Kanban sau khi thêm.</p></div><button onclick="addSuggestedTasks()">Thêm các bước đã chọn</button></div><div class="suggestion-list">${suggestedTasks.map((task,index)=>`<label><input type="checkbox" data-suggestion="${index}" checked><span><b>${index+1}. ${esc(task.title)}</b><small>${task.minutes} phút · dự kiến ${dateTime(task.dueAt)}</small></span></label>`).join('')}</div>`;
+}
+function addSuggestedTasks(){
+  const selected=[...document.querySelectorAll('[data-suggestion]:checked')].map(el=>suggestedTasks[Number(el.dataset.suggestion)]);
+  if(!selected.length){toast('Hãy chọn ít nhất một bước.');return}
+  google.script.run.withSuccessHandler(result=>{$('taskMessage').value='';$('taskSuggestions').innerHTML='';suggestedTasks=[];toast(`Đã thêm ${result.count} bước vào Kanban`);load()}).withFailureHandler(fail).addSuggestedTasks(selected);
+}
+function resetDeepChecklist(){document.querySelectorAll('[data-deep]').forEach(box=>box.checked=false);toast('Đã làm mới checklist Think Deep.')}
 function truth(x){return x===true||x==='TRUE'}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function escAttr(s){return esc(s).replace(/`/g,'&#96;')}
