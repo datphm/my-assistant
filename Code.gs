@@ -132,6 +132,21 @@ function deleteItem(type, id) {
   return { ok: true };
 }
 
+function deleteWallet(id) {
+  if (!id) throw new Error('Thiếu ví cần xoá.');
+  const ss = getBook_();
+  const expenseSheet = ss.getSheetByName('Expenses');
+  const headers = expenseSheet.getRange(1, 1, 1, expenseSheet.getLastColumn()).getValues()[0];
+  const walletCol = headers.indexOf('walletId') + 1;
+  if (walletCol > 0 && expenseSheet.getLastRow() > 1) {
+    const range = expenseSheet.getRange(2, walletCol, expenseSheet.getLastRow() - 1, 1);
+    const values = range.getValues().map(function(row) { return [row[0] === id ? '' : row[0]]; });
+    range.setValues(values);
+  }
+  deleteItem('Wallets', id);
+  return 'Đã xoá ví. Lịch sử giao dịch vẫn được giữ lại.';
+}
+
 function saveProfile(item) {
   const sheet = getBook_().getSheetByName('Profile');
   const rows = readRows_(sheet);
