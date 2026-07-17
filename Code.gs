@@ -81,6 +81,78 @@ function getTodayData() {
   };
 }
 
+// Cross-domain brief for the Today page. It is loaded after the task screen is
+// already interactive and cached so the assistant overview never blocks clicks.
+function getAssistantBrief(forceRefresh) {
+  const cache = CacheService.getUserCache();
+  const cacheKey = 'MY_ASSISTANT_BRIEF_V2';
+  if (!forceRefresh) {
+    const cached = cache.get(cacheKey);
+    if (cached) try { return JSON.parse(cached); } catch (error) {}
+  }
+  const ss = getBook_();
+  const now = new Date();
+  const timezone = getConfiguredTimeZone_();
+  const todayKey = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
+  const wallets = readRows_(ss.getSheetByName('Wallets'));
+  const debts = readRows_(ss.getSheetByName('Debts'));
+  const plans = readRows_(ss.getSheetByName('Plans'));
+  const health = readRows_(ss.getSheetByName('HealthProfile'))[0] || {};
+  const weights = readRecentRows_(ss.getSheetByName('WeightLogs'), 60);
+  const healthLogs = readRecentRows_(ss.getSheetByName('HealthLogs'), 180);
+  const flights = readRows_(ss.getSheetByName('Flights')).filter(function(flight) {
+    return flight.departure && new Date(flight.departure) > now && flight.status !== 'cancelled';
+  }).sort(function(a, b) { return new Date(a.departure) - new Date(b.departure); });
+  const studyItems = readRows_(ss.getSheetByName('StudyAbroadChecklist')).filter(function(item) { return item.status !== 'done'; });
+  const timeLogs = readRecentRows_(ss.getSheetByName('TimeLogs'), 240).filter(function(log) {
+    return log.startAt && Utilities.formatDate(new Date(log.startAt), timezone, 'yyyy-MM-dd') === todayKey;
+  });
+  const active = readRows_(ss.getSheetByName('TimeState'))[0] || null;
+  const todayHealth = healthLogs.filter(function(log) {
+    return log.date && Utilities.formatDate(new Date(log.date), timezone, 'yyyy-MM-dd') === todayKey;
+  });
+  const nextFlight = flights[0] || null;
+  const futurePlans = plans.filter(function(plan) { return plan.targetDate && new Date(plan.targetDate) >= new Date(todayKey + 'T00:00:00'); })
+    .sort(function(a, b) { return new Date(a.targetDate) - new Date(b.targetDate); });
+  const datedStudy = studyItems.filter(function(item) { return item.dueAt; }).sort(function(a, b) { return new Date(a.dueAt) - new Date(b.dueAt); });
+  const latestWeight = weights.length ? weights[weights.length - 1] : null;
+  const result = {
+    generatedAt: now.toISOString(),
+    finance: {
+      balance: wallets.reduce(function(sum, wallet) { return sum + Number(wallet.balance || 0); }, 0),
+      debt: debts.reduce(function(sum, debt) { return sum + Number(debt.balance || 0); }, 0),
+      minimumPayments: debts.reduce(function(sum, debt) { return sum + Number(debt.minimumPayment || 0); }, 0),
+      walletCount: wallets.length,
+      nextPlan: futurePlans[0] || null
+    },
+    health: {
+      currentWeightKg: latestWeight ? Number(latestWeight.weightKg || 0) : Number(health.currentWeightKg || health.startWeightKg || 0),
+      goalKg: Number(health.goal1Kg || health.goal2Kg || 0),
+      waterMl: todayHealth.filter(function(log) { return log.type === 'water'; }).reduce(function(sum, log) { return sum + Number(log.amount || 0); }, 0),
+      waterGoalMl: Number(health.waterGoalMl || 2500),
+      mealsLogged: todayHealth.filter(function(log) { return log.type === 'meal'; }).length,
+      walkMinutes: todayHealth.filter(function(log) { return log.type === 'walk'; }).reduce(function(sum, log) { return sum + Number(log.amount || 0); }, 0),
+      walkGoalMinutes: Number(health.walkingGoalMinutes || 20)
+    },
+    time: {
+      loggedMinutes: timeLogs.reduce(function(sum, log) { return sum + Number(log.durationMinutes || 0); }, 0),
+      entries: timeLogs.length,
+      active: active
+    },
+    travel: nextFlight ? {
+      id: nextFlight.id, code: nextFlight.code, fromCode: nextFlight.fromCode, toCode: nextFlight.toCode,
+      destination: nextFlight.destination, departure: nextFlight.departure, status: nextFlight.status,
+      checkinAt: new Date(new Date(nextFlight.departure).getTime() - 24 * 60 * 60 * 1000).toISOString()
+    } : null,
+    study: {
+      pending: studyItems.length,
+      next: datedStudy[0] || null
+    }
+  };
+  try { cache.put(cacheKey, JSON.stringify(result), 300); } catch (error) {}
+  return result;
+}
+
 function ensureDefaultReflection_(ss) {
   const sheet = ss.getSheetByName('ReflectionProfile');
   if (readRows_(sheet).length) return;
@@ -1283,6 +1355,61 @@ function sendDueTaskReminders() {
   });
   if (props.getProperty('APP_FLIGHT_REMINDERS') !== 'no') sendFlightReminders_(recipient, now);
   if (props.getProperty('APP_ROUTINE_REMINDERS') !== 'no') sendRoutineReminders_(recipient, now);
+  sendLifeAdminReminders_(recipient, now, emailEnabled && !quiet);
+}
+
+function sendLifeAdminReminders_(recipient, now, canEmail) {
+  const ss = getBook_();
+  const timezone = getConfiguredTimeZone_();
+  const dateKey = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
+  const monthKey = Utilities.formatDate(now, timezone, 'yyyy-MM');
+  const day = Number(Utilities.formatDate(now, timezone, 'd'));
+  const monthDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const wallets = readRows_(ss.getSheetByName('Wallets'));
+  const debts = readRows_(ss.getSheetByName('Debts'));
+  const plans = readRows_(ss.getSheetByName('Plans'));
+  const study = readRows_(ss.getSheetByName('StudyAbroadChecklist')).filter(function(item) { return item.status !== 'done'; });
+  const alerts = [];
+  debts.forEach(function(debt) {
+    const rawDueDay = Number(debt.dueDay || 0);
+    if (!rawDueDay) return;
+    const dueDay = Math.min(monthDays, Math.max(1, rawDueDay));
+    let days = dueDay - day;
+    if (days < 0) days += monthDays;
+    if ([3, 1, 0].indexOf(days) < 0) return;
+    const message = (days === 0 ? 'Đến hạn hôm nay' : 'Còn ' + days + ' ngày') + ' · tối thiểu ' + formatVnd_(debt.minimumPayment || 0);
+    if (createNotification_('debt_due', 'Sắp đến hạn: ' + debt.name, message, 'money', debt.id, days <= 1 ? 'critical' : 'high', 'debt-due:' + debt.id + ':' + monthKey + ':' + days)) alerts.push('• Nợ ' + debt.name + ': ' + message);
+  });
+  const balance = wallets.reduce(function(sum, wallet) { return sum + Number(wallet.balance || 0); }, 0);
+  const debtTotal = debts.reduce(function(sum, debt) { return sum + Number(debt.balance || 0); }, 0);
+  if (debtTotal > balance && debtTotal > 0) {
+    const gap = debtTotal - balance;
+    if (createNotification_('finance_risk', 'Nợ cao hơn tổng số dư', 'Chênh lệch ' + formatVnd_(gap) + ' · mở tab Tiền để rà phương án trả.', 'money', 'finance', 'high', 'finance-gap:' + monthKey)) alerts.push('• Tài chính: nợ cao hơn số dư ' + formatVnd_(gap));
+  }
+  plans.forEach(function(plan) {
+    if (!plan.targetDate) return;
+    const days = Math.ceil((new Date(plan.targetDate) - now) / 86400000);
+    const gap = Math.max(0, Number(plan.estimatedCost || 0) - Number(plan.savedAmount || 0));
+    if ([30, 14, 7, 3, 1, 0].indexOf(days) < 0 || gap <= 0) return;
+    const message = 'Còn ' + days + ' ngày · còn thiếu ' + formatVnd_(gap);
+    if (createNotification_('plan_funding', 'Kế hoạch lớn: ' + plan.name, message, 'money', plan.id, days <= 7 ? 'high' : 'normal', 'plan-funding:' + plan.id + ':' + days)) alerts.push('• ' + plan.name + ': ' + message);
+  });
+  study.forEach(function(item) {
+    if (!item.dueAt) return;
+    const days = Math.ceil((new Date(item.dueAt) - now) / 86400000);
+    if ([14, 7, 3, 1, 0].indexOf(days) < 0) return;
+    const message = (days === 0 ? 'Hạn hôm nay' : 'Còn ' + days + ' ngày') + ' · hãy chốt bước tiếp theo.';
+    if (createNotification_('study_deadline', 'Du học: ' + item.title, message, 'study', item.id, days <= 3 ? 'high' : 'normal', 'study-deadline:' + item.id + ':' + days)) alerts.push('• Du học ' + item.title + ': ' + message);
+  });
+  if (!alerts.length || !canEmail) return;
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('LIFE_ADMIN_DIGEST_SENT') === dateKey) return;
+  MailApp.sendEmail(recipient, 'My Assistant · Việc đời sống cần chú ý hôm nay', 'Trợ lý đã rà tiền, nợ, kế hoạch lớn và hồ sơ du học:\n\n' + alerts.slice(0, 8).join('\n') + '\n\nMở My Assistant để xử lý từng mục. Email này chỉ gửi tối đa một lần mỗi ngày.');
+  props.setProperty('LIFE_ADMIN_DIGEST_SENT', dateKey);
+}
+
+function formatVnd_(value) {
+  return Math.round(Number(value || 0)).toLocaleString('vi-VN') + ' ₫';
 }
 
 function isQuietHours_(now, startValue, endValue) {

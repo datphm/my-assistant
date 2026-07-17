@@ -8,6 +8,8 @@ const pendingActions=new Set();
 const defaultKanbanFold={overdue:false,upcoming:false,done:true};
 let kanbanCollapsed=(()=>{try{return Object.assign({},defaultKanbanFold,JSON.parse(localStorage.getItem('my-assistant-kanban-fold-v1')||'{}'))}catch(e){return Object.assign({},defaultKanbanFold)}})();
 const kanbanScrollPositions={};
+let assistantBrief=null,assistantBriefLoading=false;
+let assistantMode=localStorage.getItem('my-assistant-mode-v1')||'focus';
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
 const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
@@ -17,7 +19,7 @@ const periodLabels={week:'tuần này',month:'tháng này',year:'năm nay',twoYe
 
 function applyServerData(d){data=Object.assign(data,d);applyAppSettings();const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1')}
 function load(){const page=document.querySelector('.page.active')?.id||'today';if(page==='today'||!fullDataLoaded)refreshToday();else refreshFullData(page)}
-function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(!silent)document.body.classList.add('today-loading');google.script.run.withSuccessHandler(d=>{todayLoading=false;document.body.classList.remove('today-loading');applyServerData(d);render();if(!initialPageApplied){initialPageApplied=true;activatePage(location.hash.replace('#','')||appSettings().startupPage||'today')}}).withFailureHandler(e=>{todayLoading=false;document.body.classList.remove('today-loading');fail(e)}).getTodayData()}
+function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(!silent)document.body.classList.add('today-loading');google.script.run.withSuccessHandler(d=>{todayLoading=false;document.body.classList.remove('today-loading');applyServerData(d);render();if(!assistantBrief&&!assistantBriefLoading)loadAssistantBrief();if(!initialPageApplied){initialPageApplied=true;activatePage(location.hash.replace('#','')||appSettings().startupPage||'today')}}).withFailureHandler(e=>{todayLoading=false;document.body.classList.remove('today-loading');fail(e)}).getTodayData()}
 function refreshFullData(){if(fullLoading)return;fullLoading=true;document.body.classList.add('full-loading');google.script.run.withSuccessHandler(d=>{fullLoading=false;fullDataLoaded=true;document.body.classList.remove('full-loading');applyServerData(d);render()}).withFailureHandler(e=>{fullLoading=false;document.body.classList.remove('full-loading');fail(e)}).getData()}
 function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',theme:'dark',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes'}}
 function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
@@ -26,6 +28,7 @@ function render(){
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
   $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
   renderTodayCoach(open);
+  renderAssistantBrief();
   renderKanban();
   renderNotifications();
   renderTimeAnchor();
@@ -49,10 +52,57 @@ function taskCard(t){
 function taskSteps(taskId){return (data.tasksteps||[]).filter(s=>s.taskId===taskId).sort((a,b)=>Number(a.position||0)-Number(b.position||0))}
 function taskUpdates(taskId){return (data.taskupdates||[]).filter(u=>u.taskId===taskId).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))}
 function taskStatusLabel(t){return t.status==='waiting'?'Đang chờ follow-up':t.status==='blocked'?'Đang kẹt':t.status==='doing'?'Đang làm':t.priority==='high'?'Ưu tiên cao':'Cần làm'}
+function taskAttentionScore(t,now=Date.now()){
+  const due=t.dueAt?new Date(t.dueAt)-now:null,follow=t.followUpAt&&new Date(t.followUpAt)<=now;
+  return (t.status==='doing'?1000:0)+(t.status==='blocked'?650:0)+(t.priority==='high'?500:0)+(follow?400:0)+(due===null?0:due<=0?450:Math.max(0,300-due/3600000))+(assistantMode==='low'&&t.energy==='low'?380:0)+(assistantMode==='overwhelmed'&&Number(t.minutes||15)<=10?420:0);
+}
+function assistantTopTask(){
+  return data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a))[0]||null;
+}
 function renderTodayCoach(open){
   const box=$('todayCoach');if(!box)return;const now=Date.now(),planned=open.reduce((s,t)=>s+Number(t.minutes||15),0),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),stale=open.filter(t=>t.startedAt&&now-new Date(t.lastProgressAt||t.startedAt)>2*3600000);
-  const ranked=open.slice().sort((a,b)=>{const score=t=>(t.status==='doing'?1000:0)+(t.priority==='high'?500:0)+(t.followUpAt&&new Date(t.followUpAt)<=now?400:0)+(t.dueAt?Math.max(0,300-(new Date(t.dueAt)-now)/3600000):0);return score(b)-score(a)}),focus=ranked[0],next=focus&&taskSteps(focus.id).find(s=>!truth(s.done));
-  box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu 10 phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button></div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
+  const focus=assistantTopTask(),next=focus&&taskSteps(focus.id).find(s=>!truth(s.done)),session=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
+  box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY · CHẾ ĐỘ ${assistantMode==='overwhelmed'?'GIẢI CỨU':assistantMode==='low'?'ÍT NĂNG LƯỢNG':'TẬP TRUNG'}</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu ${session} phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button></div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
+}
+function loadAssistantBrief(force=false){
+  if(assistantBriefLoading)return;assistantBriefLoading=true;renderAssistantBrief();
+  google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief()}).withFailureHandler(e=>{assistantBriefLoading=false;renderAssistantBrief();fail(e)}).getAssistantBrief(force);
+}
+function setAssistantMode(mode){assistantMode=mode;localStorage.setItem('my-assistant-mode-v1',mode);renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'));renderAssistantBrief()}
+function assistantMoney(value){return appSettings().hideFinancialAmounts==='yes'?'••••':vnd(value)}
+function assistantCheckKey(){return `my-assistant-day-check-v1:${localDateKey(new Date())}`}
+function assistantChecks(){try{return JSON.parse(localStorage.getItem(assistantCheckKey())||'{}')}catch(e){return {}}}
+function toggleAssistantCheck(id,checked){const state=assistantChecks();state[id]=checked;localStorage.setItem(assistantCheckKey(),JSON.stringify(state));renderAssistantBrief()}
+function renderAssistantBrief(){
+  const box=$('assistantBrief');if(!box)return;
+  if(!assistantBrief){
+    box.innerHTML=`<article class="card assistant-loading"><b>${assistantBriefLoading?'Trợ lý đang tổng hợp ngày của bạn…':'Bản brief chưa tải'}</b><span>Việc vẫn dùng được ngay; tiền, sức khỏe, chuyến đi và du học đang tải nền.</span>${assistantBriefLoading?'':`<button onclick="loadAssistantBrief(true)">Tải bản brief</button>`}</article>`;return;
+  }
+  const b=assistantBrief,now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),focus=assistantTopTask();
+  const net=Number(b.finance.balance||0)-Number(b.finance.debt||0),flight=b.travel,checkinDue=flight&&new Date(flight.checkinAt)<=now,studyNext=b.study.next,studyDays=studyNext?.dueAt?Math.ceil((new Date(studyNext.dueAt)-now)/86400000):null;
+  const alerts=[];
+  if(overdue.length)alerts.push({tone:'danger',title:`${overdue.length} việc đã quá hạn`,detail:'Chọn một việc để xử lý hoặc đặt lại deadline thật.',page:'today'});
+  if(followups.length)alerts.push({tone:'warning',title:`${followups.length} follow-up đến hạn`,detail:'Đừng chờ im lặng: hỏi, chốt và báo lại.',page:'today'});
+  if(checkinDue)alerts.push({tone:'warning',title:`Đã đến cửa sổ check-in ${flight.code||''}`,detail:`${flight.fromCode||''} → ${flight.toCode||flight.destination||''} · ${dateTime(flight.departure)}`,page:'travel'});
+  if(Number(b.finance.debt||0)>Number(b.finance.balance||0)&&Number(b.finance.debt||0)>0)alerts.push({tone:'danger',title:'Nợ đang cao hơn tổng số dư',detail:`Chênh lệch ${assistantMoney(Math.abs(net))}. Mở tab Tiền để ưu tiên khoản cần trả.`,page:'money'});
+  if(new Date().getHours()>=15&&Number(b.health.waterMl||0)<Number(b.health.waterGoalMl||2500)*.5)alerts.push({tone:'info',title:'Nước hôm nay đang thấp',detail:`Đã log ${num(b.health.waterMl||0)}/${num(b.health.waterGoalMl||2500)} ml. Uống một cốc và log ngay.`,page:'food'});
+  if(studyDays!==null&&studyDays<=30)alerts.push({tone:studyDays<7?'danger':'info',title:`Hồ sơ du học: còn ${Math.max(0,studyDays)} ngày`,detail:studyNext.title||'Có bước hồ sơ sắp đến hạn.',page:'study'});
+  const card=(icon,label,value,detail,page)=>`<button class="assistant-domain" onclick="activatePage('${page}')"><span>${icon} ${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></button>`;
+  const checks=assistantChecks(),checkItems=[['top3','Chốt tối đa 3 đầu ra quan trọng'],['follow','Đặt giờ báo lại/follow-up'],['focus','Chặn một phiên tập trung không gián đoạn'],['close','Cuối ngày: cập nhật, dời việc và chuẩn bị ngày mai']];
+  box.innerHTML=`<article class="card assistant-hq">
+    <div class="assistant-head"><div><span class="pill">TRỢ LÝ TOÀN PHẦN · CẬP NHẬT ${timeOnly(b.generatedAt)}</span><h2>${assistantMode==='overwhelmed'?'Hôm nay chỉ cần thoát khỏi trạng thái đứng hình.':'Bức tranh toàn ngày của bạn'}</h2></div><button class="assistant-refresh" onclick="loadAssistantBrief(true)" ${assistantBriefLoading?'disabled':''}>${assistantBriefLoading?'Đang cập nhật…':'↻ Làm mới'}</button></div>
+    <div class="assistant-modes"><button class="${assistantMode==='focus'?'active':''}" onclick="setAssistantMode('focus')">🎯 Tập trung</button><button class="${assistantMode==='low'?'active':''}" onclick="setAssistantMode('low')">🔋 Ít năng lượng</button><button class="${assistantMode==='overwhelmed'?'active':''}" onclick="setAssistantMode('overwhelmed')">🛟 Quá tải</button></div>
+    <div class="assistant-domains">
+      ${card('✅','Công việc',`${open.length} đang mở`,overdue.length?`${overdue.length} quá hạn`:focus?`Tiếp: ${focus.title}`:'Đã sạch việc','today')}
+      ${card('⏱','Thời gian',`${Math.floor(Number(b.time.loggedMinutes||0)/60)}h ${Number(b.time.loggedMinutes||0)%60}m`,b.time.active?`Đang chạy: ${b.time.active.label}`:`${b.time.entries||0} hoạt động đã log`,'time')}
+      ${card('💰','Tài chính',assistantMoney(net),`Số dư trừ tổng nợ · ${b.finance.walletCount||0} tài khoản`,'money')}
+      ${card('❤️','Sức khỏe',b.health.currentWeightKg?`${b.health.currentWeightKg} kg`:'Chưa cân',`${num(b.health.waterMl||0)} ml nước · đi bộ ${num(b.health.walkMinutes||0)} phút`,'food')}
+      ${card('✈️','Chuyến đi',flight?(flight.code||`${flight.fromCode||''}→${flight.toCode||''}`):'Chưa có',flight?dateTime(flight.departure):'Không có chuyến tương lai','travel')}
+      ${card('🎓','Du học',`${b.study.pending||0} bước`,studyNext?`${studyNext.title} · ${dateShort(studyNext.dueAt)}`:'Chưa có deadline gần','study')}
+    </div>
+    ${alerts.length?`<div class="assistant-alert-list">${alerts.slice(0,4).map(a=>`<button class="assistant-alert ${a.tone}" onclick="activatePage('${a.page}')"><b>${esc(a.title)}</b><span>${esc(a.detail)}</span><i>Mở xử lý →</i></button>`).join('')}</div>`:'<div class="assistant-clear">Không có cảnh báo chéo nào cần xử lý ngay.</div>'}
+    <details class="assistant-day-loop"><summary>Mở ngày / đóng ngày <span>${Object.values(checks).filter(Boolean).length}/4</span></summary><div>${checkItems.map(item=>`<label><input type="checkbox" ${checks[item[0]]?'checked':''} onchange="toggleAssistantCheck('${item[0]}',this.checked)"> ${item[1]}</label>`).join('')}</div></details>
+  </article>`;
 }
 function renderTimeAnchor(){
   const now=new Date(); const clock=$('currentClock'); if(clock)clock.textContent=timeOnly(now,true);
@@ -169,6 +219,9 @@ function openNotificationTarget(type,id){
   if(type==='flight'){activatePage('travel');setTimeout(()=>$('upcomingFlightPlan')?.scrollIntoView({behavior:'smooth'}),50);return}
   if(type==='health'){activatePage('food');setTimeout(()=>$('workoutSuggestions')?.scrollIntoView({behavior:'smooth'}),50);return}
   if(type==='career'){activatePage('cv');setTimeout(()=>$('dailyGuidance')?.scrollIntoView({behavior:'smooth'}),50);return}
+  if(type==='money'){activatePage('money');return}
+  if(type==='study'){activatePage('study');return}
+  if(type==='time'){activatePage('time');return}
   activatePage('today');
   setTimeout(()=>document.querySelector(`[onclick="editItem('task','${id}')"]`)?.closest('.card')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
 }
