@@ -800,6 +800,17 @@ function addTaskStep(taskId, title) {
   return Object.assign({}, value, { createdAt: value.createdAt.toISOString() });
 }
 
+function editTaskStep(id, title) {
+  const sheet = getBook_().getSheetByName('TaskSteps');
+  const step = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!step) throw new Error('Không tìm thấy bước checklist.');
+  const cleanTitle = String(title || '').trim();
+  if (!cleanTitle) throw new Error('Nội dung bước không được để trống.');
+  const saved = Object.assign({}, step, { title: cleanTitle.slice(0, 240) });
+  upsertRow_(sheet, saved);
+  return saved;
+}
+
 function toggleTaskStep(id) {
   const ss = getBook_();
   const sheet = ss.getSheetByName('TaskSteps');

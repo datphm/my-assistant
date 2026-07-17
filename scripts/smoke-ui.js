@@ -90,7 +90,21 @@ context.window.open = () => null;
 const source = fs.readFileSync(path.join(__dirname, '..', 'Script.html'), 'utf8').replace(/^<script>\s*/, '').replace(/\s*<\/script>\s*$/, '');
 try {
   vm.runInNewContext(source, context, {filename:'Script.html'});
-  console.log('UI smoke test passed; clock:', getElement('currentClock').textContent);
+  vm.runInNewContext(`
+    data.wallets=[{id:'wallet-1',name:'Tài khoản chính',balance:12000000,type:'bank'}];
+    data.debts=[{id:'debt-1',name:'Khoản trả góp',balance:3000000,minimumPayment:500000}];
+    data.expenses=[
+      {id:'expense-1',date:new Date().toISOString(),amount:4000000,merchant:'Lương',direction:'income',category:'Thu nhập'},
+      {id:'expense-2',date:new Date().toISOString(),amount:750000,merchant:'Sinh hoạt',direction:'expense',category:'Thiết yếu'}
+    ];
+    data.timelogs=[{id:'time-1',kind:'work',label:'Công việc',startAt:new Date().toISOString(),endAt:new Date().toISOString(),durationMinutes:90}];
+    fullDataLoaded=true;
+    renderMoney();
+    document.getElementById('timeDate').value=localDateKey(new Date());
+    renderTime();
+  `, context, {filename:'smoke-fixtures.js'});
+  if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML) throw new Error('Dashboard visual did not render');
+  console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);
   process.exitCode = 1;
