@@ -1,5 +1,7 @@
 const HEADERS = {
-  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil'],
+  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil', 'outcome', 'nextAction', 'waitingFor', 'followUpAt', 'priority', 'energy', 'definitionOfDone', 'lastProgressAt', 'lastFollowUpEmailedAt'],
+  TaskSteps: ['id', 'taskId', 'title', 'done', 'position', 'dueAt', 'createdAt', 'completedAt'],
+  TaskUpdates: ['id', 'taskId', 'note', 'status', 'createdAt', 'nextFollowUpAt'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
   HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'walkingGoalMinutes', 'waterGoalMl', 'calorieDeficitTarget', 'dailyCalorieTarget', 'limitations', 'updatedAt'],
@@ -26,7 +28,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-health-finance-profile-v6';
+const SCHEMA_VERSION = '2026-07-17-adhd-task-system-v7';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -611,8 +613,22 @@ function formatPlanDeadline_(value) {
   return Utilities.formatDate(new Date(value), getConfiguredTimeZone_(), 'HH:mm dd/MM/yyyy');
 }
 
-function addSuggestedTasks(items) {
+function addSuggestedTasks(items, parentMessage) {
   if (!Array.isArray(items) || !items.length) throw new Error('Chưa chọn bước nào để thêm.');
+  if (String(parentMessage || '').trim()) {
+    const parsed = parseTaskMessage_(parentMessage);
+    const result = addItem('Tasks', parsed);
+    const stepSheet = getBook_().getSheetByName('TaskSteps');
+    items.forEach(function(item, index) {
+      const step = { id: Utilities.getUuid(), taskId: result.id, title: item.title, done: false, position: index + 1, dueAt: item.dueAt || '', createdAt: new Date(), completedAt: '' };
+      stepSheet.appendRow(HEADERS.TaskSteps.map(function(key) { return step[key] === undefined ? '' : step[key]; }));
+    });
+    const taskSheet = getBook_().getSheetByName('Tasks');
+    const saved = readRows_(taskSheet).find(function(row) { return row.id === result.id; }) || parsed;
+    upsertRow_(taskSheet, Object.assign({}, saved, { outcome: parsed.title, nextAction: items[0].title, definitionOfDone: 'Đã cập nhật tài liệu/lịch liên quan và báo lại người giao việc.' }));
+    if (PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') try { syncTaskToCalendar(result.id); } catch (error) {}
+    return { count: items.length, parentId: result.id, items: [] };
+  }
   const sheet = getBook_().getSheetByName('Tasks');
   const created = items.map(function(item) {
     const task = Object.assign({}, item, {
@@ -626,6 +642,67 @@ function addSuggestedTasks(items) {
   });
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, HEADERS.Tasks.length).setValues(rows);
   return { count: created.length, items: created };
+}
+
+function addTaskStep(taskId, title) {
+  const ss = getBook_();
+  const task = readRows_(ss.getSheetByName('Tasks')).find(function(row) { return row.id === taskId; });
+  if (!task) throw new Error('Không tìm thấy việc cha.');
+  const cleanTitle = String(title || '').trim();
+  if (!cleanTitle) throw new Error('Hãy nhập một bước nhỏ có thể làm được.');
+  const sheet = ss.getSheetByName('TaskSteps');
+  const siblings = readRows_(sheet).filter(function(row) { return row.taskId === taskId; });
+  const value = { id: Utilities.getUuid(), taskId: taskId, title: cleanTitle.slice(0, 240), done: false, position: siblings.length + 1, dueAt: '', createdAt: new Date(), completedAt: '' };
+  sheet.appendRow(HEADERS.TaskSteps.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  return Object.assign({}, value, { createdAt: value.createdAt.toISOString() });
+}
+
+function toggleTaskStep(id) {
+  const ss = getBook_();
+  const sheet = ss.getSheetByName('TaskSteps');
+  const step = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!step) throw new Error('Không tìm thấy bước checklist.');
+  const done = !(step.done === true || step.done === 'TRUE');
+  upsertRow_(sheet, Object.assign({}, step, { done: done, completedAt: done ? new Date() : '' }));
+  const siblings = readRows_(sheet).filter(function(row) { return row.taskId === step.taskId; });
+  const parentSheet = ss.getSheetByName('Tasks');
+  const task = readRows_(parentSheet).find(function(row) { return row.id === step.taskId; });
+  if (task) {
+    const next = siblings.filter(function(item) { return !(item.done === true || item.done === 'TRUE'); }).sort(function(a, b) { return Number(a.position || 0) - Number(b.position || 0); })[0];
+    upsertRow_(parentSheet, Object.assign({}, task, { nextAction: next ? next.title : task.nextAction, lastProgressAt: new Date(), status: task.status === 'todo' ? 'doing' : task.status }));
+    if (!next && siblings.length) createNotification_('close_loop', 'Checklist đã xong — hãy đóng vòng lặp', 'Cập nhật tài liệu, báo lại người giao rồi tick hoàn thành: ' + task.title, 'task', task.id, 'high', 'close-loop:' + task.id + ':' + new Date().toISOString().slice(0, 10));
+  }
+  return { id: id, done: done };
+}
+
+function addTaskUpdate(item) {
+  const ss = getBook_();
+  const taskSheet = ss.getSheetByName('Tasks');
+  const task = readRows_(taskSheet).find(function(row) { return row.id === item.taskId; });
+  if (!task) throw new Error('Không tìm thấy việc cần cập nhật.');
+  const note = String(item.note || '').trim();
+  if (!note) throw new Error('Hãy ghi ngắn gọn: đã chốt gì, còn kẹt gì, bước tiếp theo.');
+  const followUpAt = item.nextFollowUpAt ? new Date(item.nextFollowUpAt) : '';
+  const value = { id: Utilities.getUuid(), taskId: task.id, note: note.slice(0, 1000), status: item.status || task.status || 'doing', createdAt: new Date(), nextFollowUpAt: followUpAt };
+  const sheet = ss.getSheetByName('TaskUpdates');
+  sheet.appendRow(HEADERS.TaskUpdates.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  upsertRow_(taskSheet, Object.assign({}, task, { status: value.status, followUpAt: followUpAt, lastProgressAt: new Date(), lastFollowUpEmailedAt: '' }));
+  return 'Đã lưu cập nhật và mốc follow-up tiếp theo.';
+}
+
+function generateChecklistForTask(taskId) {
+  const ss = getBook_();
+  const task = readRows_(ss.getSheetByName('Tasks')).find(function(row) { return row.id === taskId; });
+  if (!task) throw new Error('Không tìm thấy việc.');
+  const sheet = ss.getSheetByName('TaskSteps');
+  if (readRows_(sheet).some(function(row) { return row.taskId === taskId; })) throw new Error('Việc này đã có checklist. Bạn có thể thêm từng bước mới.');
+  const suggestions = suggestTaskPlan(task.title).map(function(item) { return item.title; });
+  suggestions.forEach(function(title, index) {
+    const value = { id: Utilities.getUuid(), taskId: taskId, title: title, done: false, position: index + 1, dueAt: '', createdAt: new Date(), completedAt: '' };
+    sheet.appendRow(HEADERS.TaskSteps.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  });
+  upsertRow_(ss.getSheetByName('Tasks'), Object.assign({}, task, { nextAction: task.nextAction || suggestions[0] }));
+  return suggestions.length;
 }
 
 function addItem(type, item) {
@@ -687,6 +764,15 @@ function deleteItem(type, id) {
       if (event) event.deleteEvent();
     } catch (error) {}
   }
+  if (type === 'Tasks') {
+    ['TaskSteps', 'TaskUpdates'].forEach(function(childType) {
+      const childSheet = getBook_().getSheetByName(childType);
+      const childValues = childSheet.getDataRange().getValues();
+      for (let index = childValues.length - 1; index >= 1; index--) {
+        if (childValues[index][1] === id) childSheet.deleteRow(index + 1);
+      }
+    });
+  }
   sheet.deleteRow(row + 1);
   return { ok: true };
 }
@@ -740,13 +826,16 @@ function saveCvWithFile(item, file) {
 
 function completeTask(id) {
   const sheet = getBook_().getSheetByName('Tasks');
-  const values = sheet.getDataRange().getValues();
-  const row = values.findIndex((r, i) => i > 0 && r[0] === id);
-  if (row < 1) throw new Error('Không tìm thấy việc.');
-  sheet.getRange(row + 1, 6).setValue(true);
-  const headers = values[0];
-  const statusCol = headers.indexOf('status') + 1;
-  if (statusCol > 0) sheet.getRange(row + 1, statusCol).setValue('done');
+  const task = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!task) throw new Error('Không tìm thấy việc.');
+  upsertRow_(sheet, Object.assign({}, task, { done: true, status: 'done', lastProgressAt: new Date(), followUpAt: '', lastFollowUpEmailedAt: '' }));
+  if (task.calendarEventId) try {
+    const event = CalendarApp.getDefaultCalendar().getEventById(task.calendarEventId);
+    if (event) { event.removeAllReminders(); if (!/^✓ /.test(event.getTitle())) event.setTitle('✓ ' + event.getTitle()); }
+  } catch (error) {}
+  const updateSheet = getBook_().getSheetByName('TaskUpdates');
+  const update = { id: Utilities.getUuid(), taskId: id, note: 'Đã đóng việc; đã kiểm tra đầu ra, tài liệu và bước báo lại.', status: 'done', createdAt: new Date(), nextFollowUpAt: '' };
+  updateSheet.appendRow(HEADERS.TaskUpdates.map(function(key) { return update[key] === undefined ? '' : update[key]; }));
   return { ok: true };
 }
 
@@ -774,6 +863,16 @@ function createTaskFromMessage(message) {
   parsed.id = result.id;
   parsed.calendarWarning = result.calendarWarning;
   parsed.suggestions = suggestTaskPlan(message);
+  const stepSheet = getBook_().getSheetByName('TaskSteps');
+  parsed.suggestions.forEach(function(step, index) {
+    const value = { id: Utilities.getUuid(), taskId: parsed.id, title: step.title, done: false, position: index + 1, dueAt: step.dueAt, createdAt: new Date(), completedAt: '' };
+    stepSheet.appendRow(HEADERS.TaskSteps.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  });
+  const taskSheet = getBook_().getSheetByName('Tasks');
+  const saved = readRows_(taskSheet).find(function(row) { return row.id === parsed.id; }) || parsed;
+  upsertRow_(taskSheet, Object.assign({}, saved, { outcome: parsed.title, nextAction: parsed.suggestions[0] && parsed.suggestions[0].title, definitionOfDone: 'Đầu ra đã được cập nhật vào tài liệu/lịch liên quan và đã báo lại người giao việc.' }));
+  if (PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') try { syncTaskToCalendar(parsed.id); } catch (error) {}
+  parsed.checklistCount = parsed.suggestions.length;
   return parsed;
 }
 
@@ -787,6 +886,16 @@ function syncTaskToCalendar(id) {
   const minutes = Number(task.minutes || 15);
   const end = new Date(due.getTime() + Math.max(minutes, 15) * 60 * 1000);
   const cal = CalendarApp.getDefaultCalendar();
+  const steps = readRows_(ss.getSheetByName('TaskSteps')).filter(function(step) { return step.taskId === task.id; });
+  const description = [
+    task.outcome ? 'ĐẦU RA: ' + task.outcome : '',
+    task.nextAction ? 'BƯỚC TIẾP THEO: ' + task.nextAction : '',
+    task.definitionOfDone ? 'HOÀN THÀNH KHI: ' + task.definitionOfDone : '',
+    task.waitingFor ? 'ĐANG CHỜ: ' + task.waitingFor : '',
+    steps.length ? 'CHECKLIST:\n' + steps.map(function(step) { return (step.done === true || step.done === 'TRUE' ? '☑ ' : '☐ ') + step.title; }).join('\n') : '',
+    'Nhóm: ' + (task.area || ''),
+    'Created from My Assistant'
+  ].filter(String).join('\n\n');
   let event;
   if (task.calendarEventId) {
     try { event = cal.getEventById(task.calendarEventId); } catch (e) { event = null; }
@@ -794,10 +903,10 @@ function syncTaskToCalendar(id) {
   if (event) {
     event.setTitle(task.title || 'My Assistant task');
     event.setTime(due, end);
-    event.setDescription(`Area: ${task.area || ''}\nCreated from My Assistant`);
+    event.setDescription(description);
   } else {
     event = cal.createEvent(task.title || 'My Assistant task', due, end, {
-      description: `Area: ${task.area || ''}\nCreated from My Assistant`
+      description: description
     });
   }
   event.removeAllReminders();
@@ -1079,6 +1188,7 @@ function sendDueTaskReminders() {
   const ss = getBook_();
   const sheet = ss.getSheetByName('Tasks');
   const rows = readRows_(sheet);
+  const taskSteps = readRows_(ss.getSheetByName('TaskSteps'));
   const now = new Date();
   const props = PropertiesService.getUserProperties();
   const emailEnabled = props.getProperty('APP_EMAIL_REMINDERS') !== 'no';
@@ -1095,14 +1205,28 @@ function sendDueTaskReminders() {
     const overdue = delta <= 0;
     const dueSoon = delta > 0 && delta <= 30 * 60 * 1000;
     const forgotten = delta <= -24 * 60 * 60 * 1000 && !task.startedAt;
+    const steps = taskSteps.filter(function(step) { return step.taskId === task.id; });
+    const completedSteps = steps.filter(function(step) { return step.done === true || step.done === 'TRUE'; }).length;
+    const nextStep = steps.filter(function(step) { return !(step.done === true || step.done === 'TRUE'); }).sort(function(a, b) { return Number(a.position || 0) - Number(b.position || 0); })[0];
+    const followUpDue = task.followUpAt && new Date(task.followUpAt) <= now;
+    const lastFollowUp = task.lastFollowUpEmailedAt ? new Date(task.lastFollowUpEmailedAt) : null;
+    const canFollowUp = !lastFollowUp || now - lastFollowUp >= 2 * 60 * 60 * 1000;
+    if (followUpDue) createNotification_('task_follow_up', 'Đến giờ follow-up', task.title + (task.waitingFor ? ' · đang chờ ' + task.waitingFor : ''), 'task', task.id, 'high', 'follow-up:' + task.id + ':' + Math.floor(now.getTime() / (2 * 60 * 60 * 1000)));
+    if (followUpDue && canFollowUp && emailEnabled && !quiet) {
+      MailApp.sendEmail(recipient, 'FOLLOW-UP · My Assistant: ' + task.title, 'Đến mốc follow-up của việc này.' + (task.waitingFor ? '\nĐang chờ: ' + task.waitingFor : '') + '\n\nBước tiếp theo: ' + (nextStep ? nextStep.title : task.nextAction || 'Cập nhật tình hình và chốt bước kế tiếp') + '\nChecklist: ' + completedSteps + '/' + steps.length + '\n\nSau khi xử lý, bấm “Cập nhật” để đặt mốc follow-up mới.');
+      upsertRow_(sheet, Object.assign({}, task, { lastFollowUpEmailedAt: now }));
+    }
+    const progressBase = task.lastProgressAt || task.startedAt;
+    const staleInProgress = task.startedAt && progressBase && now - new Date(progressBase) >= 2 * 60 * 60 * 1000;
+    if (staleInProgress) createNotification_('progress_check', 'Bạn vẫn đang làm việc này?', (nextStep ? 'Bước kế: ' + nextStep.title : task.title) + ' · cập nhật tiến độ hoặc đặt follow-up.', 'task', task.id, 'normal', 'progress-check:' + task.id + ':' + Math.floor(now.getTime() / (2 * 60 * 60 * 1000)));
     if (dueSoon) createNotification_('due_30m', 'Còn dưới 30 phút', task.title, 'task', task.id, 'high', 'due30:' + task.id);
     if (overdue) createNotification_(forgotten ? 'forgotten_task' : 'overdue', forgotten ? 'Việc có nguy cơ bị quên' : 'Việc đã quá hạn', task.title, 'task', task.id, forgotten ? 'critical' : 'high', (forgotten ? 'forgotten:' : 'overdue:') + task.id);
     const interval = task.chaseMode === 'urgent' ? 15 * 60 * 1000 : 2 * 60 * 60 * 1000;
     const canRepeat = !last || (now - last) >= interval;
-    if ((!overdue && !dueSoon) || !canRepeat || task.startedAt || !emailEnabled || quiet) return;
+    if (((!overdue && !dueSoon) && !staleInProgress) || !canRepeat || !emailEnabled || quiet) return;
     const urgent = task.chaseMode === 'urgent';
     const prefix = forgotten ? 'VIỆC BỊ QUÊN · ' : urgent ? 'KHẨN · ' : dueSoon ? 'CÒN 30 PHÚT · ' : '';
-    MailApp.sendEmail(recipient, `${prefix}My Assistant: ${task.title}`, `${dueSoon ? 'Sắp đến hạn' : 'Đến giờ'}: ${task.title}\n\nBước duy nhất lúc này: mở việc và làm ${task.minutes || 10} phút.\n\nBấm “Đã bắt đầu” trong My Assistant để dừng chuỗi nhắc, hoặc ✓ khi hoàn thành.`);
+    MailApp.sendEmail(recipient, `${staleInProgress ? 'CHECK-IN · ' : prefix}My Assistant: ${task.title}`, `${staleInProgress ? 'Bạn đã bắt đầu nhưng chưa cập nhật tiến độ.' : dueSoon ? 'Sắp đến hạn' : 'Đến giờ'}: ${task.title}\n\nBước duy nhất lúc này: ${nextStep ? nextStep.title : task.nextAction || 'mở việc và làm ' + (task.minutes || 10) + ' phút'}.\nChecklist: ${completedSteps}/${steps.length}.\n\nBấm “Cập nhật” để ghi đã chốt gì, còn kẹt gì và đặt mốc follow-up; tick ✓ chỉ sau khi cập nhật tài liệu và báo lại.`);
     sheet.getRange(i + 2, 7).setValue(now);
   });
   if (props.getProperty('APP_FLIGHT_REMINDERS') !== 'no') sendFlightReminders_(recipient, now);
@@ -1618,7 +1742,9 @@ function parseTaskMessage_(message) {
     area,
     minutes: /báo cáo|report|tổng hợp/i.test(text) ? 45 : Number(PropertiesService.getUserProperties().getProperty('APP_DEFAULT_TASK_MINUTES') || 15),
     status: 'todo',
-    chaseMode: PropertiesService.getUserProperties().getProperty('APP_DEFAULT_CHASE_MODE') || 'normal'
+    chaseMode: PropertiesService.getUserProperties().getProperty('APP_DEFAULT_CHASE_MODE') || 'normal',
+    priority: /khẩn|gấp|ngay|urgent/i.test(text) ? 'high' : 'medium', energy: 'medium',
+    outcome: title || text, definitionOfDone: 'Đã hoàn thành đầu ra, cập nhật tài liệu và báo lại người giao việc.'
   };
 }
 

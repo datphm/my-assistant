@@ -1,5 +1,5 @@
 <script>
-let data={tasks:[],debts:[],meals:[],healthprofile:[],weightlogs:[],healthlogs:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],reflectionprofile:[],studyabroadprofile:[],studyabroadoptions:[],studyabroadchecklist:[],appsettings:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
+let data={tasks:[],tasksteps:[],taskupdates:[],debts:[],meals:[],healthprofile:[],weightlogs:[],healthlogs:[],flights:[],hotels:[],expenses:[],wallets:[],allocations:[],cvs:[],reflectionprofile:[],studyabroadprofile:[],studyabroadoptions:[],studyabroadchecklist:[],appsettings:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let viewingCvId='';
 let initialPageApplied=false;
@@ -14,9 +14,10 @@ function load(){google.script.run.withSuccessHandler(d=>{data=Object.assign(data
 function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',theme:'dark',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes'}}
 function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
 function render(){
-  const open=data.tasks.filter(t=>!truth(t.done)).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
   $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
+  renderTodayCoach(open);
   renderKanban();
   renderNotifications();
   renderTimeAnchor();
@@ -34,11 +35,20 @@ function renderCurrentPage(){
   if(page==='install')renderInstall();
 }
 function taskCard(t){
-  return `<article class="card ${t.chaseMode==='urgent'?'chasing':''}"><div class="card-top"><div><h3>${t.chaseMode==='urgent'?'🚨 ':''}${esc(t.title)}</h3><p class="meta">${dateTime(t.dueAt)} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')} ${t.calendarEventId?'· Calendar + 4 noti':''}${t.startedAt?' · đã bắt đầu':''}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('task','${t.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button><button class="outline small" onclick="syncCalendar('${t.id}')">Calendar</button><button class="outline small ${t.chaseMode==='urgent'?'danger':''}" onclick="toggleChase('${t.id}')">${t.chaseMode==='urgent'?'Tắt bám':'Bám đuổi'}</button>${t.startedAt?'':`<button class="outline small" onclick="startTask('${t.id}')">Đã bắt đầu</button>`}<button class="done" onclick="complete('${t.id}')">✓</button></div></div></article>`;
+  const steps=taskSteps(t.id),doneSteps=steps.filter(s=>truth(s.done)).length,next=steps.find(s=>!truth(s.done)),updates=taskUpdates(t.id),progress=steps.length?Math.round(doneSteps/steps.length*100):0;
+  return `<article class="card task-workspace ${t.chaseMode==='urgent'?'chasing':''}" id="task-${escAttr(t.id)}"><div class="card-top"><div><div class="task-badges"><span class="status-badge ${t.priority==='high'?'danger':t.status==='waiting'?'warning':'ok'}">${esc(taskStatusLabel(t))}</span>${t.waitingFor?`<span class="pill">CHỜ ${esc(t.waitingFor)}</span>`:''}</div><h3>${t.chaseMode==='urgent'?'🚨 ':''}${esc(t.title)}</h3><p class="meta">${dateTime(t.dueAt)} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')}${t.followUpAt?' · follow-up '+dateTime(t.followUpAt):''}</p></div><button class="done" onclick="complete('${t.id}')" aria-label="Hoàn thành">✓</button></div><div class="task-next"><small>BƯỚC DUY NHẤT LÚC NÀY</small><b>${esc(next?.title||t.nextAction||'Chọn một bước nhỏ trong 5–10 phút')}</b>${t.outcome?`<span>Đầu ra: ${esc(t.outcome)}</span>`:''}</div>${steps.length?`<div class="task-progress"><i><em style="width:${progress}%"></em></i><b>${doneSteps}/${steps.length} bước · ${progress}%</b></div>`:''}<div class="task-checklist">${steps.map(s=>`<label class="${truth(s.done)?'completed':''}"><button onclick="toggleTaskStepUi('${s.id}')" aria-label="Đổi trạng thái">${truth(s.done)?'✓':'○'}</button><span>${esc(s.title)}</span><button class="step-delete" onclick="removeItem('TaskSteps','${s.id}')" aria-label="Xoá bước">×</button></label>`).join('')||'<p class="meta">Chưa có checklist. Tạo tự động hoặc thêm bước nhỏ đầu tiên.</p>'}</div><div class="task-actions-primary"><button onclick="focusTask('${t.id}')">▶ Focus 10 phút</button><button class="outline" onclick="openTaskUpdate('${t.id}')">↻ Cập nhật / follow-up</button></div><details class="task-more"><summary>Thêm bước · sửa · Calendar · xoá</summary><div class="task-actions-secondary"><button onclick="addTaskStepUi('${t.id}')">+ Bước</button>${steps.length?'':`<button onclick="generateChecklistUi('${t.id}')">Checklist mẫu</button>`}<button onclick="editItem('task','${t.id}')">Sửa</button><button onclick="syncCalendar('${t.id}')">Calendar</button><button class="${t.chaseMode==='urgent'?'danger':''}" onclick="toggleChase('${t.id}')">${t.chaseMode==='urgent'?'Tắt bám':'Bám đuổi'}</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button></div></details>${updates.length?`<details class="task-updates"><summary>${updates.length} cập nhật gần đây</summary>${updates.slice(0,3).map(u=>`<p><b>${dateTime(u.createdAt)}</b><span>${esc(u.note)}</span></p>`).join('')}</details>`:''}</article>`;
+}
+function taskSteps(taskId){return (data.tasksteps||[]).filter(s=>s.taskId===taskId).sort((a,b)=>Number(a.position||0)-Number(b.position||0))}
+function taskUpdates(taskId){return (data.taskupdates||[]).filter(u=>u.taskId===taskId).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))}
+function taskStatusLabel(t){return t.status==='waiting'?'Đang chờ follow-up':t.status==='blocked'?'Đang kẹt':t.status==='doing'?'Đang làm':t.priority==='high'?'Ưu tiên cao':'Cần làm'}
+function renderTodayCoach(open){
+  const box=$('todayCoach');if(!box)return;const now=Date.now(),planned=open.reduce((s,t)=>s+Number(t.minutes||15),0),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),stale=open.filter(t=>t.startedAt&&now-new Date(t.lastProgressAt||t.startedAt)>2*3600000);
+  const ranked=open.slice().sort((a,b)=>{const score=t=>(t.status==='doing'?1000:0)+(t.priority==='high'?500:0)+(t.followUpAt&&new Date(t.followUpAt)<=now?400:0)+(t.dueAt?Math.max(0,300-(new Date(t.dueAt)-now)/3600000):0);return score(b)-score(a)}),focus=ranked[0],next=focus&&taskSteps(focus.id).find(s=>!truth(s.done));
+  box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu 10 phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button></div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
 }
 function renderTimeAnchor(){
   const now=new Date(); const clock=$('currentClock'); if(clock)clock.textContent=timeOnly(now,true);
-  const next=data.tasks.filter(t=>!truth(t.done)&&t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0];
+  const next=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'&&t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0];
   const countdown=$('nextTaskClock'), title=$('nextTaskTitle'); if(!countdown||!title)return;
   if(!next){countdown.textContent='Chưa có deadline';title.textContent='';return}
   const ms=new Date(next.dueAt)-now; const past=ms<0; const total=Math.abs(ms); const hours=Math.floor(total/3600000); const mins=Math.floor(total%3600000/60000); const secs=Math.floor(total%60000/1000);
@@ -108,10 +118,10 @@ function calculateSleepWindow(){
 }
 function renderKanban(){
   const now=new Date();
-  const open=data.tasks.filter(t=>!truth(t.done)).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   const overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now);
   const upcoming=open.filter(t=>!t.dueAt||new Date(t.dueAt)>now);
-  const done=data.tasks.filter(t=>truth(t.done)).slice(-6).reverse();
+  const done=data.tasks.filter(t=>truth(t.done)||t.status==='done').slice(-6).reverse();
   const col=(title,items,empty)=>`<section class="kanban-col"><h3>${title}</h3>${items.length?items.slice(0,6).map(t=>`<article class="kanban-card"><b>${esc(t.title)}</b><span>${dateTime(t.dueAt)}</span><div><button onclick="editItem('task','${t.id}')">Sửa</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button>${truth(t.done)?'':`<button onclick="complete('${t.id}')">Xong</button>`}</div></article>`).join(''):`<p class="meta">${empty}</p>`}</section>`;
   $('kanban').innerHTML=col('Đang cháy / hôm nay',overdue,'Không có việc quá hạn.')+col('Sắp tới',upcoming,'Chưa có việc sắp tới.')+col('Đã xong',done,'Chưa tick xong việc nào.');
 }
@@ -347,16 +357,14 @@ function routeLabel(f){return f.fromCode||f.toCode?`${f.fromCode||'?'} → ${f.t
 function topBy(list,fn){const m={};list.forEach(x=>{const k=fn(x);m[k]=(m[k]||0)+1});const e=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return {name:e?e[0]:'—',count:e?e[1]:0}}
 function airlineFromCode(code){const m=String(code||'').match(/^[A-Z0-9]{2}/);return m?m[0]:''}
 
-function complete(id){google.script.run.withSuccessHandler(load).withFailureHandler(fail).completeTask(id)}
+function complete(id){const task=data.tasks.find(t=>t.id===id),steps=taskSteps(id),openSteps=steps.filter(s=>!truth(s.done));if(openSteps.length&&!confirm(`Còn ${openSteps.length} bước checklist chưa xong. Bạn vẫn muốn đóng việc?`))return;if(task?.definitionOfDone&&!confirm(`Kiểm tra đóng vòng lặp:\n${task.definitionOfDone}\n\nBạn đã cập nhật tài liệu và báo lại chưa?`))return;google.script.run.withSuccessHandler(load).withFailureHandler(fail).completeTask(id)}
 function startTask(id){google.script.run.withSuccessHandler(()=>{toast('Đã ghi nhận bắt đầu; chuỗi nhắc của việc này đã dừng.');load()}).withFailureHandler(fail).startTask(id)}
 function toggleChase(id){google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).toggleTaskChase(id)}
 function createTaskFromMessage(){
   const box=$('taskMessage'); const message=box.value.trim();
   if(!message){toast('Nhập một câu công việc trước đã.');return}
   google.script.run.withSuccessHandler(task=>{
-    data.tasks=data.tasks||[];data.tasks.push(task);
-    suggestedTasks=task.suggestions||[];renderTaskSuggestions();render();
-    toast(`Đã tạo: ${task.title} · hạn ${dateTime(task.dueAt)}. Chọn các bước bên dưới.`);
+    toast(`Đã tạo: ${task.title} · ${task.checklistCount||0} bước checklist · hạn ${dateTime(task.dueAt)}.`);box.value='';$('taskSuggestions').innerHTML='';load();
   }).withFailureHandler(fail).createTaskFromMessage(message);
 }
 let suggestedTasks=[];
@@ -372,7 +380,7 @@ function renderTaskSuggestions(){
 function addSuggestedTasks(){
   const selected=[...document.querySelectorAll('[data-suggestion]:checked')].map(el=>suggestedTasks[Number(el.dataset.suggestion)]);
   if(!selected.length){toast('Hãy chọn ít nhất một bước.');return}
-  google.script.run.withSuccessHandler(result=>{data.tasks=(data.tasks||[]).concat(result.items||[]);$('taskMessage').value='';$('taskSuggestions').innerHTML='';suggestedTasks=[];toast(`Đã thêm ${result.count} bước vào Kanban`);render()}).withFailureHandler(fail).addSuggestedTasks(selected);
+  const message=$('taskMessage').value.trim();google.script.run.withSuccessHandler(result=>{$('taskMessage').value='';$('taskSuggestions').innerHTML='';suggestedTasks=[];toast(`Đã tạo 1 việc với ${result.count} bước checklist`);load()}).withFailureHandler(fail).addSuggestedTasks(selected,message);
 }
 function resetDeepChecklist(){document.querySelectorAll('[data-deep]').forEach(box=>box.checked=false);toast('Đã làm mới checklist Think Deep.')}
 function truth(x){return x===true||x==='TRUE'}
@@ -385,7 +393,8 @@ function localDateKey(value){const d=new Date(value);if(isNaN(d))return '';retur
 function safeUrl(url){return /^https:\/\//i.test(url||'')}
 
 const fields={
- task:[['title','Việc cần làm','text'],['dueAt','Nhắc lúc','datetime-local'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Bắt đầu trong (phút)','number'],['chaseMode','Mức nhắc','select','normal,urgent'],['status','Trạng thái','select','todo,doing,blocked,done']],
+ task:[['title','Việc cần làm','text'],['outcome','Đầu ra cụ thể phải bàn giao','textarea'],['definitionOfDone','Khi nào được coi là hoàn thành?','textarea'],['nextAction','Bước nhỏ tiếp theo','text'],['dueAt','Deadline cuối','datetime-local'],['followUpAt','Mốc phải follow-up / cập nhật','datetime-local'],['waitingFor','Đang chờ ai / điều gì','text'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Thời lượng phiên bắt đầu (phút)','number'],['priority','Ưu tiên','select','high,medium,low'],['energy','Năng lượng cần','select','low,medium,high'],['chaseMode','Mức nhắc','select','normal,urgent'],['status','Trạng thái','select','todo,doing,waiting,blocked,done']],
+ taskUpdate:[['taskId','Mã việc','hidden'],['note','Cập nhật: đã chốt gì, còn kẹt gì, bước tiếp theo','textarea'],['status','Trạng thái sau cập nhật','select','doing,waiting,blocked,todo'],['nextFollowUpAt','Mốc follow-up tiếp theo','datetime-local']],
  debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
  meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],
  healthProfile:[['heightCm','Chiều cao (cm)','number'],['startWeightKg','Cân nặng bắt đầu (kg)','number'],['currentWeightKg','Cân nặng hiện tại (kg)','number'],['goal1Kg','Mốc đầu tiên (kg)','number'],['goal2Kg','Mục tiêu tiếp theo (kg)','number'],['targetDate','Ngày mục tiêu','date'],['activityLevel','Mức vận động hiện tại','select','sedentary,light,active'],['calorieDeficitTarget','Thâm hụt calorie muốn mô phỏng mỗi ngày','number'],['dailyCalorieTarget','Mục tiêu calorie/ngày (để trống nếu dùng ước tính)','number'],['walkingGoalMinutes','Mục tiêu đi bộ mỗi ngày (phút)','number'],['waterGoalMl','Mục tiêu nước mỗi ngày (ml)','number'],['exerciseTime','Giờ nhắc vận động','time'],['limitations','Đau/giới hạn vận động cần lưu ý','textarea']],
@@ -426,17 +435,19 @@ function editItem(kind,id){
   if(!found){toast('Không tìm thấy mục để sửa.');return}
   openForm(map[kind][0],found);
 }
+function openTaskUpdate(id){const task=data.tasks.find(t=>t.id===id);if(!task)return;openForm('taskUpdate',{taskId:id,status:task.waitingFor?'waiting':task.status||'doing',nextFollowUpAt:task.followUpAt||''})}
 function openForm(type,item={}){
-  if(type==='task'&&!item.id)item=Object.assign({minutes:appSettings().defaultTaskMinutes||15,chaseMode:appSettings().defaultChaseMode||'normal',status:'todo'},item);
+  if(type==='task'&&!item.id)item=Object.assign({minutes:appSettings().defaultTaskMinutes||15,chaseMode:appSettings().defaultChaseMode||'normal',status:'todo',priority:'medium',energy:'medium',definitionOfDone:'Đã cập nhật tài liệu/lịch liên quan và báo lại người giao việc.'},item);
   currentType=type;editingId=item.id||'';
   formDialog.classList.toggle('cv-editor-dialog',type==='cv');
-  const names={task:editingId?'Sửa việc':'Thêm việc',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',weightLog:'Ghi cân nặng',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn',studyProfile:'Mục tiêu du học',studyOption:editingId?'Sửa trường / chương trình':'Thêm trường / chương trình',studyChecklist:editingId?'Sửa bước hồ sơ':'Thêm bước hồ sơ',appSettings:'Thiết lập ứng dụng'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',taskUpdate:'Cập nhật tiến độ & follow-up',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',weightLog:'Ghi cân nặng',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn',studyProfile:'Mục tiêu du học',studyOption:editingId?'Sửa trường / chương trình':'Thêm trường / chương trình',studyChecklist:editingId?'Sửa bước hồ sơ':'Thêm bước hồ sơ',appSettings:'Thiết lập ứng dụng'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
 }
 function fieldHtml(name,label,input,options,value){
   const val=value===undefined||value===null?'':value;
+  if(input==='hidden')return `<input type="hidden" name="${name}" value="${escAttr(val)}">`;
   if(input==='select'){return `<div class="field"><label>${label}</label><select name="${name}">${options.split(',').map(o=>`<option value="${escAttr(o)}" ${String(o)===String(val)?'selected':''}>${esc(labelForOption(o))}</option>`).join('')}</select></div>`}
   if(input==='wallet'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Chưa chọn</option>${data.wallets.map(w=>`<option value="${escAttr(w.id)}" ${w.id===val?'selected':''}>${esc(w.name)}</option>`).join('')}</select></div>`}
   if(input==='debt'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Không liên kết khoản nợ</option>${data.debts.map(d=>`<option value="${escAttr(d.id)}" ${d.id===val?'selected':''}>${esc(d.name)} · ${vnd(d.balance)}</option>`).join('')}</select></div>`}
@@ -444,18 +455,19 @@ function fieldHtml(name,label,input,options,value){
   if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
   let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
   const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#245647"':'';
-  const optional=['terminal','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl','birthPlace','currentGpa','currentEnglishScore','otherLanguages','budgetVnd','savingsVnd','passportStatus','applicationDeadline','tuitionAnnual','livingCostAnnual','website','intake','dailyCalorieTarget','preferredName','phone','email','nationality','emergencyContactRelation','passportNumber','passportExpiry','insuranceProvider','insuranceNumber','documentFolderUrl'];
+  const optional=['terminal','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl','birthPlace','currentGpa','currentEnglishScore','otherLanguages','budgetVnd','savingsVnd','passportStatus','applicationDeadline','tuitionAnnual','livingCostAnnual','website','intake','dailyCalorieTarget','preferredName','phone','email','nationality','emergencyContactRelation','passportNumber','passportExpiry','insuranceProvider','insuranceNumber','documentFolderUrl','nextAction','followUpAt','waitingFor','nextFollowUpAt'];
   return `<div class="field"><label>${label}</label><input ${input==='color'||optional.includes(name)?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
 }
 function saveForm(event){
   event.preventDefault();
   const item=Object.fromEntries(new FormData(event.target)); if(editingId)item.id=editingId;
   delete item.cvFile;
-  if(item.dueAt||item.departure){const k=item.dueAt?'dueAt':'departure';item[k]=new Date(item[k]).toISOString()}
+  ['dueAt','departure','followUpAt','nextFollowUpAt'].forEach(k=>{if(item[k])item[k]=new Date(item[k]).toISOString()});
   if(item.date)item.date=new Date(item.date).toISOString();
   if(currentType==='cv'){saveCvForm(event.target,item);return}
   const runner=google.script.run.withSuccessHandler(result=>{formDialog.close();toast(result&&result.calendarWarning?'Đã lưu việc; hãy bấm Calendar để cấp lại quyền Google.':'Đã lưu và đồng bộ');load()}).withFailureHandler(fail);
   if(currentType==='profile'){runner.saveProfile(item);return}
+  if(currentType==='taskUpdate'){runner.addTaskUpdate(item);return}
   if(currentType==='reflection'){runner.saveReflectionProfile(item);return}
   if(currentType==='studyProfile'){runner.saveStudyAbroadProfile(item);return}
   if(currentType==='appSettings'){runner.saveAppSettings(item);return}
@@ -467,11 +479,15 @@ function saveForm(event){
   const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans',studyOption:'StudyAbroadOptions',studyChecklist:'StudyAbroadChecklist'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
-function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',male:'Nam',female:'Nữ',yes:'Bật',no:'Tắt',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ',researching:'Đang tìm hiểu',shortlisted:'Đã vào shortlist',applying:'Đang làm hồ sơ',submitted:'Đã nộp',offer:'Có offer',rejected:'Không được nhận',safe:'An toàn',match:'Phù hợp',reach:'Tham vọng',system:'Theo thiết bị',dark:'Tối',light:'Sáng',today:'Hôm nay',study:'Du học',money:'Tiền',time:'Thời gian',travel:'Chuyến đi',food:'Sức khỏe',cv:'CV',profile:'Hồ sơ',install:'Cài đặt'}[o]||o}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',todo:'Cần làm',doing:'Đang làm',waiting:'Đang chờ / follow-up',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',male:'Nam',female:'Nữ',yes:'Bật',no:'Tắt',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ',researching:'Đang tìm hiểu',shortlisted:'Đã vào shortlist',applying:'Đang làm hồ sơ',submitted:'Đã nộp',offer:'Có offer',rejected:'Không được nhận',safe:'An toàn',match:'Phù hợp',reach:'Tham vọng',system:'Theo thiết bị',dark:'Tối',light:'Sáng',today:'Hôm nay',study:'Du học',money:'Tiền',time:'Thời gian',travel:'Chuyến đi',food:'Sức khỏe',cv:'CV',profile:'Hồ sơ',install:'Cài đặt'}[o]||o}
 function confirmDelete(message){return appSettings().confirmBeforeDelete==='no'||confirm(message)}
 function removeItem(type,id){if(!confirmDelete('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;google.script.run.withSuccessHandler(()=>{toast('Đã xoá');load()}).withFailureHandler(fail).deleteItem(type,id)}
 function removeWeight(id){if(!confirmDelete('Xoá lần cân này?'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWeightLog(id)}
 function removeWallet(id){if(!confirmDelete('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
+function addTaskStepUi(taskId){const title=(prompt('Bước nhỏ tiếp theo là gì? Hãy bắt đầu bằng một động từ:','')||'').trim();if(!title)return;google.script.run.withSuccessHandler(step=>{data.tasksteps.push(step);render();toast('Đã thêm bước nhỏ')}).withFailureHandler(fail).addTaskStep(taskId,title)}
+function toggleTaskStepUi(id){google.script.run.withSuccessHandler(result=>{const step=data.tasksteps.find(s=>s.id===id);if(step)step.done=result.done;load()}).withFailureHandler(fail).toggleTaskStep(id)}
+function generateChecklistUi(taskId){google.script.run.withSuccessHandler(count=>{toast(`Đã tạo ${count} bước nhỏ`);load()}).withFailureHandler(fail).generateChecklistForTask(taskId)}
+function focusTask(id){const task=data.tasks.find(t=>t.id===id);if(!task)return;google.script.run.withSuccessHandler(()=>{task.status='doing';task.startedAt=task.startedAt||new Date().toISOString();render();if(!activeTimeLog)startTimeLog('work',task.title);else toast('Việc đã chuyển sang Đang làm; bộ đếm hiện tại vẫn tiếp tục.')}).withFailureHandler(fail).startTask(id)}
 function saveCvForm(form,item){
   const file=form.querySelector('input[name="cvFile"]').files[0];
   const done=()=>{formDialog.close();toast('Đã lưu CV');load()};
