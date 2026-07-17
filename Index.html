@@ -48,7 +48,6 @@
       </article>
       <div id="todayCoach" class="today-coach"></div>
       <section id="assistantBrief" class="assistant-brief" aria-live="polite"></section>
-      <section id="journeyControl" class="journey-control" aria-live="polite"></section>
       <section id="notificationCenter" class="notification-center"></section>
       <article class="card think-deep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
@@ -69,7 +68,7 @@
         <p class="hint">App sẽ gợi ý chuỗi hành động để bạn chủ động chốt việc, cập nhật tài liệu và báo lại.</p>
         <div class="inline wrap">
           <textarea id="taskMessage" placeholder="Nhập tin nhắn công việc ở đây..."></textarea>
-          <button id="captureTaskButton" class="outline" onclick="createTaskFromMessage()">Tạo 1 việc</button>
+          <button class="outline" onclick="createTaskFromMessage()">Tạo 1 việc</button>
           <button onclick="suggestTaskPlan()">Phân rã nhiệm vụ</button>
         </div>
         <div id="taskSuggestions" class="task-suggestions"></div>
@@ -279,7 +278,6 @@
     </div>
   </dialog>
   <div id="toast"></div>
-  <?!= include('Boot'); ?>
   <?!= include('Script'); ?>
 </body>
 </html>
