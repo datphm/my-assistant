@@ -330,7 +330,7 @@ function createTaskFromStudyChecklist(id) {
 
 function defaultAppSettings_() {
   return {
-    id: 'default', timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', startupPage: 'today', theme: 'pastel',
+    id: 'default', timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', startupPage: 'assistant', theme: 'pastel',
     fontScale: '100', reducedMotion: 'no', compactMode: 'no', hideFinancialAmounts: 'no',
     defaultTaskMinutes: 15, defaultChaseMode: 'normal', quietHoursStart: '23:00:00', quietHoursEnd: '07:00:00',
     emailReminders: 'yes', calendarReminders: 'yes', routineReminders: 'yes', flightReminders: 'yes',
@@ -353,6 +353,13 @@ function ensureDefaultAppSettings_(ss) {
         syncSettingsProperties_(upgraded);
       }
       props.setProperty('PASTEL_THEME_V1', '1');
+    }
+    if (!props.getProperty('ASSISTANT_OPERATION_CENTER_V1')) {
+      const current = readRows_(sheet)[0] || rows[0];
+      const upgraded = Object.assign({}, current, { startupPage: 'assistant', updatedAt: new Date() });
+      upsertRow_(sheet, upgraded);
+      syncSettingsProperties_(upgraded);
+      props.setProperty('ASSISTANT_OPERATION_CENTER_V1', '1');
     }
     return;
   }

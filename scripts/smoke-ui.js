@@ -34,7 +34,7 @@ const getElement = id => {
 };
 const page = getElement('today');
 page.classList.contains = name => name === 'active';
-const navButtons = ['today','assistant','profile','money','cv','study','food','travel','time','install'].map(name => {
+const navButtons = ['assistant','today','profile','money','cv','study','food','travel','time','install'].map(name => {
   const item = new Element(); item.dataset.page = name; return item;
 });
 const document = {
@@ -107,6 +107,8 @@ try {
     data.studyabroadoptions=[{id:'school-1',school:'Example University',program:'Public Policy',scholarship:'Full tuition',applicationDeadline:new Date(Date.now()+120*86400000).toISOString()}];
     data.studyabroadchecklist=[{id:'study-1',title:'Viết bản nháp SOP',category:'Hồ sơ',dueAt:new Date(Date.now()+14*86400000).toISOString(),status:'todo'}];
     fullDataLoaded=true;
+    assistantBrief={generatedAt:new Date().toISOString(),finance:{balance:12000000,debt:3000000,walletCount:1,nextPlan:null},health:{currentWeightKg:90,goalKg:75,waterMl:750,waterGoalMl:2500,walkMinutes:20,walkGoalMinutes:30},time:{loggedMinutes:90,entries:1,active:null},travel:null,study:{pending:1,next:data.studyabroadchecklist[0]}};
+    renderAssistantBrief();
     renderMoney();
     renderStudyAbroad();
     renderCvs();
@@ -119,8 +121,11 @@ try {
   if (!getElement('reflectionProfile').innerHTML.includes('Đường đời 4 (13)') || !getElement('reflectionProfile').innerHTML.includes('MANIFEST CÓ CĂN CỨ')) throw new Error('Reflection corrections did not render');
   if (getElement('studyScholarship').innerHTML.includes('scholarship-pillar done')) throw new Error('Scholarship layout class collision returned');
   if (!getElement('debts').innerHTML.includes('Đã trả bớt') || !getElement('debts').innerHTML.includes('Đặt số nợ mới')) throw new Error('Debt adjustment controls did not render');
+  if (!getElement('assistantBrief').innerHTML.includes('Trung tâm') && !getElement('opsTaskChart').innerHTML) throw new Error('Operation Center did not render');
+  if (!getElement('opsTaskChart').innerHTML || !getElement('opsMoneyChart').innerHTML || !getElement('opsTimeChart').innerHTML || !getElement('opsLifeChart').innerHTML || !getElement('operationKpis').innerHTML) throw new Error('Operation Center charts did not render');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
   if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health')) throw new Error('Assistant tab, mobile dialog actions, or Health import UI missing');
+  if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);

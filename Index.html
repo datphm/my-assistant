@@ -35,8 +35,8 @@
     <section id="livePulse" class="live-pulse" data-home-panel="pulse" aria-live="polite"></section>
     <section id="summary" class="summary" data-home-panel="summary"></section>
     <nav>
-      <button class="active" data-page="today" data-mobile-label="⌂ Hôm nay">Hôm nay</button>
-      <button data-page="assistant" data-mobile-label="✦ Trợ lý">Trợ lý</button>
+      <button class="active" data-page="assistant" data-mobile-label="✦ Trung tâm">Trợ lý</button>
+      <button data-page="today" data-mobile-label="⌂ Hôm nay">Hôm nay</button>
       <button data-page="profile" data-mobile-label="♙ Hồ sơ">Hồ sơ</button>
       <button data-page="money" data-mobile-label="₫ Tiền">Tiền</button>
       <button data-page="cv" data-mobile-label="▤ CV">CV</button>
@@ -47,7 +47,7 @@
       <button data-page="install" data-mobile-label="⚙ Cài đặt">Cài đặt</button>
     </nav>
 
-    <section id="today" class="page active">
+    <section id="today" class="page">
       <div class="section-head"><h2>Việc kế tiếp</h2><button onclick="openForm('task')">+ Thêm việc</button></div>
       <article class="card time-anchor" data-home-panel="clock">
         <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
@@ -55,6 +55,17 @@
       </article>
       <div id="todayCoach" class="today-coach" data-home-panel="coach"></div>
       <section id="notificationCenter" class="notification-center" data-home-panel="notifications"></section>
+      <article class="card quick-capture" data-home-panel="capture">
+        <h3>Dán nguyên nhiệm vụ bạn vừa nhận</h3>
+        <p class="hint">App sẽ gợi ý chuỗi hành động để bạn chủ động chốt việc, cập nhật tài liệu và báo lại.</p>
+        <div class="inline wrap">
+          <textarea id="taskMessage" placeholder="Nhập tin nhắn công việc ở đây..."></textarea>
+          <button class="outline" onclick="createTaskFromMessage()">Tạo 1 việc</button>
+          <button onclick="suggestTaskPlan()">Phân rã nhiệm vụ</button>
+        </div>
+        <div id="taskSuggestions" class="task-suggestions"></div>
+      </article>
+      <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
       <article class="card think-deep" data-home-panel="thinkdeep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
         <h2>Đừng chỉ nhận việc. Hãy chốt đầu ra.</h2>
@@ -69,22 +80,11 @@
         </div>
         <p class="deep-mantra">Hỏi rõ → gọi người quyết định → chốt → cập nhật tài liệu → báo lại.</p>
       </article>
-      <article class="card quick-capture" data-home-panel="capture">
-        <h3>Dán nguyên nhiệm vụ bạn vừa nhận</h3>
-        <p class="hint">App sẽ gợi ý chuỗi hành động để bạn chủ động chốt việc, cập nhật tài liệu và báo lại.</p>
-        <div class="inline wrap">
-          <textarea id="taskMessage" placeholder="Nhập tin nhắn công việc ở đây..."></textarea>
-          <button class="outline" onclick="createTaskFromMessage()">Tạo 1 việc</button>
-          <button onclick="suggestTaskPlan()">Phân rã nhiệm vụ</button>
-        </div>
-        <div id="taskSuggestions" class="task-suggestions"></div>
-      </article>
-      <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
       <section data-home-panel="tasks"><div class="task-view-tools"><div><h2>Chi tiết công việc</h2><p class="hint">Checklist mặc định được thu gọn; mở đúng việc bạn đang làm.</p></div><div><button class="outline small" onclick="setAllTaskFolds(true)">Thu gọn tất cả</button><button class="outline small" onclick="setAllTaskFolds(false)">Mở tất cả</button></div></div><div id="tasks" class="cards"></div></section>
     </section>
 
-    <section id="assistant" class="page">
-      <div class="section-head"><div><h2>Trợ lý toàn phần</h2><p class="hint">Tổng hợp công việc, thời gian, tiền, sức khỏe, chuyến đi và du học — không làm loãng Kanban.</p></div><button class="outline" onclick="loadAssistantBrief(true)">↻ Cập nhật</button></div>
+    <section id="assistant" class="page active">
+      <div class="section-head"><div><span class="section-kicker">OPERATION CENTER</span><h2>Trung tâm điều hành cá nhân</h2><p class="hint">Một màn hình để biết việc nào cần chốt, dòng tiền đang ra sao và hệ thống nào đang lệch nhịp.</p></div><button class="outline" onclick="refreshOperationCenter()">↻ Cập nhật tất cả</button></div>
       <section id="assistantBrief" class="assistant-brief" aria-live="polite"></section>
     </section>
 
