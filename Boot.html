@@ -26,9 +26,11 @@
     var bar = document.createElement('div');
     bar.id = 'bootDiagnostic';
     bar.className = 'boot-diagnostic';
-    bar.textContent = 'App đã tự chuyển sang chế độ ổn định. Dữ liệu vẫn an toàn.';
+    bar.innerHTML = '<b>Đang tự khôi phục một mô-đun.</b><span> Các phần còn lại vẫn tiếp tục tải.</span>';
     var nav = document.querySelector('nav');
     if (nav && nav.parentNode) nav.parentNode.insertBefore(bar, nav.nextSibling);
+    window.__maMainReady = false;
+    window.setTimeout(loadBasicToday, 0);
   }
 
   window.addEventListener('error', function (event) {
@@ -82,7 +84,17 @@
     try {
       google.script.run.withSuccessHandler(function (payload) {
         bootDataLoading = false;
-        if (!window.__maMainReady) renderBasicToday(payload);
+        if (typeof window.applyServerData === 'function' && typeof window.render === 'function') {
+          try {
+            window.applyServerData(payload || {});
+            window.render();
+            window.__maMainReady = true;
+            var diagnostic = byId('bootDiagnostic');
+            if (diagnostic && diagnostic.parentNode) diagnostic.parentNode.removeChild(diagnostic);
+            return;
+          } catch (error) { window.__maBootError = String(error && error.message || error); }
+        }
+        renderBasicToday(payload);
       }).withFailureHandler(function (error) {
         bootDataLoading = false;
         showBootMessage('Không kết nối được Google Sheets', (error && error.message) || 'Hãy thử lại sau một phút.');
@@ -101,6 +113,13 @@
       google.script.run.withSuccessHandler(function (payload) {
         bootPageLoading = false;
         window.__maBootPagePayload = payload || {};
+        if (typeof window.applyServerData === 'function' && typeof window.renderCurrentPage === 'function') {
+          try {
+            window.applyServerData(payload || {});
+            window.renderCurrentPage();
+            return;
+          } catch (error) { window.__maBootError = String(error && error.message || error); }
+        }
         var section = byId(page);
         if (section && !section.querySelector('.boot-page-note')) {
           var note = document.createElement('div');
@@ -122,7 +141,11 @@
   setClock();
   window.setInterval(setClock, 1000);
   window.setTimeout(function () {
-    if (!window.__maMainReady) loadBasicToday();
-  }, 800);
+    var summary = byId('summary');
+    if (!window.__maMainReady || !summary || !String(summary.textContent || '').trim()) {
+      window.__maMainReady = false;
+      loadBasicToday();
+    }
+  }, 2500);
 })();
 </script>

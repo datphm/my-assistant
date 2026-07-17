@@ -66,8 +66,8 @@ function getData() {
 // flights, finance history, CVs and other large sheets on every task click.
 function getTodayData() {
   const ss = getBook_();
-  ensureDefaultAppSettings_(ss);
-  const allTasks = readRows_(ss.getSheetByName('Tasks'));
+  try { ensureDefaultAppSettings_(ss); } catch (error) {}
+  const allTasks = readRowsSafe_(ss, 'Tasks');
   const openTasks = allTasks.filter(function(task) { return !(task.done === true || task.done === 'TRUE') && task.status !== 'done'; });
   const recentDone = allTasks.filter(function(task) { return task.done === true || task.done === 'TRUE' || task.status === 'done'; }).slice(-12);
   const tasks = openTasks.concat(recentDone);
@@ -75,14 +75,28 @@ function getTodayData() {
   return {
     partial: true,
     tasks: tasks,
-    tasksteps: readRows_(ss.getSheetByName('TaskSteps')).filter(function(step) { return taskIds.has(step.taskId); }),
-    taskupdates: readRecentRows_(ss.getSheetByName('TaskUpdates'), 180).filter(function(update) { return taskIds.has(update.taskId); }),
-    notifications: readRecentRows_(ss.getSheetByName('Notifications'), 120),
-    timestate: readRows_(ss.getSheetByName('TimeState')),
-    appsettings: readRows_(ss.getSheetByName('AppSettings')),
-    projects: readRows_(ss.getSheetByName('Projects')),
-    dailylogs: readRecentRows_(ss.getSheetByName('DailyLogs'), 21)
+    tasksteps: readRowsSafe_(ss, 'TaskSteps').filter(function(step) { return taskIds.has(step.taskId); }),
+    taskupdates: readRowsSafe_(ss, 'TaskUpdates').slice(-180).filter(function(update) { return taskIds.has(update.taskId); }),
+    notifications: readRowsSafe_(ss, 'Notifications').slice(-120),
+    timestate: readRowsSafe_(ss, 'TimeState'),
+    appsettings: readRowsSafe_(ss, 'AppSettings'),
+    projects: readRowsSafe_(ss, 'Projects'),
+    dailylogs: readRowsSafe_(ss, 'DailyLogs').slice(-21),
+    recovered: true
   };
+}
+
+function readRowsSafe_(ss, name) {
+  try {
+    let sheet = ss.getSheetByName(name);
+    if (!sheet && HEADERS[name]) {
+      sheet = ss.insertSheet(name);
+      ensureHeaders_(sheet, HEADERS[name]);
+    }
+    return sheet ? readRows_(sheet) : [];
+  } catch (error) {
+    return [];
+  }
 }
 
 // Load only the sheets needed by the selected tab. The previous implementation
