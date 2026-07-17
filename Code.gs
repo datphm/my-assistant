@@ -14,6 +14,7 @@ const HEADERS = {
   StudyAbroadProfile: ['id', 'targetIntakeYear', 'targetCountries', 'targetDegree', 'targetFields', 'currentEducation', 'currentGpa', 'englishTest', 'currentEnglishScore', 'targetEnglishScore', 'otherLanguages', 'budgetVnd', 'savingsVnd', 'fundingPlan', 'scholarshipTarget', 'passportStatus', 'visaNotes', 'motivation', 'constraints', 'updatedAt'],
   StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
   StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
+  AppSettings: ['id', 'timezone', 'locale', 'startupPage', 'theme', 'fontScale', 'reducedMotion', 'compactMode', 'hideFinancialAmounts', 'defaultTaskMinutes', 'defaultChaseMode', 'quietHoursStart', 'quietHoursEnd', 'emailReminders', 'calendarReminders', 'routineReminders', 'flightReminders', 'confirmBeforeDelete', 'updatedAt'],
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
@@ -24,7 +25,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-study-abroad-v4';
+const SCHEMA_VERSION = '2026-07-17-app-settings-v5';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -48,6 +49,7 @@ function getData() {
   seedReflectionDetails_(ss);
   ensureReflectionSynthesis_(ss);
   ensureDefaultStudyAbroad_(ss);
+  ensureDefaultAppSettings_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   result.dailyguidance = buildDailyGuidance_(ss);
@@ -178,6 +180,65 @@ function createTaskFromStudyChecklist(id) {
   return { id: result.id, title: task.title, dueAt: task.dueAt, area: task.area, minutes: task.minutes, status: task.status, chaseMode: task.chaseMode, calendarWarning: result.calendarWarning };
 }
 
+function defaultAppSettings_() {
+  return {
+    id: 'default', timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', startupPage: 'today', theme: 'dark',
+    fontScale: '100', reducedMotion: 'no', compactMode: 'no', hideFinancialAmounts: 'no',
+    defaultTaskMinutes: 15, defaultChaseMode: 'normal', quietHoursStart: '23:00:00', quietHoursEnd: '07:00:00',
+    emailReminders: 'yes', calendarReminders: 'yes', routineReminders: 'yes', flightReminders: 'yes',
+    confirmBeforeDelete: 'yes', updatedAt: new Date()
+  };
+}
+
+function ensureDefaultAppSettings_(ss) {
+  const sheet = ss.getSheetByName('AppSettings');
+  if (readRows_(sheet).length) return;
+  upsertRow_(sheet, defaultAppSettings_());
+  syncSettingsProperties_(defaultAppSettings_());
+}
+
+function saveAppSettings(item) {
+  const timezone = String(item.timezone || 'Asia/Ho_Chi_Minh').trim();
+  try { Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd HH:mm'); }
+  catch (error) { throw new Error('Múi giờ không hợp lệ. Hãy dùng dạng Asia/Ho_Chi_Minh hoặc Europe/London.'); }
+  const sheet = getBook_().getSheetByName('AppSettings');
+  const current = readRows_(sheet)[0] || defaultAppSettings_();
+  const value = Object.assign({}, current, item, { id: 'default', timezone: timezone, updatedAt: new Date() });
+  upsertRow_(sheet, value);
+  syncSettingsProperties_(value);
+  return value;
+}
+
+function resetAppSettings() {
+  const value = defaultAppSettings_();
+  upsertRow_(getBook_().getSheetByName('AppSettings'), value);
+  syncSettingsProperties_(value);
+  return value;
+}
+
+function syncSettingsProperties_(settings) {
+  const props = PropertiesService.getUserProperties();
+  props.setProperties({
+    APP_TIMEZONE: String(settings.timezone || 'Asia/Ho_Chi_Minh'),
+    APP_EMAIL_REMINDERS: String(settings.emailReminders || 'yes'),
+    APP_CALENDAR_REMINDERS: String(settings.calendarReminders || 'yes'),
+    APP_ROUTINE_REMINDERS: String(settings.routineReminders || 'yes'),
+    APP_FLIGHT_REMINDERS: String(settings.flightReminders || 'yes'),
+    APP_DEFAULT_TASK_MINUTES: String(settings.defaultTaskMinutes || 15),
+    APP_DEFAULT_CHASE_MODE: String(settings.defaultChaseMode || 'normal'),
+    APP_QUIET_START: String(settings.quietHoursStart || '23:00:00'),
+    APP_QUIET_END: String(settings.quietHoursEnd || '07:00:00')
+  });
+}
+
+function getConfiguredTimeZone_() {
+  return PropertiesService.getUserProperties().getProperty('APP_TIMEZONE') || Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh';
+}
+
+function getDataSheetUrl() {
+  return getBook_().getUrl();
+}
+
 function defaultTuViNotes_() {
   return `LÁ SỐ TỬ VI PHẠM NGUYỄN GIA ĐẠT — HẠN NĂM 2026, 24 TUỔI MỤ
 Sinh năm 2003 — Quý Mùi. Giới tính Âm Nam. Âm Dương nghịch lý. Cung mệnh Dương Liễu Mộc. Cục Kim Tứ Cục, Cục khắc Mệnh. Thân cư Phu Thê.
@@ -302,7 +363,7 @@ function buildDailyGuidance_(ss) {
   });
   const overdue = tasks.filter(function(task) { return task.dueAt && new Date(task.dueAt) <= now; });
   const focus = overdue[0] || tasks[0] || null;
-  const dateSeed = Number(Utilities.formatDate(now, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyyMMdd'));
+  const dateSeed = Number(Utilities.formatDate(now, getConfiguredTimeZone_(), 'yyyyMMdd'));
   const headlines = ['Chốt một đầu ra trước khi mở việc mới', 'Chủ động báo tiến độ trước khi bị hỏi', 'Làm bước có thể nhìn thấy trong 10 phút', 'Gọi hoặc hỏi thẳng người đang giữ thông tin', 'Hoàn thành bản đủ dùng trước, tối ưu sau'];
   const adhdPrompts = ['Đặt hẹn giờ 10 phút và chỉ mở đúng một tài liệu.', 'Viết bước tiếp theo thành một động từ cụ thể.', 'Nếu đang kẹt, gửi một câu hỏi rõ ràng thay vì tiếp tục suy nghĩ một mình.', 'Để điện thoại ngoài tầm tay cho tới khi hết phiên.', 'Gửi recap ba dòng: đã làm gì, còn kẹt gì, khi nào xong.'];
   const careerFits = careerFits_(profile, readRows_(ss.getSheetByName('CVs')));
@@ -507,7 +568,7 @@ function suggestTaskPlan(message) {
 }
 
 function formatPlanDeadline_(value) {
-  return Utilities.formatDate(new Date(value), Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'HH:mm dd/MM/yyyy');
+  return Utilities.formatDate(new Date(value), getConfiguredTimeZone_(), 'HH:mm dd/MM/yyyy');
 }
 
 function addSuggestedTasks(items) {
@@ -544,7 +605,7 @@ function addItem(type, item) {
   sheet.appendRow(row);
   if (type === 'Expenses') applyExpenseImpact_(item, 1);
   let calendarWarning = '';
-  if (type === 'Tasks' && item.dueAt) {
+  if (type === 'Tasks' && item.dueAt && PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') {
     try { syncTaskToCalendar(id); } catch (error) { calendarWarning = error.message || String(error); }
   }
   if (type === 'Flights' && item.departure) {
@@ -563,7 +624,7 @@ function updateItem(type, item) {
   upsertRow_(sheet, Object.assign({}, existing, item));
   if (type === 'Expenses') applyExpenseImpact_(Object.assign({}, existing, item), 1);
   let calendarWarning = '';
-  if (type === 'Tasks' && item.dueAt) {
+  if (type === 'Tasks' && item.dueAt && PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') {
     try { syncTaskToCalendar(item.id); } catch (error) { calendarWarning = error.message || String(error); }
   }
   if (type === 'Flights' && item.departure) {
@@ -960,7 +1021,7 @@ function flightType_(flight) {
 }
 
 function formatDateTime_(value) {
-  return Utilities.formatDate(new Date(value), Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy HH:mm');
+  return Utilities.formatDate(new Date(value), getConfiguredTimeZone_(), 'dd/MM/yyyy HH:mm');
 }
 
 function uninstallTravelSync() {
@@ -973,6 +1034,9 @@ function sendDueTaskReminders() {
   const sheet = ss.getSheetByName('Tasks');
   const rows = readRows_(sheet);
   const now = new Date();
+  const props = PropertiesService.getUserProperties();
+  const emailEnabled = props.getProperty('APP_EMAIL_REMINDERS') !== 'no';
+  const quiet = isQuietHours_(now, props.getProperty('APP_QUIET_START'), props.getProperty('APP_QUIET_END'));
   const recipient = Session.getEffectiveUser().getEmail();
   if (!recipient) throw new Error('Hãy triển khai app trong tài khoản Google Workspace của bạn để gửi email nhắc việc.');
   rows.forEach((task, i) => {
@@ -989,14 +1053,23 @@ function sendDueTaskReminders() {
     if (overdue) createNotification_(forgotten ? 'forgotten_task' : 'overdue', forgotten ? 'Việc có nguy cơ bị quên' : 'Việc đã quá hạn', task.title, 'task', task.id, forgotten ? 'critical' : 'high', (forgotten ? 'forgotten:' : 'overdue:') + task.id);
     const interval = task.chaseMode === 'urgent' ? 15 * 60 * 1000 : 2 * 60 * 60 * 1000;
     const canRepeat = !last || (now - last) >= interval;
-    if ((!overdue && !dueSoon) || !canRepeat || task.startedAt) return;
+    if ((!overdue && !dueSoon) || !canRepeat || task.startedAt || !emailEnabled || quiet) return;
     const urgent = task.chaseMode === 'urgent';
     const prefix = forgotten ? 'VIỆC BỊ QUÊN · ' : urgent ? 'KHẨN · ' : dueSoon ? 'CÒN 30 PHÚT · ' : '';
     MailApp.sendEmail(recipient, `${prefix}My Assistant: ${task.title}`, `${dueSoon ? 'Sắp đến hạn' : 'Đến giờ'}: ${task.title}\n\nBước duy nhất lúc này: mở việc và làm ${task.minutes || 10} phút.\n\nBấm “Đã bắt đầu” trong My Assistant để dừng chuỗi nhắc, hoặc ✓ khi hoàn thành.`);
     sheet.getRange(i + 2, 7).setValue(now);
   });
-  sendFlightReminders_(recipient, now);
-  sendRoutineReminders_(recipient, now);
+  if (props.getProperty('APP_FLIGHT_REMINDERS') !== 'no') sendFlightReminders_(recipient, now);
+  if (props.getProperty('APP_ROUTINE_REMINDERS') !== 'no') sendRoutineReminders_(recipient, now);
+}
+
+function isQuietHours_(now, startValue, endValue) {
+  const timezone = getConfiguredTimeZone_();
+  const current = Utilities.formatDate(now, timezone, 'HH:mm');
+  const start = String(startValue || '23:00').slice(0, 5);
+  const end = String(endValue || '07:00').slice(0, 5);
+  if (!start || !end || start === end) return false;
+  return start < end ? current >= start && current < end : current >= start || current < end;
 }
 
 function createNotification_(type, title, message, targetType, targetId, priority, dedupeKey) {
@@ -1052,7 +1125,7 @@ function sendRoutineReminders_(recipient, now) {
   ensureDefaultHealth_(ss);
   const settings = readRows_(ss.getSheetByName('RoutineSettings'))[0];
   const props = PropertiesService.getUserProperties();
-  const tz = Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh';
+  const tz = getConfiguredTimeZone_();
   const dateKey = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
   const hhmm = Utilities.formatDate(now, tz, 'HH:mm');
   const lastRoutineSent = JSON.parse(props.getProperty('ROUTINE_LAST_SENT') || '{}');
@@ -1465,9 +1538,9 @@ function parseTaskMessage_(message) {
     title: title || text,
     dueAt,
     area,
-    minutes: /báo cáo|report|tổng hợp/i.test(text) ? 45 : 15,
+    minutes: /báo cáo|report|tổng hợp/i.test(text) ? 45 : Number(PropertiesService.getUserProperties().getProperty('APP_DEFAULT_TASK_MINUTES') || 15),
     status: 'todo',
-    chaseMode: 'normal'
+    chaseMode: PropertiesService.getUserProperties().getProperty('APP_DEFAULT_CHASE_MODE') || 'normal'
   };
 }
 
@@ -1487,7 +1560,7 @@ function serialize_(value) {
   // Formatting it as ISO exposes the historical timezone offset (for example
   // 00:53:30Z) instead of the user's intended 08:00:00.
   if (value.getUTCFullYear() < 1902) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'HH:mm:ss');
+    return Utilities.formatDate(value, getConfiguredTimeZone_(), 'HH:mm:ss');
   }
   return value.toISOString();
 }

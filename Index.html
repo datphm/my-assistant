@@ -219,6 +219,12 @@
 
     <section id="install" class="page">
       <div class="section-head"><h2>Cài đặt & điện thoại</h2><div class="actions"><button onclick="copyAppLink()">Copy link app</button><button class="outline" onclick="exportAllDataFile()">Xuất dữ liệu JSON</button></div></div>
+      <article class="card settings-control">
+        <div class="section-head compact"><div><span class="section-kicker">CÁ NHÂN HÓA</span><h3>Thiết lập ứng dụng</h3></div><button onclick="openAppSettingsForm()">Chỉnh cài đặt</button></div>
+        <div id="appSettingsSummary" class="settings-summary"></div>
+        <div class="settings-actions"><button class="outline" onclick="openDataSheet()">Mở Google Sheet dữ liệu</button><button class="outline" onclick="resetAppSettingsUi()">Khôi phục cài đặt mặc định</button></div>
+        <p class="hint">Múi giờ này dùng cho hiển thị, email nhắc, lịch sinh hoạt và giờ yên lặng. Sự kiện Calendar không bị mất; Google Calendar vẫn hiển thị theo múi giờ bạn đặt trong chính Google Calendar.</p>
+      </article>
       <div class="install-grid">
         <article class="card install-card">
           <span class="pill">iPhone / iPad</span>
