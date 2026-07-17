@@ -4,23 +4,30 @@ let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let viewingCvId='';
 let initialPageApplied=false;
 let fullDataLoaded=false,todayLoading=false,fullLoading=false,formSaving=false;
+const loadedPages=new Set(['today']);
 const pendingActions=new Set();
 const defaultKanbanFold={overdue:false,upcoming:false,done:true};
-let kanbanCollapsed=(()=>{try{return Object.assign({},defaultKanbanFold,JSON.parse(localStorage.getItem('my-assistant-kanban-fold-v1')||'{}'))}catch(e){return Object.assign({},defaultKanbanFold)}})();
+let kanbanCollapsed=(()=>{try{return Object.assign({},defaultKanbanFold,JSON.parse(safeStorageGet('my-assistant-kanban-fold-v1','{}')||'{}'))}catch(e){return Object.assign({},defaultKanbanFold)}})();
 const kanbanScrollPositions={};
 let assistantBrief=null,assistantBriefLoading=false;
-let assistantMode=localStorage.getItem('my-assistant-mode-v1')||'focus';
-let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
+function safeStorageGet(key,fallback=''){try{return localStorage.getItem(key)??fallback}catch(e){return fallback}}
+function safeStorageSet(key,value){try{localStorage.setItem(key,value)}catch(e){}}
+function safeStorageRemove(key){try{localStorage.removeItem(key)}catch(e){}}
+function safeStoredJson(key,fallback){try{return JSON.parse(safeStorageGet(key,''))||fallback}catch(e){safeStorageRemove(key);return fallback}}
+let assistantMode=safeStorageGet('my-assistant-mode-v1','focus')||'focus';
+let activeTimeLog=safeStoredJson('my-assistant-active-time-v1',null);
 const $=id=>document.getElementById(id);
 const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
 const num=n=>new Intl.NumberFormat('vi-VN').format(Number(n||0));
 const colors=['#203a66','#245647','#87aa99','#e5b44f','#e55d6f','#5795d0'];
 const periodLabels={week:'tuần này',month:'tháng này',year:'năm nay',twoYears:'2 năm gần đây'};
 
-function applyServerData(d){data=Object.assign(data,d);applyAppSettings();const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1')}
-function load(){const page=document.querySelector('.page.active')?.id||'today';if(page==='today'||!fullDataLoaded)refreshToday();else refreshFullData(page)}
-function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(!silent)document.body.classList.add('today-loading');google.script.run.withSuccessHandler(d=>{todayLoading=false;document.body.classList.remove('today-loading');applyServerData(d);render();if(!assistantBrief&&!assistantBriefLoading)loadAssistantBrief();if(!initialPageApplied){initialPageApplied=true;activatePage(location.hash.replace('#','')||appSettings().startupPage||'today')}}).withFailureHandler(e=>{todayLoading=false;document.body.classList.remove('today-loading');fail(e)}).getTodayData()}
-function refreshFullData(){if(fullLoading)return;fullLoading=true;document.body.classList.add('full-loading');google.script.run.withSuccessHandler(d=>{fullLoading=false;fullDataLoaded=true;document.body.classList.remove('full-loading');applyServerData(d);render()}).withFailureHandler(e=>{fullLoading=false;document.body.classList.remove('full-loading');fail(e)}).getData()}
+function applyServerData(d){data=Object.assign(data,d||{});applyAppSettings();const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)safeStorageSet('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else safeStorageRemove('my-assistant-active-time-v1')}
+function load(){const page=document.querySelector('.page.active')?.id||'today';if(page==='today')refreshToday();else refreshPageData(page)}
+function showTodayDelay(){if(!todayLoading)return;const summary=$('summary');if(summary)summary.innerHTML='<small>GOOGLE SHEETS ĐANG PHẢN HỒI CHẬM</small><b>Bạn vẫn có thể chuyển tab</b><span>Không bấm tải lại liên tục; app đang giữ đúng một yêu cầu.</span>'}
+function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(!silent)document.body.classList.add('today-loading');const delayTimer=setTimeout(showTodayDelay,10000);google.script.run.withSuccessHandler(d=>{clearTimeout(delayTimer);todayLoading=false;loadedPages.add('today');document.body.classList.remove('today-loading');applyServerData(d);render();if(!assistantBrief&&!assistantBriefLoading)loadAssistantBrief();if(!initialPageApplied){initialPageApplied=true;activatePage(location.hash.replace('#','')||appSettings().startupPage||'today')}}).withFailureHandler(e=>{clearTimeout(delayTimer);todayLoading=false;document.body.classList.remove('today-loading');fail(e)}).getTodayData()}
+function refreshPageData(page){if(loadedPages.has(page)){renderCurrentPage();return}if(fullLoading)return;fullLoading=true;document.body.classList.add('full-loading');google.script.run.withSuccessHandler(d=>{fullLoading=false;loadedPages.add(page);document.body.classList.remove('full-loading');applyServerData(d);renderCurrentPage()}).withFailureHandler(e=>{fullLoading=false;document.body.classList.remove('full-loading');fail(e)}).getPageData(page)}
+function refreshFullData(){const page=document.querySelector('.page.active')?.id||'today';refreshPageData(page)}
 function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',theme:'dark',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes',dailyLogEnabled:'yes',dailyLogMorningTime:'07:45:00',dailyLogEveningTime:'21:30:00',spotifyUrl:'',spotifyFocusEnabled:'yes'}}
 function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
 function render(){
@@ -69,11 +76,11 @@ function loadAssistantBrief(force=false){
   if(assistantBriefLoading)return;assistantBriefLoading=true;renderAssistantBrief();
   google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief()}).withFailureHandler(e=>{assistantBriefLoading=false;renderAssistantBrief();fail(e)}).getAssistantBrief(force);
 }
-function setAssistantMode(mode){assistantMode=mode;localStorage.setItem('my-assistant-mode-v1',mode);renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'));renderAssistantBrief()}
+function setAssistantMode(mode){assistantMode=mode;safeStorageSet('my-assistant-mode-v1',mode);renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'));renderAssistantBrief()}
 function assistantMoney(value){return appSettings().hideFinancialAmounts==='yes'?'••••':vnd(value)}
 function assistantCheckKey(){return `my-assistant-day-check-v1:${localDateKey(new Date())}`}
-function assistantChecks(){try{return JSON.parse(localStorage.getItem(assistantCheckKey())||'{}')}catch(e){return {}}}
-function toggleAssistantCheck(id,checked){const state=assistantChecks();state[id]=checked;localStorage.setItem(assistantCheckKey(),JSON.stringify(state));renderAssistantBrief()}
+function assistantChecks(){return safeStoredJson(assistantCheckKey(),{})}
+function toggleAssistantCheck(id,checked){const state=assistantChecks();state[id]=checked;safeStorageSet(assistantCheckKey(),JSON.stringify(state));renderAssistantBrief()}
 function renderAssistantBrief(){
   const box=$('assistantBrief');if(!box)return;
   if(!assistantBrief){
@@ -162,20 +169,20 @@ function syncActiveTimeLog(){
     const before=activeTimeLog&&String(activeTimeLog.startAt),after=server&&String(server.startAt);
     if(before===after)return;
     activeTimeLog=server?{kind:server.kind,label:server.label,startAt:server.startAt}:null;
-    if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1');
+    if(activeTimeLog)safeStorageSet('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else safeStorageRemove('my-assistant-active-time-v1');
     if(before&&!after){load();return}renderActiveTime();
   }).withFailureHandler(()=>{}).getActiveTimeLog();
 }
 
 function startTimeLog(kind,label){
   if(activeTimeLog){toast('Hãy dừng mục đang chạy trước.');return}
-  google.script.run.withSuccessHandler(active=>{activeTimeLog=active;localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(active));renderTime();toast('Đã bắt đầu · tập trung vào đúng việc này')}).withFailureHandler(fail).beginTimeLog(kind,label);
+  google.script.run.withSuccessHandler(active=>{activeTimeLog=active;safeStorageSet('my-assistant-active-time-v1',JSON.stringify(active));renderTime();toast('Đã bắt đầu · tập trung vào đúng việc này')}).withFailureHandler(fail).beginTimeLog(kind,label);
 }
 function startCustomTimeLog(){const input=$('customTimeLabel'),label=input.value.trim();if(!label){toast('Nhập tên hoạt động trước.');return}startTimeLog('custom',label);input.value=''}
 function stopTimeLog(){
   if(!activeTimeLog)return;
   google.script.run.withSuccessHandler(result=>{
-    activeTimeLog=null;localStorage.removeItem('my-assistant-active-time-v1');
+    activeTimeLog=null;safeStorageRemove('my-assistant-active-time-v1');
     if(result.log&&!(data.timelogs||[]).some(log=>log.id===result.log.id))data.timelogs.push(result.log);
     const picker=$('timeDate');if(picker&&result.log)picker.value=localDateKey(result.log.startAt);
     renderTime();toast(`Đã lưu và xác nhận ${result.durationMinutes} phút trên Google Sheet`);load();
@@ -232,7 +239,7 @@ function renderKanban(){
   requestAnimationFrame(()=>document.querySelectorAll('.kanban-list[data-kanban-key]').forEach(list=>list.scrollTop=kanbanScrollPositions[list.dataset.kanbanKey]||0));
 }
 function rememberKanbanScroll(key,value){kanbanScrollPositions[key]=value}
-function toggleKanbanColumn(key){kanbanCollapsed[key]=!kanbanCollapsed[key];localStorage.setItem('my-assistant-kanban-fold-v1',JSON.stringify(kanbanCollapsed));renderKanban()}
+function toggleKanbanColumn(key){kanbanCollapsed[key]=!kanbanCollapsed[key];safeStorageSet('my-assistant-kanban-fold-v1',JSON.stringify(kanbanCollapsed));renderKanban()}
 
 function renderNotifications(){
   const box=$('notificationCenter');if(!box)return;
@@ -689,11 +696,21 @@ function activatePage(page){
   if(!btn||!section)return;
   document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));
   btn.classList.add('active'); section.classList.add('active');
-  if(page!=='today'&&!fullDataLoaded){refreshFullData(page);return}
+  location.hash=page;
+  if(page!=='today'&&!loadedPages.has(page)){refreshPageData(page);return}
   renderCurrentPage();
 }
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
 function fail(e){toast(e.message||String(e))}
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
-load();
+function bootApp(){
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
+  applyAppSettings();renderTimeAnchor();
+  load();
+}
+try{bootApp()}catch(error){
+  document.body.classList.remove('today-loading','full-loading');
+  const summary=$('summary');if(summary)summary.innerHTML='<small>CHẾ ĐỘ KHÔI PHỤC</small><b>App vẫn điều hướng được</b><span>Hãy chuyển tab hoặc tải lại một lần. Dữ liệu của bạn không bị mất.</span>';
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
+  try{toast('Khởi tạo gặp lỗi; app đã bật chế độ khôi phục.')}catch(e){}
+}
 </script>

@@ -85,6 +85,33 @@ function getTodayData() {
   };
 }
 
+// Load only the sheets needed by the selected tab. The previous implementation
+// read every sheet before showing any secondary page, which made a simple tab
+// switch feel frozen on larger personal databases.
+function getPageData(page) {
+  const ss = getBook_();
+  const map = {
+    profile: ['Profile', 'Wallets'],
+    money: ['Wallets', 'Expenses', 'Debts', 'Allocations', 'Plans'],
+    cv: ['CVs', 'ReflectionProfile'],
+    study: ['StudyAbroadProfile', 'StudyAbroadOptions', 'StudyAbroadChecklist'],
+    food: ['Meals', 'HealthProfile', 'WeightLogs', 'HealthLogs', 'RoutineSettings'],
+    travel: ['Flights', 'Hotels'],
+    time: ['TimeLogs', 'TimeState', 'RoutineSettings'],
+    install: ['AppSettings']
+  };
+  if (page === 'cv') { ensureDefaultCv_(ss); ensureDefaultReflection_(ss); seedReflectionDetails_(ss); ensureReflectionSynthesis_(ss); }
+  if (page === 'study') ensureDefaultStudyAbroad_(ss);
+  if (page === 'food') { ensureDefaultRoutine_(ss); ensureDefaultHealth_(ss); ensureHabitDefaults_(ss); }
+  if (page === 'travel') ensureDefaultFlights_(ss);
+  if (page === 'time') ensureDefaultRoutine_(ss);
+  if (page === 'install') ensureDefaultAppSettings_(ss);
+  const result = { partial: true };
+  (map[page] || []).forEach(function(name) { result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)); });
+  if (page === 'cv') result.dailyguidance = buildDailyGuidance_(ss);
+  return result;
+}
+
 // Cross-domain brief for the Today page. It is loaded after the task screen is
 // already interactive and cached so the assistant overview never blocks clicks.
 function getAssistantBrief(forceRefresh) {
@@ -1792,13 +1819,19 @@ function getBook_() {
   const props = PropertiesService.getUserProperties();
   let id = props.getProperty('BOOK_ID');
   let ss = id ? SpreadsheetApp.openById(id) : null;
+  let created = false;
   if (!ss) {
     ss = SpreadsheetApp.create('My Assistant — dữ liệu riêng');
+    created = true;
     props.setProperty('BOOK_ID', ss.getId());
     props.deleteProperty('SCHEMA_VERSION');
   }
   if (props.getProperty('SCHEMA_VERSION') !== SCHEMA_VERSION) {
-    Object.entries(HEADERS).forEach(([name, headers]) => {
+    // A brand-new account needs every sheet. Existing accounts only need the
+    // sheets changed by the current schema, avoiding dozens of Spreadsheet API
+    // calls on the first load after every deployment.
+    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs'].map(function(name) { return [name, HEADERS[name]]; });
+    schemaEntries.forEach(([name, headers]) => {
       let sheet = ss.getSheetByName(name);
       if (!sheet) sheet = ss.insertSheet(name);
       ensureHeaders_(sheet, headers);
