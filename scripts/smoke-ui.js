@@ -98,6 +98,8 @@ try {
       {id:'expense-2',date:new Date().toISOString(),amount:750000,merchant:'Sinh hoạt',direction:'expense',category:'Thiết yếu'}
     ];
     data.timelogs=[{id:'time-1',kind:'work',label:'Công việc',startAt:new Date().toISOString(),endAt:new Date().toISOString(),durationMinutes:90}];
+    data.appointments=[{id:'appointment-1',title:'Cà phê với Minh',type:'coffee',startAt:new Date(Date.now()+86400000).toISOString(),location:'Quận 1',withWhom:'Minh'}];
+    data.flights=[{id:'flight-1',code:'VJ161',fromCode:'HAN',toCode:'SGN',departure:new Date(Date.now()+3*86400000).toISOString(),status:'scheduled'}];
     data.healthprofile=[{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',dailyCalorieTarget:1900}];
     data.healthlogs=[
       {id:'health-1',date:new Date().toISOString(),type:'calorie_in',amount:1700,label:'Tổng bữa ăn',source:'iPhone Health'},
@@ -113,6 +115,7 @@ try {
     renderStudyAbroad();
     renderCvs();
     renderHealth();
+    renderTravel();
     document.getElementById('timeDate').value=localDateKey(new Date());
     renderTime();
   `, context, {filename:'smoke-fixtures.js'});
@@ -123,9 +126,12 @@ try {
   if (!getElement('debts').innerHTML.includes('Đã trả bớt') || !getElement('debts').innerHTML.includes('Đặt số nợ mới')) throw new Error('Debt adjustment controls did not render');
   if (!getElement('assistantBrief').innerHTML.includes('Trung tâm') && !getElement('opsTaskChart').innerHTML) throw new Error('Operation Center did not render');
   if (!getElement('opsTaskChart').innerHTML || !getElement('opsMoneyChart').innerHTML || !getElement('opsTimeChart').innerHTML || !getElement('opsLifeChart').innerHTML || !getElement('operationKpis').innerHTML) throw new Error('Operation Center charts did not render');
+  if (!getElement('miniCalendar').innerHTML.includes('✈️') || !getElement('miniCalendar').innerHTML.includes('☕') || !getElement('appointments').innerHTML.includes('Cà phê với Minh')) throw new Error('Mini calendar or appointments did not render');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
   if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health')) throw new Error('Assistant tab, mobile dialog actions, or Health import UI missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
+  const styleSource=fs.readFileSync(path.join(__dirname,'..','Styles.html'),'utf8');
+  if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar')) throw new Error('Health progress fix or mini calendar styles missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);

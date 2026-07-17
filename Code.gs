@@ -9,6 +9,7 @@ const HEADERS = {
   HealthLogs: ['id', 'date', 'type', 'amount', 'durationMinutes', 'steps', 'label', 'source', 'note', 'createdAt'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
+  Appointments: ['id', 'title', 'type', 'startAt', 'endAt', 'location', 'withWhom', 'transport', 'notes', 'calendarEventId', 'createdAt'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
@@ -30,7 +31,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-18-health-assistant-v10';
+const SCHEMA_VERSION = '2026-07-18-appointments-calendar-v11';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -110,7 +111,7 @@ function getPageData(page) {
     cv: ['CVs', 'ReflectionProfile'],
     study: ['StudyAbroadProfile', 'StudyAbroadOptions', 'StudyAbroadChecklist'],
     food: ['Meals', 'HealthProfile', 'WeightLogs', 'HealthLogs', 'RoutineSettings'],
-    travel: ['Flights', 'Hotels'],
+    travel: ['Flights', 'Hotels', 'Appointments'],
     time: ['TimeLogs', 'TimeState', 'RoutineSettings'],
     install: ['AppSettings']
   };
@@ -968,6 +969,9 @@ function addItem(type, item) {
   if (type === 'Flights' && item.departure) {
     try { syncFlightToCalendar_(id); } catch (error) { calendarWarning = error.message || String(error); }
   }
+  if (type === 'Appointments' && item.startAt) {
+    try { syncAppointmentToCalendar_(id); } catch (error) { calendarWarning = error.message || String(error); }
+  }
   return { ok: true, id: id, calendarWarning: calendarWarning };
 }
 
@@ -987,6 +991,9 @@ function updateItem(type, item) {
   if (type === 'Flights' && item.departure) {
     try { syncFlightToCalendar_(item.id); } catch (error) { calendarWarning = error.message || String(error); }
   }
+  if (type === 'Appointments' && item.startAt) {
+    try { syncAppointmentToCalendar_(item.id); } catch (error) { calendarWarning = error.message || String(error); }
+  }
   return { ok: true, calendarWarning: calendarWarning };
 }
 
@@ -998,7 +1005,7 @@ function deleteItem(type, id) {
   if (row < 1) throw new Error('Không tìm thấy mục cần xoá.');
   const existing = readRows_(sheet).find(r => r.id === id) || {};
   if (type === 'Expenses') applyExpenseImpact_(existing, -1);
-  if (type === 'Tasks' && existing.calendarEventId) {
+  if ((type === 'Tasks' || type === 'Appointments') && existing.calendarEventId) {
     try {
       const event = CalendarApp.getDefaultCalendar().getEventById(existing.calendarEventId);
       if (event) event.deleteEvent();
@@ -1474,6 +1481,38 @@ function syncFlightToCalendar_(id) {
   return event.getId();
 }
 
+function syncAppointmentToCalendar_(id) {
+  const sheet = getBook_().getSheetByName('Appointments');
+  const appointment = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!appointment || !appointment.startAt) throw new Error('Cuộc hẹn chưa có giờ bắt đầu.');
+  const start = new Date(appointment.startAt);
+  const end = appointment.endAt ? new Date(appointment.endAt) : new Date(start.getTime() + 60 * 60000);
+  const cal = CalendarApp.getDefaultCalendar();
+  let event = null;
+  if (appointment.calendarEventId) try { event = cal.getEventById(appointment.calendarEventId); } catch (error) { event = null; }
+  const icons = { coffee: '☕', friend: '🎉', meeting: '🤝', hometown: '🏡', personal: '📌' };
+  const title = (icons[appointment.type] || '📌') + ' ' + (appointment.title || 'Cuộc hẹn');
+  const description = [
+    'My Assistant · cuộc hẹn cá nhân',
+    appointment.withWhom ? 'Với: ' + appointment.withWhom : '',
+    appointment.transport ? 'Di chuyển: ' + appointment.transport : '',
+    appointment.notes || ''
+  ].filter(String).join('\n');
+  if (event) {
+    event.setTitle(title);
+    event.setTime(start, end);
+    event.setDescription(description);
+    if (appointment.location) event.setLocation(appointment.location);
+  } else {
+    event = cal.createEvent(title, start, end, { description: description, location: appointment.location || '' });
+  }
+  event.removeAllReminders();
+  try { event.addPopupReminder(30); } catch (error) {}
+  try { event.addPopupReminder(120); } catch (error) {}
+  upsertRow_(sheet, Object.assign({}, appointment, { calendarEventId: event.getId() }));
+  return event.getId();
+}
+
 function airlineCheckinUrl_(code) {
   const prefix = (String(code || '').match(/^[A-Z0-9]{2}/) || [''])[0].toUpperCase();
   const urls = {
@@ -1912,7 +1951,7 @@ function getBook_() {
     // A brand-new account needs every sheet. Existing accounts only need the
     // sheets changed by the current schema, avoiding dozens of Spreadsheet API
     // calls on the first load after every deployment.
-    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile', 'HealthLogs'].map(function(name) { return [name, HEADERS[name]]; });
+    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile', 'HealthLogs', 'Appointments'].map(function(name) { return [name, HEADERS[name]]; });
     schemaEntries.forEach(([name, headers]) => {
       let sheet = ss.getSheetByName(name);
       if (!sheet) sheet = ss.insertSheet(name);

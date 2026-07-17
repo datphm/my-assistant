@@ -197,7 +197,7 @@
     <section id="travel" class="page">
       <div class="section-head">
         <h2>Chuyến đi</h2>
-        <div class="actions"><button class="outline" onclick="reviewFutureFlightsUi()">Rà lại lịch bay</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
+        <div class="actions"><button class="outline" onclick="openForm('appointment')">+ Cuộc hẹn</button><button class="outline" onclick="reviewFutureFlightsUi()">Rà lại lịch bay</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
       </div>
       <p class="hint">Đã nạp sẵn list chuyến bay từ file PDF bạn gửi. Gmail chỉ quét khi bạn nhập query, ví dụ từ hãng bay/Booking/Agoda trong 2 năm.</p>
       <div class="inline wrap travel-tools">
@@ -207,6 +207,8 @@
         <button class="outline danger" onclick="disableTravelSync()">Tắt tự động</button>
       </div>
       <div id="travelInsights" class="insight-grid"></div>
+      <div class="section-head subhead"><div><h3>Cuộc hẹn & đi chơi</h3><p class="hint">Cà phê, gặp bạn, về quê hoặc một lịch hẹn cá nhân có người–địa điểm–giờ rõ ràng.</p></div><button onclick="openForm('appointment')">+ Thêm cuộc hẹn</button></div>
+      <div id="appointments" class="cards appointment-list"></div>
       <div id="upcomingFlightPlan" class="cards flight-plans"></div>
       <h3>Chuyến bay</h3>
       <div id="flights" class="cards"></div>
