@@ -10,7 +10,7 @@ const HEADERS = {
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
-  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
+  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
@@ -21,7 +21,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-task-capture-v2';
+const SCHEMA_VERSION = '2026-07-17-reflection-synthesis-v3';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -43,6 +43,7 @@ function getData() {
   ensureDefaultHealth_(ss);
   ensureDefaultReflection_(ss);
   seedReflectionDetails_(ss);
+  ensureReflectionSynthesis_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   result.dailyguidance = buildDailyGuidance_(ss);
@@ -78,6 +79,31 @@ function seedReflectionDetails_(ss) {
     updatedAt: new Date()
   }));
   props.setProperty('REFLECTION_DETAILS_2026_SEEDED', '1');
+}
+
+function ensureReflectionSynthesis_(ss) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('REFLECTION_SYNTHESIS_V1_SEEDED')) return;
+  const sheet = ss.getSheetByName('ReflectionProfile');
+  const current = readRows_(sheet)[0] || { id: 'default' };
+  const defaults = defaultReflectionSynthesis_();
+  const update = Object.assign({}, current, { id: current.id || 'default', updatedAt: new Date() });
+  Object.keys(defaults).forEach(function(key) { if (!String(update[key] || '').trim()) update[key] = defaults[key]; });
+  upsertRow_(sheet, update);
+  props.setProperty('REFLECTION_SYNTHESIS_V1_SEEDED', '1');
+}
+
+function defaultReflectionSynthesis_() {
+  return {
+    tuViSummary: 'Mệnh Vũ Khúc – Thiên Phủ gợi hình ảnh người thiên về quản lý nguồn lực, tính toán và chịu trách nhiệm. Lộc Tồn, Hóa Lộc và Quốc Ấn nhấn mạnh khả năng vận hành; Triệt, Tuần cùng các sát tinh nhắc rằng tiến độ thường tốt hơn khi có quy trình, kiểm tra chéo và không quyết định vội dưới áp lực.',
+    batTuSummary: 'Nhật chủ Ất Mộc trong tháng Tỵ, đi cùng Thực Thần và Thất Sát, gợi sự mềm dẻo nhưng chịu áp lực tiêu chuẩn cao. Đại vận Giáp Dần 2025–2034 tăng năng lượng tự chủ, cạnh tranh và mở hướng mới; bài học thực tế là chọn ít mục tiêu, nuôi nền tảng đều và tránh phân tán nguồn lực.',
+    horoscopeSummary: 'Mặt Trời Kim Ngưu và Mặt Trăng Xử Nữ thiên về tính thực tế, ổn định, chú ý chi tiết; ASC Sư Tử tạo nhu cầu thể hiện năng lực và được ghi nhận. Mercury vuông Mars/Jupiter/Neptune gợi nên xác nhận lại yêu cầu bằng văn bản, kiểm tra giả định và tránh trả lời quá nhanh khi chưa đủ dữ liệu.',
+    numerologySummary: 'Đường đời 4 (13), tiềm ẩn 22 và động lực 11 gợi hình mẫu người xây hệ thống: có thể biến ý tưởng lớn thành cấu trúc cụ thể. Nợ bài học 6 nhắc về trách nhiệm, sự nhất quán và cân bằng giữa chăm người khác với giữ cam kết của chính mình.',
+    personalitySummary: 'Gợi ý tổng hợp: thực tế, thích tạo trật tự và có khả năng nhìn cả vận hành lẫn con người. Bạn thường làm tốt khi đầu ra rõ ràng, có quyền chủ động và thấy tác động cụ thể. Khi quá nhiều việc cùng mở, áp lực và nhu cầu làm đúng có thể biến thành chậm bắt đầu, giữ việc trong đầu hoặc thiếu bước báo lại.',
+    strengthsSummary: 'Tư duy hệ thống; quản lý nguồn lực; bền bỉ với mục tiêu có ý nghĩa; quan sát chi tiết; kết nối và điều phối; có tiềm năng biến vấn đề mơ hồ thành checklist, tài liệu và quy trình có thể bàn giao.',
+    weaknessesSummary: 'Dễ ôm nhiều đầu việc, đánh giá thấp thời gian chuyển đổi, cầu toàn trước khi gửi bản nháp và chậm hỏi khi thiếu thông tin. Khi căng thẳng có thể phản ứng nhanh nhưng truyền đạt chưa đủ bối cảnh, hoặc làm xong phần việc mà quên cập nhật tài liệu và báo lại người giao.',
+    improvementSummary: 'Mỗi nhiệm vụ cần 5 điểm bắt buộc: đầu ra, deadline, người cần hỏi, tài liệu phải cập nhật và câu báo lại. Bắt đầu bằng bước 10 phút; đặt mốc kiểm tra giữa chặng; gửi bản nháp sớm; dùng Calendar cho hạn chính và Kanban cho hành động nhỏ. Cuối ngày đóng vòng lặp: đã chốt gì, còn kẹt gì, bước tiếp theo khi nào.'
+  };
 }
 
 function defaultTuViNotes_() {
