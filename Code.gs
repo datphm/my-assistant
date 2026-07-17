@@ -1,5 +1,5 @@
 const HEADERS = {
-  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil', 'outcome', 'nextAction', 'waitingFor', 'followUpAt', 'priority', 'energy', 'definitionOfDone', 'lastProgressAt', 'lastFollowUpEmailedAt'],
+  Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil', 'outcome', 'nextAction', 'waitingFor', 'followUpAt', 'priority', 'energy', 'definitionOfDone', 'lastProgressAt', 'lastFollowUpEmailedAt', 'projectId', 'recurrence', 'recurrenceEndDate'],
   TaskSteps: ['id', 'taskId', 'title', 'done', 'position', 'dueAt', 'createdAt', 'completedAt'],
   TaskUpdates: ['id', 'taskId', 'note', 'status', 'createdAt', 'nextFollowUpAt'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
@@ -17,18 +17,20 @@ const HEADERS = {
   StudyAbroadProfile: ['id', 'targetIntakeYear', 'targetCountries', 'targetDegree', 'targetFields', 'currentEducation', 'currentGpa', 'englishTest', 'currentEnglishScore', 'targetEnglishScore', 'otherLanguages', 'budgetVnd', 'savingsVnd', 'fundingPlan', 'scholarshipTarget', 'passportStatus', 'visaNotes', 'motivation', 'constraints', 'updatedAt'],
   StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
   StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
-  AppSettings: ['id', 'timezone', 'locale', 'startupPage', 'theme', 'fontScale', 'reducedMotion', 'compactMode', 'hideFinancialAmounts', 'defaultTaskMinutes', 'defaultChaseMode', 'quietHoursStart', 'quietHoursEnd', 'emailReminders', 'calendarReminders', 'routineReminders', 'flightReminders', 'confirmBeforeDelete', 'updatedAt'],
+  AppSettings: ['id', 'timezone', 'locale', 'startupPage', 'theme', 'fontScale', 'reducedMotion', 'compactMode', 'hideFinancialAmounts', 'defaultTaskMinutes', 'defaultChaseMode', 'quietHoursStart', 'quietHoursEnd', 'emailReminders', 'calendarReminders', 'routineReminders', 'flightReminders', 'confirmBeforeDelete', 'dailyLogEnabled', 'dailyLogMorningTime', 'dailyLogEveningTime', 'spotifyUrl', 'spotifyFocusEnabled', 'updatedAt'],
   Profile: ['id', 'fullName', 'preferredName', 'dateOfBirth', 'bloodType', 'phone', 'email', 'address', 'nationality', 'emergencyContact', 'emergencyContactRelation', 'allergies', 'medications', 'medicalConditions', 'medicalNotes', 'passportNumber', 'passportExpiry', 'insuranceProvider', 'insuranceNumber', 'documentFolderUrl', 'personalGoals', 'privateNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
   RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'waterReminderEnabled', 'waterStartTime', 'waterEndTime', 'waterIntervalMinutes', 'mealLogReminderEnabled', 'mealLogReminderTime', 'walkReminderEnabled', 'walkReminderTime', 'updatedAt'],
   Plans: ['id', 'name', 'type', 'targetDate', 'estimatedCost', 'savedAmount', 'priority', 'notes'],
-  Notifications: ['id', 'type', 'title', 'message', 'targetType', 'targetId', 'priority', 'dedupeKey', 'createdAt', 'readAt']
+  Notifications: ['id', 'type', 'title', 'message', 'targetType', 'targetId', 'priority', 'dedupeKey', 'createdAt', 'readAt'],
+  Projects: ['id', 'name', 'outcome', 'status', 'deadline', 'priority', 'progress', 'nextMilestone', 'budget', 'notes', 'createdAt', 'updatedAt'],
+  DailyLogs: ['id', 'date', 'phase', 'mood', 'energy', 'sleepHours', 'top1', 'top2', 'top3', 'wins', 'blockers', 'spendingNote', 'healthNote', 'tomorrowFirst', 'notes', 'updatedAt']
 };
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-adhd-task-system-v7';
+const SCHEMA_VERSION = '2026-07-17-whole-journey-v8';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -77,7 +79,9 @@ function getTodayData() {
     taskupdates: readRecentRows_(ss.getSheetByName('TaskUpdates'), 180).filter(function(update) { return taskIds.has(update.taskId); }),
     notifications: readRecentRows_(ss.getSheetByName('Notifications'), 120),
     timestate: readRows_(ss.getSheetByName('TimeState')),
-    appsettings: readRows_(ss.getSheetByName('AppSettings'))
+    appsettings: readRows_(ss.getSheetByName('AppSettings')),
+    projects: readRows_(ss.getSheetByName('Projects')),
+    dailylogs: readRecentRows_(ss.getSheetByName('DailyLogs'), 21)
   };
 }
 
@@ -283,6 +287,8 @@ function defaultAppSettings_() {
     fontScale: '100', reducedMotion: 'no', compactMode: 'no', hideFinancialAmounts: 'no',
     defaultTaskMinutes: 15, defaultChaseMode: 'normal', quietHoursStart: '23:00:00', quietHoursEnd: '07:00:00',
     emailReminders: 'yes', calendarReminders: 'yes', routineReminders: 'yes', flightReminders: 'yes',
+    dailyLogEnabled: 'yes', dailyLogMorningTime: '07:45:00', dailyLogEveningTime: '21:30:00',
+    spotifyUrl: '', spotifyFocusEnabled: 'yes',
     confirmBeforeDelete: 'yes', updatedAt: new Date()
   };
 }
@@ -321,6 +327,9 @@ function syncSettingsProperties_(settings) {
     APP_CALENDAR_REMINDERS: String(settings.calendarReminders || 'yes'),
     APP_ROUTINE_REMINDERS: String(settings.routineReminders || 'yes'),
     APP_FLIGHT_REMINDERS: String(settings.flightReminders || 'yes'),
+    APP_DAILY_LOG_ENABLED: String(settings.dailyLogEnabled || 'yes'),
+    APP_DAILY_LOG_MORNING: String(settings.dailyLogMorningTime || '07:45:00'),
+    APP_DAILY_LOG_EVENING: String(settings.dailyLogEveningTime || '21:30:00'),
     APP_DEFAULT_TASK_MINUTES: String(settings.defaultTaskMinutes || 15),
     APP_DEFAULT_CHASE_MODE: String(settings.defaultChaseMode || 'normal'),
     APP_QUIET_START: String(settings.quietHoursStart || '23:00:00'),
@@ -821,6 +830,26 @@ function generateChecklistForTask(taskId) {
   return suggestions.length;
 }
 
+function saveDailyLog(item) {
+  const ss = getBook_();
+  const sheet = ss.getSheetByName('DailyLogs');
+  const timezone = getConfiguredTimeZone_();
+  const rawDate = item && item.date ? new Date(item.date) : new Date();
+  const dateKey = Utilities.formatDate(rawDate, timezone, 'yyyy-MM-dd');
+  const existing = readRows_(sheet).find(function(row) {
+    return row.date && Utilities.formatDate(new Date(row.date), timezone, 'yyyy-MM-dd') === dateKey;
+  }) || {};
+  const value = Object.assign({}, existing, item, {
+    id: existing.id || 'daily-' + dateKey,
+    date: new Date(dateKey + 'T12:00:00'),
+    phase: item.phase || existing.phase || 'morning',
+    updatedAt: new Date()
+  });
+  upsertRow_(sheet, value);
+  CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V2');
+  return Object.assign({}, value, { date: value.date.toISOString(), updatedAt: value.updatedAt.toISOString() });
+}
+
 function addItem(type, item) {
   if (!HEADERS[type]) throw new Error('Loại dữ liệu không hợp lệ.');
   const sheet = getBook_().getSheetByName(type);
@@ -831,6 +860,7 @@ function addItem(type, item) {
     if (key === 'done') return false;
     if (key === 'lastEmailedAt' || key === 'gmailMessageId' || key === 'lastUpdatedAt') return '';
     if (key === 'updatedAt') return new Date();
+    if (key === 'createdAt') return item[key] || new Date();
     if (key === 'currency') return item[key] || 'VND';
     if (key === 'direction') return item[key] || 'expense';
     return item[key] === undefined ? '' : item[key];
@@ -957,10 +987,30 @@ function completeTask(id) {
     const updateSheet = ss.getSheetByName('TaskUpdates');
     const update = { id: Utilities.getUuid(), taskId: id, note: 'Đã đóng việc; đã kiểm tra đầu ra, tài liệu và bước báo lại.', status: 'done', createdAt: new Date(), nextFollowUpAt: '' };
     updateSheet.appendRow(HEADERS.TaskUpdates.map(function(key) { return update[key] === undefined ? '' : update[key]; }));
-    return { ok: true, id: id };
+    const nextTask = createNextRecurringTask_(ss, task);
+    return { ok: true, id: id, nextTask: nextTask };
   } finally {
     lock.releaseLock();
   }
+}
+
+function createNextRecurringTask_(ss, task) {
+  const recurrence = String(task.recurrence || 'none');
+  if (!/^(daily|weekly|monthly)$/.test(recurrence)) return null;
+  const due = task.dueAt ? new Date(task.dueAt) : new Date();
+  if (recurrence === 'daily') due.setDate(due.getDate() + 1);
+  if (recurrence === 'weekly') due.setDate(due.getDate() + 7);
+  if (recurrence === 'monthly') due.setMonth(due.getMonth() + 1);
+  if (task.recurrenceEndDate && due > new Date(task.recurrenceEndDate)) return null;
+  const next = Object.assign({}, task, {
+    id: Utilities.getUuid(), dueAt: due, done: false, status: 'todo', calendarEventId: '',
+    startedAt: '', snoozedUntil: '', lastEmailedAt: '', lastProgressAt: '', lastFollowUpEmailedAt: ''
+  });
+  ss.getSheetByName('Tasks').appendRow(HEADERS.Tasks.map(function(key) { return next[key] === undefined ? '' : next[key]; }));
+  if (PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') {
+    try { syncTaskToCalendar(next.id); } catch (error) {}
+  }
+  return Object.assign({}, next, { dueAt: due.toISOString() });
 }
 
 function startTask(id) {
@@ -1473,6 +1523,7 @@ function sendRoutineReminders_(recipient, now) {
   ensureDefaultRoutine_(ss);
   ensureDefaultHealth_(ss);
   const settings = readRows_(ss.getSheetByName('RoutineSettings'))[0];
+  const appSettings = readRows_(ss.getSheetByName('AppSettings'))[0] || defaultAppSettings_();
   const props = PropertiesService.getUserProperties();
   const tz = getConfiguredTimeZone_();
   const dateKey = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
@@ -1491,6 +1542,23 @@ function sendRoutineReminders_(recipient, now) {
       lastRoutineSent[rule[0]] = dateKey;
     }
   });
+  if (appSettings.dailyLogEnabled !== 'no') {
+    const todayLog = readRows_(ss.getSheetByName('DailyLogs')).find(function(log) {
+      return log.date && Utilities.formatDate(new Date(log.date), tz, 'yyyy-MM-dd') === dateKey;
+    }) || {};
+    const morningTime = String(appSettings.dailyLogMorningTime || '07:45').slice(0, 5);
+    const eveningTime = String(appSettings.dailyLogEveningTime || '21:30').slice(0, 5);
+    if (hhmm >= morningTime && !todayLog.top1 && lastRoutineSent.dailyLogMorning !== dateKey) {
+      MailApp.sendEmail(recipient, 'My Assistant · Chốt ngày trong 90 giây', 'Mở trang Hôm nay → Nhật ký sáng. Ghi đúng 3 đầu ra, chọn việc số 1 và đặt giờ follow-up. Không lập danh sách vô hạn.');
+      createNotification_('daily_log_morning', 'Chưa chốt kế hoạch hôm nay', 'Ghi Top 3 và việc đầu tiên trong 90 giây.', 'time', 'daily-log', 'high', 'daily-log-morning:' + dateKey);
+      lastRoutineSent.dailyLogMorning = dateKey;
+    }
+    if (hhmm >= eveningTime && !todayLog.wins && lastRoutineSent.dailyLogEvening !== dateKey) {
+      MailApp.sendEmail(recipient, 'My Assistant · Đóng ngày trước khi nghỉ', 'Mở trang Hôm nay → Nhật ký tối. Ghi việc đã xong, điều đang kẹt và bước đầu tiên của ngày mai. Sau đó dừng công việc.');
+      createNotification_('daily_log_evening', 'Chưa đóng ngày', 'Ghi thắng lợi, vướng mắc và việc đầu tiên ngày mai.', 'time', 'daily-log', 'high', 'daily-log-evening:' + dateKey);
+      lastRoutineSent.dailyLogEvening = dateKey;
+    }
+  }
   props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
   const active = readRows_(ss.getSheetByName('TimeState'))[0];
   const interval = Math.max(30, Number(settings.logIntervalMinutes || 60)) * 60000;
@@ -1576,6 +1644,7 @@ function installRoutineCalendar() {
   const ss = getBook_();
   ensureDefaultRoutine_(ss);
   const settings = readRows_(ss.getSheetByName('RoutineSettings'))[0];
+  const appSettings = readRows_(ss.getSheetByName('AppSettings'))[0] || defaultAppSettings_();
   const calendar = CalendarApp.getDefaultCalendar();
   const props = PropertiesService.getUserProperties();
   const oldIds = JSON.parse(props.getProperty('ROUTINE_EVENT_IDS') || '[]');
@@ -1587,7 +1656,9 @@ function installRoutineCalendar() {
     ['Ăn tối · My Assistant', settings.dinnerTime, 45],
     ['Chuẩn bị ngủ · My Assistant', settings.bedtime, 30],
     ['Log bữa ăn hôm nay · My Assistant', settings.mealLogReminderTime || '20:30', 10],
-    ['Đi bộ bản nhỏ nhất · My Assistant', settings.walkReminderTime || '18:30', 15]
+    ['Đi bộ bản nhỏ nhất · My Assistant', settings.walkReminderTime || '18:30', 15],
+    ['Nhật ký sáng 90 giây · My Assistant', appSettings.dailyLogMorningTime || '07:45', 10],
+    ['Đóng ngày · My Assistant', appSettings.dailyLogEveningTime || '21:30', 10]
   ];
   const ids = definitions.map(function(def) {
     const start = nextDateAt_(def[1]);
@@ -1597,7 +1668,7 @@ function installRoutineCalendar() {
     return series.getId();
   });
   props.setProperty('ROUTINE_EVENT_IDS', JSON.stringify(ids));
-  return 'Đã tạo 6 điểm neo hằng ngày trong Google Calendar trong 1 năm, gồm log bữa ăn và đi bộ.';
+  return 'Đã tạo 8 điểm neo hằng ngày trong Google Calendar trong 1 năm, gồm nhật ký sáng/tối, log bữa ăn và đi bộ.';
 }
 
 function installHealthCalendar() {
@@ -1648,7 +1719,7 @@ function enableSmartReminders() {
   installRoutineCalendar();
   installHealthCalendar();
   const flights = syncFutureFlightsToCalendar_();
-  return `Đã bật hệ thống nhắc thông minh qua Calendar “${calendarName}” + email: deadline, việc bị quên, sinh hoạt, vận động hằng ngày và ${flights} chuyến bay tương lai.`;
+  return `Đã bật hệ thống nhắc thông minh qua Calendar “${calendarName}” + email: deadline, việc bị quên, nhật ký sáng/tối, sinh hoạt, vận động hằng ngày và ${flights} chuyến bay tương lai.`;
 }
 
 function uninstallReminderTrigger() {
