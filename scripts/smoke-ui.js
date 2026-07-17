@@ -98,12 +98,17 @@ try {
       {id:'expense-2',date:new Date().toISOString(),amount:750000,merchant:'Sinh hoạt',direction:'expense',category:'Thiết yếu'}
     ];
     data.timelogs=[{id:'time-1',kind:'work',label:'Công việc',startAt:new Date().toISOString(),endAt:new Date().toISOString(),durationMinutes:90}];
+    data.studyabroadprofile=[{targetIntakeYear:2028,currentGpa:'3.4',englishTest:'IELTS',currentEnglishScore:'6.5',targetEnglishScore:'7.0',scholarshipTarget:'Toàn phần'}];
+    data.studyabroadoptions=[{id:'school-1',school:'Example University',program:'Public Policy',scholarship:'Full tuition',applicationDeadline:new Date(Date.now()+120*86400000).toISOString()}];
+    data.studyabroadchecklist=[{id:'study-1',title:'Viết bản nháp SOP',category:'Hồ sơ',dueAt:new Date(Date.now()+14*86400000).toISOString(),status:'todo'}];
     fullDataLoaded=true;
     renderMoney();
+    renderStudyAbroad();
+    renderCvs();
     document.getElementById('timeDate').value=localDateKey(new Date());
     renderTime();
   `, context, {filename:'smoke-fixtures.js'});
-  if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML) throw new Error('Dashboard visual did not render');
+  if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML || !getElement('studyScholarship').innerHTML || !getElement('reflectionProfile').innerHTML || !getElement('debtPayoffPlan').innerHTML) throw new Error('Dashboard visual did not render');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);

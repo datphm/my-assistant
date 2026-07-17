@@ -324,7 +324,7 @@ function createTaskFromStudyChecklist(id) {
 
 function defaultAppSettings_() {
   return {
-    id: 'default', timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', startupPage: 'today', theme: 'dark',
+    id: 'default', timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', startupPage: 'today', theme: 'pastel',
     fontScale: '100', reducedMotion: 'no', compactMode: 'no', hideFinancialAmounts: 'no',
     defaultTaskMinutes: 15, defaultChaseMode: 'normal', quietHoursStart: '23:00:00', quietHoursEnd: '07:00:00',
     emailReminders: 'yes', calendarReminders: 'yes', routineReminders: 'yes', flightReminders: 'yes',
@@ -336,7 +336,20 @@ function defaultAppSettings_() {
 
 function ensureDefaultAppSettings_(ss) {
   const sheet = ss.getSheetByName('AppSettings');
-  if (readRows_(sheet).length) return;
+  const rows = readRows_(sheet);
+  if (rows.length) {
+    const props = PropertiesService.getUserProperties();
+    if (!props.getProperty('PASTEL_THEME_V1')) {
+      const current = rows[0];
+      if (!current.theme || current.theme === 'dark') {
+        const upgraded = Object.assign({}, current, { theme: 'pastel', updatedAt: new Date() });
+        upsertRow_(sheet, upgraded);
+        syncSettingsProperties_(upgraded);
+      }
+      props.setProperty('PASTEL_THEME_V1', '1');
+    }
+    return;
+  }
   upsertRow_(sheet, defaultAppSettings_());
   syncSettingsProperties_(defaultAppSettings_());
 }
@@ -1247,6 +1260,20 @@ function adjustWalletManual(item) {
   if (!amount) throw new Error('Nhập số tiền khác 0.');
   adjustWalletByTransaction_(item.walletId, amount, item.direction || 'expense', new Date());
   return { ok: true };
+}
+
+function adjustDebtManual(item) {
+  if (!item.debtId) throw new Error('Không tìm thấy khoản nợ.');
+  const sheet = getBook_().getSheetByName('Debts');
+  const debt = readRows_(sheet).find(function(row) { return row.id === item.debtId; });
+  if (!debt) throw new Error('Khoản nợ không còn tồn tại.');
+  const amount = Math.abs(Number(item.amount || 0));
+  if (!Number.isFinite(amount)) throw new Error('Số tiền không hợp lệ.');
+  const direction = item.direction || 'set';
+  const current = Number(debt.balance || 0);
+  const balance = direction === 'increase' ? current + amount : direction === 'decrease' ? Math.max(0, current - amount) : amount;
+  upsertRow_(sheet, Object.assign({}, debt, { balance: balance }));
+  return { ok: true, balance: balance };
 }
 
 function applyExpenseImpact_(item, sign) {

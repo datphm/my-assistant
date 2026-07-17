@@ -32,8 +32,8 @@
       <div class="led-window"><div id="tickerTrack" class="led-track">Đang tổng hợp thông tin nhắc việc…</div></div>
       <button id="tickerToggle" class="led-toggle" onclick="toggleTickerVisibility()">Ẩn</button>
     </section>
-    <section id="livePulse" class="live-pulse" aria-live="polite"></section>
-    <section id="summary" class="summary"></section>
+    <section id="livePulse" class="live-pulse" data-home-panel="pulse" aria-live="polite"></section>
+    <section id="summary" class="summary" data-home-panel="summary"></section>
     <nav>
       <button class="active" data-page="today" data-mobile-label="⌂ Hôm nay">Hôm nay</button>
       <button data-page="profile" data-mobile-label="♙ Hồ sơ">Hồ sơ</button>
@@ -47,15 +47,19 @@
     </nav>
 
     <section id="today" class="page active">
+      <details class="card panel-manager">
+        <summary>⚙ Ẩn / hiện các khối ở trang Hôm nay</summary>
+        <div id="homePanelToggles" class="panel-toggle-grid"></div>
+      </details>
       <div class="section-head"><h2>Việc kế tiếp</h2><button onclick="openForm('task')">+ Thêm việc</button></div>
-      <article class="card time-anchor">
+      <article class="card time-anchor" data-home-panel="clock">
         <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
         <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
       </article>
-      <div id="todayCoach" class="today-coach"></div>
-      <section id="assistantBrief" class="assistant-brief" aria-live="polite"></section>
-      <section id="notificationCenter" class="notification-center"></section>
-      <article class="card think-deep">
+      <div id="todayCoach" class="today-coach" data-home-panel="coach"></div>
+      <section id="assistantBrief" class="assistant-brief" data-home-panel="assistant" aria-live="polite"></section>
+      <section id="notificationCenter" class="notification-center" data-home-panel="notifications"></section>
+      <article class="card think-deep" data-home-panel="thinkdeep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
         <h2>Đừng chỉ nhận việc. Hãy chốt đầu ra.</h2>
         <p>Mỗi nhiệm vụ mới phải đi qua 6 câu hỏi trước khi bạn rời màn hình này.</p>
@@ -69,7 +73,7 @@
         </div>
         <p class="deep-mantra">Hỏi rõ → gọi người quyết định → chốt → cập nhật tài liệu → báo lại.</p>
       </article>
-      <article class="card quick-capture">
+      <article class="card quick-capture" data-home-panel="capture">
         <h3>Dán nguyên nhiệm vụ bạn vừa nhận</h3>
         <p class="hint">App sẽ gợi ý chuỗi hành động để bạn chủ động chốt việc, cập nhật tài liệu và báo lại.</p>
         <div class="inline wrap">
@@ -79,13 +83,8 @@
         </div>
         <div id="taskSuggestions" class="task-suggestions"></div>
       </article>
-      <div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div>
-      <div id="kanban" class="kanban"></div>
-      <div class="task-view-tools">
-        <div><h2>Chi tiết công việc</h2><p class="hint">Bạn có thể thu gọn từng việc nhưng vẫn thấy tên, hạn và tiến độ.</p></div>
-        <div><button class="outline small" onclick="setAllTaskFolds(true)">Thu gọn tất cả</button><button class="outline small" onclick="setAllTaskFolds(false)">Mở tất cả</button></div>
-      </div>
-      <div id="tasks" class="cards"></div>
+      <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
+      <section data-home-panel="tasks"><div class="task-view-tools"><div><h2>Chi tiết công việc</h2><p class="hint">Checklist mặc định được thu gọn; mở đúng việc bạn đang làm.</p></div><div><button class="outline small" onclick="setAllTaskFolds(true)">Thu gọn tất cả</button><button class="outline small" onclick="setAllTaskFolds(false)">Mở tất cả</button></div></div><div id="tasks" class="cards"></div></section>
     </section>
 
     <section id="profile" class="page">
@@ -134,6 +133,7 @@
       </div>
       <div id="expenses" class="cards compact-cards"></div>
       <h3>Khoản nợ</h3>
+      <div id="debtPayoffPlan"></div>
       <div id="debts" class="cards"></div>
       <div class="section-head subhead"><h3>Kế hoạch chi lớn / chuyến đi sắp tới</h3><button class="outline" onclick="openForm('plan')">+ Kế hoạch</button></div>
       <div id="moneyCoach" class="cards"></div>
@@ -160,6 +160,7 @@
       </div>
       <div id="studyOverview" class="study-overview"></div>
       <div id="studyMetrics" class="insight-grid"></div>
+      <div id="studyScholarship" class="study-scholarship"></div>
       <div class="study-grid">
         <article class="card"><div class="section-head compact"><h3>Hồ sơ cần đạt</h3><button class="text-button" onclick="openStudyProfileForm()">Sửa</button></div><div id="studyProfileSummary" class="study-profile-summary"></div></article>
         <article class="card"><h3>Kế hoạch tài chính</h3><div id="studyFinance"></div></article>
