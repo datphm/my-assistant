@@ -6,7 +6,7 @@ const HEADERS = {
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
   HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'walkingGoalMinutes', 'waterGoalMl', 'calorieDeficitTarget', 'dailyCalorieTarget', 'limitations', 'updatedAt'],
   WeightLogs: ['id', 'date', 'weightKg', 'note'],
-  HealthLogs: ['id', 'date', 'type', 'amount', 'label', 'note', 'createdAt'],
+  HealthLogs: ['id', 'date', 'type', 'amount', 'durationMinutes', 'steps', 'label', 'source', 'note', 'createdAt'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
@@ -30,7 +30,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-18-reflection-v9';
+const SCHEMA_VERSION = '2026-07-18-health-assistant-v10';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -611,16 +611,20 @@ function logWeight(item) {
 
 function logHealthHabit(item) {
   const type = String(item && item.type || '');
-  if (!/^(water|meal|walk)$/.test(type)) throw new Error('Loại log sức khỏe không hợp lệ.');
+  if (!/^(water|meal|walk|calorie_in|calorie_out|exercise)$/.test(type)) throw new Error('Loại log sức khỏe không hợp lệ.');
   const amount = Math.max(0, Number(item.amount || 0));
   if (type === 'water' && (!amount || amount > 5000)) throw new Error('Lượng nước cần nằm trong khoảng 1–5000 ml.');
+  if (/^(calorie_in|calorie_out|exercise)$/.test(type) && (!amount || amount > 10000)) throw new Error('Calorie cần nằm trong khoảng 1–10.000 kcal.');
   const sheet = getBook_().getSheetByName('HealthLogs');
   const value = {
     id: Utilities.getUuid(), date: item.date ? new Date(item.date) : new Date(), type: type,
-    amount: amount, label: String(item.label || (type === 'water' ? 'Uống nước' : type === 'meal' ? 'Bữa ăn' : 'Đi bộ')).slice(0, 120),
-    note: String(item.note || '').slice(0, 500), createdAt: new Date()
+    amount: amount, label: String(item.label || ({water:'Uống nước',meal:'Bữa ăn',walk:'Đi bộ',calorie_in:'Calories nạp',calorie_out:'Calories tiêu hao',exercise:'Buổi tập'}[type] || 'Sức khỏe')).slice(0, 120),
+    durationMinutes: Math.max(0, Number(item.durationMinutes || 0)), steps: Math.max(0, Number(item.steps || 0)),
+    source: String(item.source || 'Nhập tay').slice(0, 80), note: String(item.note || '').slice(0, 500), createdAt: new Date()
   };
-  sheet.appendRow(HEADERS.HealthLogs.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  // Map by the actual sheet header order so existing accounts keep every old
+  // HealthLogs row aligned when new columns are appended by ensureHeaders_.
+  upsertRow_(sheet, value);
   return Object.assign({}, value, { date: value.date.toISOString(), createdAt: value.createdAt.toISOString() });
 }
 
@@ -1901,7 +1905,7 @@ function getBook_() {
     // A brand-new account needs every sheet. Existing accounts only need the
     // sheets changed by the current schema, avoiding dozens of Spreadsheet API
     // calls on the first load after every deployment.
-    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile'].map(function(name) { return [name, HEADERS[name]]; });
+    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile', 'HealthLogs'].map(function(name) { return [name, HEADERS[name]]; });
     schemaEntries.forEach(([name, headers]) => {
       let sheet = ss.getSheetByName(name);
       if (!sheet) sheet = ss.insertSheet(name);

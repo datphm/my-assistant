@@ -36,6 +36,7 @@
     <section id="summary" class="summary" data-home-panel="summary"></section>
     <nav>
       <button class="active" data-page="today" data-mobile-label="⌂ Hôm nay">Hôm nay</button>
+      <button data-page="assistant" data-mobile-label="✦ Trợ lý">Trợ lý</button>
       <button data-page="profile" data-mobile-label="♙ Hồ sơ">Hồ sơ</button>
       <button data-page="money" data-mobile-label="₫ Tiền">Tiền</button>
       <button data-page="cv" data-mobile-label="▤ CV">CV</button>
@@ -53,7 +54,6 @@
         <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
       </article>
       <div id="todayCoach" class="today-coach" data-home-panel="coach"></div>
-      <section id="assistantBrief" class="assistant-brief" data-home-panel="assistant" aria-live="polite"></section>
       <section id="notificationCenter" class="notification-center" data-home-panel="notifications"></section>
       <article class="card think-deep" data-home-panel="thinkdeep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
@@ -81,6 +81,11 @@
       </article>
       <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
       <section data-home-panel="tasks"><div class="task-view-tools"><div><h2>Chi tiết công việc</h2><p class="hint">Checklist mặc định được thu gọn; mở đúng việc bạn đang làm.</p></div><div><button class="outline small" onclick="setAllTaskFolds(true)">Thu gọn tất cả</button><button class="outline small" onclick="setAllTaskFolds(false)">Mở tất cả</button></div></div><div id="tasks" class="cards"></div></section>
+    </section>
+
+    <section id="assistant" class="page">
+      <div class="section-head"><div><h2>Trợ lý toàn phần</h2><p class="hint">Tổng hợp công việc, thời gian, tiền, sức khỏe, chuyến đi và du học — không làm loãng Kanban.</p></div><button class="outline" onclick="loadAssistantBrief(true)">↻ Cập nhật</button></div>
+      <section id="assistantBrief" class="assistant-brief" aria-live="polite"></section>
     </section>
 
     <section id="profile" class="page">
@@ -180,6 +185,8 @@
         <article class="card"><h3>Hôm nay: nước · bữa ăn · đi bộ</h3><div id="healthHabits" class="habit-dashboard"></div><div class="habit-actions"><button onclick="quickHealthLog('water')">+ 250 ml</button><button class="outline" onclick="quickHealthLog('meal')">+ Bữa ăn</button><button class="outline" onclick="startTimeLog('walk','Đi bộ')">Bắt đầu đi bộ</button></div></article>
         <article class="card calorie-calculator"><h3>Máy tính calorie vận động</h3><p class="hint">Ước tính theo cân nặng, thời lượng và MET; không phải số đo y tế.</p><div class="calculator-inputs"><select id="calorieActivity" onchange="calculateCalories()"><option value="2.8">Đi bộ chậm</option><option value="3.5" selected>Đi bộ vừa</option><option value="4.3">Đi bộ nhanh</option><option value="4">Đạp xe nhẹ</option><option value="3">Bài sức mạnh với ghế</option><option value="5.8">Bơi nhẹ</option></select><input id="calorieMinutes" type="number" min="1" value="20" oninput="calculateCalories()" aria-label="Số phút"><input id="calorieTargetBurn" type="number" min="1" value="300" oninput="calculateCalories()" aria-label="Mục tiêu calorie"></div><div id="calorieCalculatorResult" class="calculator-result"></div></article>
       </div>
+      <div class="section-head subhead"><div><h2>Calorie nạp vào & tiêu hao</h2><p class="hint">Nhập thủ công số liệu từ Apple Health, đồng hồ hoặc nhãn dinh dưỡng.</p></div><button onclick="openForm('healthEntry')">+ Dữ liệu Health</button></div>
+      <div class="health-calorie-grid"><article class="card chart-card"><div id="calorieBalanceSummary"></div><div id="calorieBalanceChart"></div></article><article class="card"><h3>Dữ liệu gần đây</h3><div id="healthEntries" class="health-entry-list"></div></article></div>
       <div class="section-head subhead"><h2>Bài tập hôm nay</h2><button class="outline" onclick="installHealthCalendarUi()">Nhắc mỗi ngày</button></div>
       <div id="workoutSuggestions" class="workout-grid"></div>
       <div class="section-head subhead"><h2>Thực đơn đã lưu</h2><button onclick="openForm('meal')">+ Lưu món</button></div>
@@ -284,7 +291,7 @@
       </div>
     </section>
   </main>
-  <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()">×</button></div><div id="formFields"></div><button class="save" value="default">Lưu</button></form></dialog>
+  <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()" aria-label="Đóng cửa sổ">×</button></div><div id="formFields"></div><div class="dialog-actions"><button type="button" class="cancel" onclick="formDialog.close()">Huỷ</button><button type="submit" class="save" value="default">Lưu</button></div></form></dialog>
   <dialog id="cvViewDialog" class="cv-view-dialog">
     <div class="cv-view-shell">
       <div class="dialog-head"><div><span class="section-kicker">CV ĐẦY ĐỦ</span><h2 id="cvViewTitle">CV</h2><p id="cvViewMeta" class="meta"></p></div><button type="button" class="close" onclick="cvViewDialog.close()">×</button></div>

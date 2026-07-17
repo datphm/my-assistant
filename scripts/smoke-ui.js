@@ -34,7 +34,7 @@ const getElement = id => {
 };
 const page = getElement('today');
 page.classList.contains = name => name === 'active';
-const navButtons = ['today','profile','money','cv','study','food','travel','time','install'].map(name => {
+const navButtons = ['today','assistant','profile','money','cv','study','food','travel','time','install'].map(name => {
   const item = new Element(); item.dataset.page = name; return item;
 });
 const document = {
@@ -98,6 +98,11 @@ try {
       {id:'expense-2',date:new Date().toISOString(),amount:750000,merchant:'Sinh hoạt',direction:'expense',category:'Thiết yếu'}
     ];
     data.timelogs=[{id:'time-1',kind:'work',label:'Công việc',startAt:new Date().toISOString(),endAt:new Date().toISOString(),durationMinutes:90}];
+    data.healthprofile=[{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',dailyCalorieTarget:1900}];
+    data.healthlogs=[
+      {id:'health-1',date:new Date().toISOString(),type:'calorie_in',amount:1700,label:'Tổng bữa ăn',source:'iPhone Health'},
+      {id:'health-2',date:new Date().toISOString(),type:'exercise',amount:320,durationMinutes:35,label:'Đi bộ nhanh',source:'Apple Watch'}
+    ];
     data.studyabroadprofile=[{targetIntakeYear:2028,currentGpa:'3.4',englishTest:'IELTS',currentEnglishScore:'6.5',targetEnglishScore:'7.0',scholarshipTarget:'Toàn phần'}];
     data.studyabroadoptions=[{id:'school-1',school:'Example University',program:'Public Policy',scholarship:'Full tuition',applicationDeadline:new Date(Date.now()+120*86400000).toISOString()}];
     data.studyabroadchecklist=[{id:'study-1',title:'Viết bản nháp SOP',category:'Hồ sơ',dueAt:new Date(Date.now()+14*86400000).toISOString(),status:'todo'}];
@@ -105,14 +110,17 @@ try {
     renderMoney();
     renderStudyAbroad();
     renderCvs();
+    renderHealth();
     document.getElementById('timeDate').value=localDateKey(new Date());
     renderTime();
   `, context, {filename:'smoke-fixtures.js'});
-  if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML || !getElement('studyScholarship').innerHTML || !getElement('reflectionProfile').innerHTML || !getElement('debtPayoffPlan').innerHTML) throw new Error('Dashboard visual did not render');
+  if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML || !getElement('studyScholarship').innerHTML || !getElement('reflectionProfile').innerHTML || !getElement('debtPayoffPlan').innerHTML || !getElement('calorieBalanceChart').innerHTML || !getElement('calorieBalanceSummary').innerHTML) throw new Error('Dashboard visual did not render');
   if (!getElement('tasks').innerHTML.includes('task-checklist-panel') || getElement('tasks').innerHTML.includes('task-checklist-panel" open')) throw new Error('Task checklist must render collapsed');
   if (!getElement('reflectionProfile').innerHTML.includes('Đường đời 4 (13)') || !getElement('reflectionProfile').innerHTML.includes('MANIFEST CÓ CĂN CỨ')) throw new Error('Reflection corrections did not render');
   if (getElement('studyScholarship').innerHTML.includes('scholarship-pillar done')) throw new Error('Scholarship layout class collision returned');
   if (!getElement('debts').innerHTML.includes('Đã trả bớt') || !getElement('debts').innerHTML.includes('Đặt số nợ mới')) throw new Error('Debt adjustment controls did not render');
+  const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
+  if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health')) throw new Error('Assistant tab, mobile dialog actions, or Health import UI missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);
