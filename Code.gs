@@ -60,6 +60,27 @@ function getData() {
   return result;
 }
 
+// Fast path for the app's primary screen. This deliberately avoids loading
+// flights, finance history, CVs and other large sheets on every task click.
+function getTodayData() {
+  const ss = getBook_();
+  ensureDefaultAppSettings_(ss);
+  const allTasks = readRows_(ss.getSheetByName('Tasks'));
+  const openTasks = allTasks.filter(function(task) { return !(task.done === true || task.done === 'TRUE') && task.status !== 'done'; });
+  const recentDone = allTasks.filter(function(task) { return task.done === true || task.done === 'TRUE' || task.status === 'done'; }).slice(-12);
+  const tasks = openTasks.concat(recentDone);
+  const taskIds = new Set(tasks.map(function(task) { return task.id; }));
+  return {
+    partial: true,
+    tasks: tasks,
+    tasksteps: readRows_(ss.getSheetByName('TaskSteps')).filter(function(step) { return taskIds.has(step.taskId); }),
+    taskupdates: readRecentRows_(ss.getSheetByName('TaskUpdates'), 180).filter(function(update) { return taskIds.has(update.taskId); }),
+    notifications: readRecentRows_(ss.getSheetByName('Notifications'), 120),
+    timestate: readRows_(ss.getSheetByName('TimeState')),
+    appsettings: readRows_(ss.getSheetByName('AppSettings'))
+  };
+}
+
 function ensureDefaultReflection_(ss) {
   const sheet = ss.getSheetByName('ReflectionProfile');
   if (readRows_(sheet).length) return;
@@ -675,6 +696,29 @@ function toggleTaskStep(id) {
   return { id: id, done: done };
 }
 
+function setTaskStepDone(id, requestedDone) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getBook_();
+    const sheet = ss.getSheetByName('TaskSteps');
+    const step = readRows_(sheet).find(function(row) { return row.id === id; });
+    if (!step) throw new Error('Không tìm thấy bước checklist.');
+    const done = requestedDone === true || requestedDone === 'true' || requestedDone === 'TRUE';
+    const currentDone = step.done === true || step.done === 'TRUE';
+    if (currentDone !== done) upsertRow_(sheet, Object.assign({}, step, { done: done, completedAt: done ? new Date() : '' }));
+    const siblings = readRows_(sheet).filter(function(row) { return row.taskId === step.taskId; });
+    const next = siblings.filter(function(item) { return !(item.done === true || item.done === 'TRUE'); }).sort(function(a, b) { return Number(a.position || 0) - Number(b.position || 0); })[0];
+    const parentSheet = ss.getSheetByName('Tasks');
+    const task = readRows_(parentSheet).find(function(row) { return row.id === step.taskId; });
+    if (task) upsertRow_(parentSheet, Object.assign({}, task, { nextAction: next ? next.title : task.nextAction, lastProgressAt: new Date(), status: task.status === 'todo' ? 'doing' : task.status }));
+    if (!next && siblings.length && task) createNotification_('close_loop', 'Checklist đã xong — hãy đóng vòng lặp', 'Cập nhật tài liệu, báo lại người giao rồi tick hoàn thành: ' + task.title, 'task', task.id, 'high', 'close-loop:' + task.id + ':' + new Date().toISOString().slice(0, 10));
+    return { id: id, done: done, taskId: step.taskId, nextAction: next ? next.title : '' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function addTaskUpdate(item) {
   const ss = getBook_();
   const taskSheet = ss.getSheetByName('Tasks');
@@ -825,26 +869,34 @@ function saveCvWithFile(item, file) {
 }
 
 function completeTask(id) {
-  const sheet = getBook_().getSheetByName('Tasks');
-  const task = readRows_(sheet).find(function(row) { return row.id === id; });
-  if (!task) throw new Error('Không tìm thấy việc.');
-  upsertRow_(sheet, Object.assign({}, task, { done: true, status: 'done', lastProgressAt: new Date(), followUpAt: '', lastFollowUpEmailedAt: '' }));
-  if (task.calendarEventId) try {
-    const event = CalendarApp.getDefaultCalendar().getEventById(task.calendarEventId);
-    if (event) { event.removeAllReminders(); if (!/^✓ /.test(event.getTitle())) event.setTitle('✓ ' + event.getTitle()); }
-  } catch (error) {}
-  const updateSheet = getBook_().getSheetByName('TaskUpdates');
-  const update = { id: Utilities.getUuid(), taskId: id, note: 'Đã đóng việc; đã kiểm tra đầu ra, tài liệu và bước báo lại.', status: 'done', createdAt: new Date(), nextFollowUpAt: '' };
-  updateSheet.appendRow(HEADERS.TaskUpdates.map(function(key) { return update[key] === undefined ? '' : update[key]; }));
-  return { ok: true };
+  const lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getBook_();
+    const sheet = ss.getSheetByName('Tasks');
+    const task = readRows_(sheet).find(function(row) { return row.id === id; });
+    if (!task) throw new Error('Không tìm thấy việc.');
+    if (task.done === true || task.done === 'TRUE' || task.status === 'done') return { ok: true, alreadyDone: true, id: id };
+    upsertRow_(sheet, Object.assign({}, task, { done: true, status: 'done', lastProgressAt: new Date(), followUpAt: '', lastFollowUpEmailedAt: '' }));
+    if (task.calendarEventId) try {
+      const event = CalendarApp.getDefaultCalendar().getEventById(task.calendarEventId);
+      if (event) { event.removeAllReminders(); if (!/^✓ /.test(event.getTitle())) event.setTitle('✓ ' + event.getTitle()); }
+    } catch (error) {}
+    const updateSheet = ss.getSheetByName('TaskUpdates');
+    const update = { id: Utilities.getUuid(), taskId: id, note: 'Đã đóng việc; đã kiểm tra đầu ra, tài liệu và bước báo lại.', status: 'done', createdAt: new Date(), nextFollowUpAt: '' };
+    updateSheet.appendRow(HEADERS.TaskUpdates.map(function(key) { return update[key] === undefined ? '' : update[key]; }));
+    return { ok: true, id: id };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function startTask(id) {
   const sheet = getBook_().getSheetByName('Tasks');
   const task = readRows_(sheet).find(row => row.id === id);
   if (!task) throw new Error('Không tìm thấy việc.');
-  upsertRow_(sheet, Object.assign({}, task, { status: 'doing', startedAt: new Date(), snoozedUntil: '' }));
-  return { ok: true };
+  upsertRow_(sheet, Object.assign({}, task, { status: 'doing', startedAt: task.startedAt || new Date(), lastProgressAt: task.lastProgressAt || new Date(), snoozedUntil: '' }));
+  return { ok: true, id: id, startedAt: task.startedAt || new Date().toISOString() };
 }
 
 function toggleTaskChase(id) {
@@ -1757,6 +1809,17 @@ function readRows_(sheet) {
   if (all.length < 2) return [];
   const headers = all[0];
   return all.slice(1).filter(row => row.some(value => value !== '')).map(row => Object.fromEntries(headers.map((h, i) => [h, serialize_(row[i])])));
+}
+function readRecentRows_(sheet, maxRows) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return [];
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const count = Math.min(Math.max(1, Number(maxRows || 100)), lastRow - 1);
+  const startRow = lastRow - count + 1;
+  return sheet.getRange(startRow, 1, count, lastColumn).getValues()
+    .filter(function(row) { return row.some(function(value) { return value !== ''; }); })
+    .map(function(row) { return Object.fromEntries(headers.map(function(header, index) { return [header, serialize_(row[index])]; })); });
 }
 function serialize_(value) {
   if (!(value instanceof Date)) return value;
