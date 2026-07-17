@@ -13,7 +13,7 @@ const HEADERS = {
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
-  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'spiritualMoney', 'spiritualCareer', 'spiritualTravel', 'spiritualStudy', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
+  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'spiritualMoney', 'spiritualCareer', 'spiritualTravel', 'spiritualStudy', 'manifestGoal', 'manifestEvidence', 'manifestUpdatedAt', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
   StudyAbroadProfile: ['id', 'targetIntakeYear', 'targetCountries', 'targetDegree', 'targetFields', 'currentEducation', 'currentGpa', 'englishTest', 'currentEnglishScore', 'targetEnglishScore', 'otherLanguages', 'budgetVnd', 'savingsVnd', 'fundingPlan', 'scholarshipTarget', 'passportStatus', 'visaNotes', 'motivation', 'constraints', 'updatedAt'],
   StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
   StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
@@ -30,7 +30,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-whole-journey-v8';
+const SCHEMA_VERSION = '2026-07-18-reflection-v9';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -200,7 +200,12 @@ function getAssistantBrief(forceRefresh) {
 
 function ensureDefaultReflection_(ss) {
   const sheet = ss.getSheetByName('ReflectionProfile');
-  if (readRows_(sheet).length) return;
+  const existing = readRows_(sheet);
+  if (existing.length) {
+    const current = existing[0], birth = String(current.dateOfBirth || '').slice(0, 10);
+    if (birth === '2003-05-12' && Number(current.lifePathNumber) !== 4) upsertRow_(sheet, Object.assign({}, current, { lifePathNumber: 4, updatedAt: new Date() }));
+    return;
+  }
   upsertRow_(sheet, {
     id: 'default', fullName: 'Phạm Nguyễn Gia Đạt', dateOfBirth: '2003-05-12', birthTime: '10:25:00',
     birthPlace: '', gender: 'male', zodiacSign: 'Kim Ngưu', lifePathNumber: 4,
@@ -231,14 +236,15 @@ function seedReflectionDetails_(ss) {
 
 function ensureReflectionSynthesis_(ss) {
   const props = PropertiesService.getUserProperties();
-  if (props.getProperty('REFLECTION_SYNTHESIS_V2_SEEDED')) return;
+  if (props.getProperty('REFLECTION_SYNTHESIS_V3_SEEDED')) return;
   const sheet = ss.getSheetByName('ReflectionProfile');
   const current = readRows_(sheet)[0] || { id: 'default' };
   const defaults = defaultReflectionSynthesis_();
   const update = Object.assign({}, current, { id: current.id || 'default', updatedAt: new Date() });
   Object.keys(defaults).forEach(function(key) { if (!String(update[key] || '').trim()) update[key] = defaults[key]; });
+  if (String(update.spiritualStudy || '').indexOf('đại vận Giáp Dần tăng xu hướng') >= 0) update.spiritualStudy = defaults.spiritualStudy;
   upsertRow_(sheet, update);
-  props.setProperty('REFLECTION_SYNTHESIS_V2_SEEDED', '1');
+  props.setProperty('REFLECTION_SYNTHESIS_V3_SEEDED', '1');
 }
 
 function defaultReflectionSynthesis_() {
@@ -254,7 +260,7 @@ function defaultReflectionSynthesis_() {
     spiritualMoney: 'Góc chiêm nghiệm: Vũ Khúc, Thiên Phủ, Lộc Tồn và Hóa Lộc thường được liên hệ với năng lực quản lý nguồn lực; các dấu hiệu Tuần/Triệt và Kiếp Sát nhắc tránh quyết định tiền bạc vội hoặc quá tự tin. Thực tế nên dùng ngân sách, quỹ dự phòng và giới hạn rủi ro rõ ràng.',
     spiritualCareer: 'Góc chiêm nghiệm: Tử Vi – Thiên Tướng ở Quan Lộc, Mặt Trời và Mercury gần MC, cùng đường đời 4/22 gợi hướng vận hành, quản lý, xây hệ thống, chiến lược và vai trò có trách nhiệm. Cần kiểm chứng bằng năng lực, trải nghiệm và phản hồi thực tế.',
     spiritualTravel: 'Góc chiêm nghiệm: Thiên Di có Thất Sát và Địa Không gợi môi trường bên ngoài nhiều thay đổi, đòi hỏi chuẩn bị kỹ và khả năng ứng biến. Với chuyến đi dài, nên có kế hoạch giấy tờ, tiền dự phòng, bảo hiểm và phương án B.',
-    spiritualStudy: 'Góc chiêm nghiệm: đại vận Giáp Dần tăng xu hướng mở rộng và tự chủ; Venus nhà IX cùng các điểm nhấn nhà X có thể được dùng như lời nhắc khám phá học tập quốc tế. Đây không phải dự đoán chắc chắn: khả năng du học phụ thuộc chủ yếu vào ngoại ngữ, hồ sơ, tài chính, học bổng và visa.'
+    spiritualStudy: 'Góc chiêm nghiệm mở rộng: đại vận Giáp Dần 2025–2034 tượng trưng cho tự chủ, cạnh tranh và mở hướng mới; năm Bính Ngọ 2026 nhấn mạnh đầu ra, tiếng nói và sự hiện diện. Venus nhà IX hỗ trợ hứng thú học xa, ngôn ngữ và giao lưu quốc tế; Mặt Trời–Mercury gần MC gợi việc du học nên gắn với câu chuyện nghề nghiệp rõ ràng. Thân cư Phu Thê cùng Phá Quân–Hóa Lộc nhắc chọn cộng sự, cố vấn và người giới thiệu cẩn thận. Rủi ro biểu tượng nằm ở phân tán mục tiêu, giao tiếp vội và hồ sơ thiếu kiểm tra chéo. Dấu hiệu thực tế tích cực là điểm ngoại ngữ tăng, shortlist có deadline, SOP được phản biện, thư giới thiệu được xác nhận và quỹ hồ sơ tăng đều. Đây không phải dự đoán chắc chắn.'
   };
 }
 
@@ -497,6 +503,17 @@ function saveReflectionProfile(item) {
   return 'Đã cập nhật hồ sơ định hướng và chiêm nghiệm.';
 }
 
+function saveManifest(item) {
+  const sheet = getBook_().getSheetByName('ReflectionProfile');
+  const current = readRows_(sheet)[0] || { id: 'default' };
+  const value = Object.assign({}, current, {
+    id: current.id || 'default', manifestGoal: String(item.goal || '').trim(),
+    manifestEvidence: String(item.evidence || '').trim(), manifestUpdatedAt: new Date(), updatedAt: new Date()
+  });
+  upsertRow_(sheet, value);
+  return { manifestGoal: value.manifestGoal, manifestEvidence: value.manifestEvidence };
+}
+
 function zodiacSign_(dateValue) {
   const date = new Date(dateValue);
   if (isNaN(date)) return '';
@@ -507,7 +524,8 @@ function zodiacSign_(dateValue) {
 }
 
 function lifePathNumber_(dateValue) {
-  const digits = String(dateValue || '').replace(/\D/g, '').split('').map(Number);
+  const raw = String(dateValue || ''), datePart = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : raw;
+  const digits = datePart.replace(/\D/g, '').split('').map(Number);
   if (!digits.length) return '';
   let sum = digits.reduce(function(total, value) { return total + value; }, 0);
   while (sum > 9 && ![11, 22, 33].includes(sum)) sum = String(sum).split('').reduce(function(total, value) { return total + Number(value); }, 0);
@@ -1882,7 +1900,7 @@ function getBook_() {
     // A brand-new account needs every sheet. Existing accounts only need the
     // sheets changed by the current schema, avoiding dozens of Spreadsheet API
     // calls on the first load after every deployment.
-    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs'].map(function(name) { return [name, HEADERS[name]]; });
+    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile'].map(function(name) { return [name, HEADERS[name]]; });
     schemaEntries.forEach(([name, headers]) => {
       let sheet = ss.getSheetByName(name);
       if (!sheet) sheet = ss.insertSheet(name);

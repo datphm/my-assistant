@@ -109,6 +109,9 @@ try {
     renderTime();
   `, context, {filename:'smoke-fixtures.js'});
   if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML || !getElement('studyScholarship').innerHTML || !getElement('reflectionProfile').innerHTML || !getElement('debtPayoffPlan').innerHTML) throw new Error('Dashboard visual did not render');
+  if (!getElement('tasks').innerHTML.includes('task-checklist-panel') || getElement('tasks').innerHTML.includes('task-checklist-panel" open')) throw new Error('Task checklist must render collapsed');
+  if (!getElement('reflectionProfile').innerHTML.includes('Đường đời 4 (13)') || !getElement('reflectionProfile').innerHTML.includes('MANIFEST CÓ CĂN CỨ')) throw new Error('Reflection corrections did not render');
+  if (getElement('studyScholarship').innerHTML.includes('scholarship-pillar done')) throw new Error('Scholarship layout class collision returned');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);
