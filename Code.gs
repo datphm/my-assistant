@@ -1031,23 +1031,70 @@ function toggleTaskChase(id) {
   return next === 'urgent' ? 'Đã bật Bám đuổi: nhắc lại mỗi 15 phút khi đến hạn.' : 'Đã chuyển về nhắc thường mỗi 2 giờ.';
 }
 
-function createTaskFromMessage(message) {
-  const parsed = parseTaskMessage_(message);
-  const result = addItem('Tasks', parsed);
-  parsed.id = result.id;
-  parsed.calendarWarning = result.calendarWarning;
-  parsed.suggestions = suggestTaskPlan(message);
-  const stepSheet = getBook_().getSheetByName('TaskSteps');
-  parsed.suggestions.forEach(function(step, index) {
-    const value = { id: Utilities.getUuid(), taskId: parsed.id, title: step.title, done: false, position: index + 1, dueAt: step.dueAt, createdAt: new Date(), completedAt: '' };
-    stepSheet.appendRow(HEADERS.TaskSteps.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
-  });
-  const taskSheet = getBook_().getSheetByName('Tasks');
-  const saved = readRows_(taskSheet).find(function(row) { return row.id === parsed.id; }) || parsed;
-  upsertRow_(taskSheet, Object.assign({}, saved, { outcome: parsed.title, nextAction: parsed.suggestions[0] && parsed.suggestions[0].title, definitionOfDone: 'Đầu ra đã được cập nhật vào tài liệu/lịch liên quan và đã báo lại người giao việc.' }));
-  if (PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') try { syncTaskToCalendar(parsed.id); } catch (error) {}
-  parsed.checklistCount = parsed.suggestions.length;
-  return parsed;
+function createTaskFromMessage(message, requestId) {
+  const text = String(message || '').trim();
+  if (!text) throw new Error('Hãy nhập nội dung công việc.');
+  const normalized = text.toLowerCase().replace(/\s+/g, ' ');
+  const digest = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, normalized)).slice(0, 32);
+  const props = PropertiesService.getUserProperties();
+  const lock = LockService.getUserLock();
+  lock.waitLock(15000);
+  try {
+    const now = Date.now();
+    const recent = JSON.parse(props.getProperty('TASK_CAPTURE_RECENT_V2') || '[]').filter(function(entry) { return now - Number(entry.at || 0) < 5 * 60 * 1000; });
+    const duplicate = recent.find(function(entry) { return entry.hash === digest || (requestId && entry.requestId === requestId); });
+    if (duplicate && duplicate.taskId) {
+      const duplicateBook = getBook_();
+      const existingTask = readRows_(duplicateBook.getSheetByName('Tasks')).find(function(row) { return row.id === duplicate.taskId; });
+      if (existingTask) {
+        const existingSteps = readRows_(duplicateBook.getSheetByName('TaskSteps')).filter(function(step) { return step.taskId === duplicate.taskId; });
+        return Object.assign({}, JSON.parse(JSON.stringify(existingTask)), { steps: JSON.parse(JSON.stringify(existingSteps)), checklistCount: existingSteps.length, duplicate: true });
+      }
+    }
+
+    const ss = getBook_();
+    const parsed = parseTaskMessage_(text);
+    const suggestions = suggestTaskPlan(text);
+    const taskId = Utilities.getUuid();
+    const task = Object.assign({}, parsed, {
+      id: taskId,
+      done: false,
+      lastEmailedAt: '',
+      status: parsed.status || 'todo',
+      calendarEventId: '',
+      startedAt: '',
+      snoozedUntil: '',
+      outcome: parsed.title,
+      nextAction: suggestions[0] ? suggestions[0].title : '',
+      definitionOfDone: 'Đầu ra đã được cập nhật vào tài liệu/lịch liên quan và đã báo lại người giao việc.',
+      lastProgressAt: '',
+      lastFollowUpEmailedAt: ''
+    });
+    ss.getSheetByName('Tasks').appendRow(HEADERS.Tasks.map(function(key) { return task[key] === undefined ? '' : task[key]; }));
+
+    const createdAt = new Date();
+    const steps = suggestions.map(function(step, index) {
+      return { id: Utilities.getUuid(), taskId: taskId, title: step.title, done: false, position: index + 1, dueAt: step.dueAt, createdAt: createdAt, completedAt: '' };
+    });
+    if (steps.length) {
+      const stepSheet = ss.getSheetByName('TaskSteps');
+      const rows = steps.map(function(step) { return HEADERS.TaskSteps.map(function(key) { return step[key] === undefined ? '' : step[key]; }); });
+      stepSheet.getRange(stepSheet.getLastRow() + 1, 1, rows.length, HEADERS.TaskSteps.length).setValues(rows);
+    }
+
+    const result = Object.assign({}, task, {
+      dueAt: new Date(task.dueAt).toISOString(),
+      suggestions: suggestions,
+      steps: steps.map(function(step) { return Object.assign({}, step, { dueAt: new Date(step.dueAt).toISOString(), createdAt: createdAt.toISOString() }); }),
+      checklistCount: steps.length,
+      duplicate: false
+    });
+    recent.unshift({ hash: digest, requestId: String(requestId || ''), at: now, taskId: taskId });
+    props.setProperty('TASK_CAPTURE_RECENT_V2', JSON.stringify(recent.slice(0, 8)));
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function syncTaskToCalendar(id) {

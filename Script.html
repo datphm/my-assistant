@@ -484,9 +484,18 @@ function createTaskFromMessage(){
   const box=$('taskMessage'); const message=box.value.trim();
   if(!message){toast('Nhập một câu công việc trước đã.');return}
   const key='create-task-message';if(!beginAction(key))return;
+  const button=$('captureTaskButton'),requestId=(window.crypto&&window.crypto.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random()}`);
+  if(button){button.disabled=true;button.textContent='Đang tạo…'}
+  box.readOnly=true;
+  $('taskSuggestions').innerHTML='<div class="capture-saving"><b>Đang lưu một lần duy nhất…</b><span>Bạn có thể ở nguyên trang; không cần bấm lại.</span></div>';
   google.script.run.withSuccessHandler(task=>{
-    endAction(key);toast(`Đã tạo: ${task.title} · ${task.checklistCount||0} bước checklist · hạn ${dateTime(task.dueAt)}.`);box.value='';$('taskSuggestions').innerHTML='';refreshToday(true);
-  }).withFailureHandler(e=>{endAction(key);fail(e)}).createTaskFromMessage(message);
+    endAction(key);box.readOnly=false;if(button){button.disabled=false;button.textContent='Tạo 1 việc'}
+    if(!data.tasks.some(x=>x.id===task.id))data.tasks.push(task);
+    (task.steps||[]).forEach(step=>{if(!data.tasksteps.some(x=>x.id===step.id))data.tasksteps.push(step)});
+    box.value='';$('taskSuggestions').innerHTML='';render();
+    toast(task.duplicate?`Việc này đã được tạo trước đó — không tạo bản trùng.`:`Đã tạo: ${task.title} · ${task.checklistCount||0} bước · hạn ${dateTime(task.dueAt)}.`);
+    if(!task.duplicate&&task.dueAt&&appSettings().calendarReminders!=='no')google.script.run.withFailureHandler(()=>{}).syncTaskToCalendar(task.id);
+  }).withFailureHandler(e=>{endAction(key);box.readOnly=false;if(button){button.disabled=false;button.textContent='Tạo 1 việc'}$('taskSuggestions').innerHTML='';fail(e)}).createTaskFromMessage(message,requestId);
 }
 let suggestedTasks=[];
 function suggestTaskPlan(){
