@@ -33,6 +33,7 @@
       <button data-page="profile" data-mobile-label="♙ Hồ sơ">Hồ sơ</button>
       <button data-page="money" data-mobile-label="₫ Tiền">Tiền</button>
       <button data-page="cv" data-mobile-label="▤ CV">CV</button>
+      <button data-page="study" data-mobile-label="✦ Du học">Du học</button>
       <button data-page="food" data-mobile-label="♡ Sức khỏe">Sức khỏe</button>
       <button data-page="travel" data-mobile-label="✈ Chuyến đi">Chuyến đi</button>
       <button data-page="time" data-mobile-label="◷ Thời gian">Thời gian</button>
@@ -132,6 +133,24 @@
         <div id="careerAnalysis" class="cards"></div>
         <div id="reflectionProfile" class="cards"></div>
       </div>
+    </section>
+
+    <section id="study" class="page">
+      <div class="section-head">
+        <div><h2>Kế hoạch du học 2027–2028</h2><p class="hint">Biến mong muốn du học thành deadline, ngân sách và hành động có thể theo dõi.</p></div>
+        <div class="actions"><button class="outline" onclick="openStudyProfileForm()">Cập nhật mục tiêu</button><button onclick="openForm('studyOption')">+ Trường / chương trình</button></div>
+      </div>
+      <div id="studyOverview" class="study-overview"></div>
+      <div id="studyMetrics" class="insight-grid"></div>
+      <div class="study-grid">
+        <article class="card"><div class="section-head compact"><h3>Hồ sơ cần đạt</h3><button class="text-button" onclick="openStudyProfileForm()">Sửa</button></div><div id="studyProfileSummary" class="study-profile-summary"></div></article>
+        <article class="card"><h3>Kế hoạch tài chính</h3><div id="studyFinance"></div></article>
+      </div>
+      <div class="section-head subhead"><h2>Trường & chương trình đang cân nhắc</h2><button class="outline" onclick="openForm('studyOption')">+ Thêm lựa chọn</button></div>
+      <div id="studyOptions" class="cards"></div>
+      <div class="section-head subhead"><h2>Lộ trình hồ sơ</h2><button class="outline" onclick="openForm('studyChecklist')">+ Thêm bước</button></div>
+      <div id="studyRoadmap" class="study-roadmap"></div>
+      <article class="card study-reminder"><h3>Quy tắc chống trì hoãn</h3><p>Mỗi tuần chỉ cần chốt một đầu ra du học: một bài thi thử, một trường được nghiên cứu, một tài liệu hoàn chỉnh hoặc một khoản tiền được chuyển vào quỹ. Không để “tìm hiểu du học” tồn tại như một việc vô hạn.</p></article>
     </section>
 
     <section id="food" class="page">

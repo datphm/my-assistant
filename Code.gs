@@ -10,7 +10,10 @@ const HEADERS = {
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
-  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
+  ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'spiritualMoney', 'spiritualCareer', 'spiritualTravel', 'spiritualStudy', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
+  StudyAbroadProfile: ['id', 'targetIntakeYear', 'targetCountries', 'targetDegree', 'targetFields', 'currentEducation', 'currentGpa', 'englishTest', 'currentEnglishScore', 'targetEnglishScore', 'otherLanguages', 'budgetVnd', 'savingsVnd', 'fundingPlan', 'scholarshipTarget', 'passportStatus', 'visaNotes', 'motivation', 'constraints', 'updatedAt'],
+  StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
+  StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
   Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
@@ -21,7 +24,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-reflection-synthesis-v3';
+const SCHEMA_VERSION = '2026-07-17-study-abroad-v4';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -44,6 +47,7 @@ function getData() {
   ensureDefaultReflection_(ss);
   seedReflectionDetails_(ss);
   ensureReflectionSynthesis_(ss);
+  ensureDefaultStudyAbroad_(ss);
   const result = {};
   Object.keys(HEADERS).forEach(name => result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)));
   result.dailyguidance = buildDailyGuidance_(ss);
@@ -83,14 +87,14 @@ function seedReflectionDetails_(ss) {
 
 function ensureReflectionSynthesis_(ss) {
   const props = PropertiesService.getUserProperties();
-  if (props.getProperty('REFLECTION_SYNTHESIS_V1_SEEDED')) return;
+  if (props.getProperty('REFLECTION_SYNTHESIS_V2_SEEDED')) return;
   const sheet = ss.getSheetByName('ReflectionProfile');
   const current = readRows_(sheet)[0] || { id: 'default' };
   const defaults = defaultReflectionSynthesis_();
   const update = Object.assign({}, current, { id: current.id || 'default', updatedAt: new Date() });
   Object.keys(defaults).forEach(function(key) { if (!String(update[key] || '').trim()) update[key] = defaults[key]; });
   upsertRow_(sheet, update);
-  props.setProperty('REFLECTION_SYNTHESIS_V1_SEEDED', '1');
+  props.setProperty('REFLECTION_SYNTHESIS_V2_SEEDED', '1');
 }
 
 function defaultReflectionSynthesis_() {
@@ -102,8 +106,76 @@ function defaultReflectionSynthesis_() {
     personalitySummary: 'Gợi ý tổng hợp: thực tế, thích tạo trật tự và có khả năng nhìn cả vận hành lẫn con người. Bạn thường làm tốt khi đầu ra rõ ràng, có quyền chủ động và thấy tác động cụ thể. Khi quá nhiều việc cùng mở, áp lực và nhu cầu làm đúng có thể biến thành chậm bắt đầu, giữ việc trong đầu hoặc thiếu bước báo lại.',
     strengthsSummary: 'Tư duy hệ thống; quản lý nguồn lực; bền bỉ với mục tiêu có ý nghĩa; quan sát chi tiết; kết nối và điều phối; có tiềm năng biến vấn đề mơ hồ thành checklist, tài liệu và quy trình có thể bàn giao.',
     weaknessesSummary: 'Dễ ôm nhiều đầu việc, đánh giá thấp thời gian chuyển đổi, cầu toàn trước khi gửi bản nháp và chậm hỏi khi thiếu thông tin. Khi căng thẳng có thể phản ứng nhanh nhưng truyền đạt chưa đủ bối cảnh, hoặc làm xong phần việc mà quên cập nhật tài liệu và báo lại người giao.',
-    improvementSummary: 'Mỗi nhiệm vụ cần 5 điểm bắt buộc: đầu ra, deadline, người cần hỏi, tài liệu phải cập nhật và câu báo lại. Bắt đầu bằng bước 10 phút; đặt mốc kiểm tra giữa chặng; gửi bản nháp sớm; dùng Calendar cho hạn chính và Kanban cho hành động nhỏ. Cuối ngày đóng vòng lặp: đã chốt gì, còn kẹt gì, bước tiếp theo khi nào.'
+    improvementSummary: 'Mỗi nhiệm vụ cần 5 điểm bắt buộc: đầu ra, deadline, người cần hỏi, tài liệu phải cập nhật và câu báo lại. Bắt đầu bằng bước 10 phút; đặt mốc kiểm tra giữa chặng; gửi bản nháp sớm; dùng Calendar cho hạn chính và Kanban cho hành động nhỏ. Cuối ngày đóng vòng lặp: đã chốt gì, còn kẹt gì, bước tiếp theo khi nào.',
+    spiritualMoney: 'Góc chiêm nghiệm: Vũ Khúc, Thiên Phủ, Lộc Tồn và Hóa Lộc thường được liên hệ với năng lực quản lý nguồn lực; các dấu hiệu Tuần/Triệt và Kiếp Sát nhắc tránh quyết định tiền bạc vội hoặc quá tự tin. Thực tế nên dùng ngân sách, quỹ dự phòng và giới hạn rủi ro rõ ràng.',
+    spiritualCareer: 'Góc chiêm nghiệm: Tử Vi – Thiên Tướng ở Quan Lộc, Mặt Trời và Mercury gần MC, cùng đường đời 4/22 gợi hướng vận hành, quản lý, xây hệ thống, chiến lược và vai trò có trách nhiệm. Cần kiểm chứng bằng năng lực, trải nghiệm và phản hồi thực tế.',
+    spiritualTravel: 'Góc chiêm nghiệm: Thiên Di có Thất Sát và Địa Không gợi môi trường bên ngoài nhiều thay đổi, đòi hỏi chuẩn bị kỹ và khả năng ứng biến. Với chuyến đi dài, nên có kế hoạch giấy tờ, tiền dự phòng, bảo hiểm và phương án B.',
+    spiritualStudy: 'Góc chiêm nghiệm: đại vận Giáp Dần tăng xu hướng mở rộng và tự chủ; Venus nhà IX cùng các điểm nhấn nhà X có thể được dùng như lời nhắc khám phá học tập quốc tế. Đây không phải dự đoán chắc chắn: khả năng du học phụ thuộc chủ yếu vào ngoại ngữ, hồ sơ, tài chính, học bổng và visa.'
   };
+}
+
+function ensureDefaultStudyAbroad_(ss) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('STUDY_ABROAD_V1_SEEDED')) return;
+  const profileSheet = ss.getSheetByName('StudyAbroadProfile');
+  if (!readRows_(profileSheet).length) {
+    upsertRow_(profileSheet, {
+      id: 'default', targetIntakeYear: 2028, targetCountries: '', targetDegree: 'Master / chương trình sau đại học',
+      targetFields: 'Operations, Business, Management, Technology', currentEducation: '', currentGpa: '', englishTest: 'IELTS',
+      currentEnglishScore: '', targetEnglishScore: '7.0', otherLanguages: '', budgetVnd: '', savingsVnd: '',
+      fundingPlan: 'Tiết kiệm cá nhân + học bổng + hỗ trợ gia đình (nếu có)', scholarshipTarget: 'Học bổng bán phần hoặc toàn phần',
+      passportStatus: 'Chưa cập nhật', visaNotes: '', motivation: 'Mở rộng năng lực, trải nghiệm quốc tế và cơ hội nghề nghiệp',
+      constraints: 'Ngoại ngữ, tài chính, tiến độ hồ sơ và quản trị thời gian', updatedAt: new Date()
+    });
+  }
+  const checklistSheet = ss.getSheetByName('StudyAbroadChecklist');
+  if (!readRows_(checklistSheet).length) {
+    const defaults = [
+      ['Định hướng', 'Chốt bậc học, ngành và 2–3 quốc gia mục tiêu', '2026-09-30T18:00:00', 'todo', 'So sánh cơ hội việc làm, học phí, visa và ngôn ngữ.'],
+      ['Ngoại ngữ', 'Thi thử IELTS/TOEFL để có điểm xuất phát', '2026-10-31T10:00:00', 'todo', 'Chọn đúng bài thi theo yêu cầu của trường.'],
+      ['Tài chính', 'Lập ngân sách du học và số tiền cần tiết kiệm mỗi tháng', '2026-11-30T18:00:00', 'todo', 'Gồm học phí, sinh hoạt, visa, vé máy bay, bảo hiểm và quỹ khẩn cấp.'],
+      ['Danh sách trường', 'Lập shortlist 6–10 chương trình: an toàn, phù hợp, tham vọng', '2027-03-31T18:00:00', 'todo', 'Lưu deadline và yêu cầu riêng của từng trường.'],
+      ['Hồ sơ', 'Chuẩn bị CV học thuật, SOP, bảng điểm và người viết thư giới thiệu', '2027-06-30T18:00:00', 'todo', 'Xin tài liệu sớm; không chờ sát deadline.'],
+      ['Ngoại ngữ', 'Đạt điểm ngoại ngữ mục tiêu hoặc đặt lịch thi lại', '2027-08-31T18:00:00', 'todo', 'Để còn thời gian thi lại trước mùa nộp hồ sơ.'],
+      ['Nộp hồ sơ', 'Nộp đợt sớm và hồ sơ học bổng', '2027-11-30T18:00:00', 'todo', 'Kiểm tra lệ phí, portfolio và câu hỏi bổ sung.'],
+      ['Visa & đi học', 'Chốt offer, chứng minh tài chính, visa, nhà ở và vé bay', '2028-06-30T18:00:00', 'todo', 'Theo checklist chính thức của quốc gia và trường.']
+    ];
+    const rows = defaults.map(function(row) {
+      const item = { id: Utilities.getUuid(), category: row[0], title: row[1], dueAt: new Date(row[2]), status: row[3], notes: row[4] };
+      return HEADERS.StudyAbroadChecklist.map(function(key) { return item[key] === undefined ? '' : item[key]; });
+    });
+    checklistSheet.getRange(2, 1, rows.length, HEADERS.StudyAbroadChecklist.length).setValues(rows);
+  }
+  props.setProperty('STUDY_ABROAD_V1_SEEDED', '1');
+}
+
+function saveStudyAbroadProfile(item) {
+  const sheet = getBook_().getSheetByName('StudyAbroadProfile');
+  const current = readRows_(sheet)[0] || {};
+  upsertRow_(sheet, Object.assign({}, current, item, { id: 'default', updatedAt: new Date() }));
+  return 'Đã cập nhật mục tiêu du học.';
+}
+
+function toggleStudyChecklist(id) {
+  const sheet = getBook_().getSheetByName('StudyAbroadChecklist');
+  const item = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!item) throw new Error('Không tìm thấy bước du học.');
+  item.status = item.status === 'done' ? 'todo' : 'done';
+  upsertRow_(sheet, item);
+  return item;
+}
+
+function createTaskFromStudyChecklist(id) {
+  const sheet = getBook_().getSheetByName('StudyAbroadChecklist');
+  const item = readRows_(sheet).find(function(row) { return row.id === id; });
+  if (!item) throw new Error('Không tìm thấy bước du học.');
+  const task = {
+    title: 'Du học · ' + item.title,
+    dueAt: item.dueAt || new Date(Date.now() + 7 * 86400000),
+    area: 'Cá nhân', minutes: 30, status: 'todo', chaseMode: 'normal'
+  };
+  const result = addItem('Tasks', task);
+  return { id: result.id, title: task.title, dueAt: task.dueAt, area: task.area, minutes: task.minutes, status: task.status, chaseMode: task.chaseMode, calendarWarning: result.calendarWarning };
 }
 
 function defaultTuViNotes_() {
