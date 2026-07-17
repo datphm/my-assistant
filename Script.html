@@ -30,28 +30,29 @@ function refreshPageData(page){if(loadedPages.has(page)){renderCurrentPage();ret
 function refreshFullData(){const page=document.querySelector('.page.active')?.id||'today';refreshPageData(page)}
 function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',theme:'dark',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes',dailyLogEnabled:'yes',dailyLogMorningTime:'07:45:00',dailyLogEveningTime:'21:30:00',spotifyUrl:'',spotifyFocusEnabled:'yes'}}
 function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
+function renderSafely(name,fn){try{return fn()}catch(error){window.__maRenderErrors=window.__maRenderErrors||[];window.__maRenderErrors.push({name:name,message:error&&error.message||String(error)});console.error('My Assistant render error · '+name,error);return null}}
 function render(){
-  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
-  $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
-  $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
-  renderTodayCoach(open);
-  renderAssistantBrief();
-  renderJourneyControl();
-  renderKanban();
-  renderNotifications();
-  renderTimeAnchor();
-  renderCurrentPage();
+  const open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt||8640000000000000)-new Date(b.dueAt||8640000000000000));
+  renderSafely('summary',()=>{$('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`});
+  renderSafely('tasks',()=>{$('tasks').innerHTML=open.length?open.slice(0,8).map(t=>renderSafely('task:'+String(t.id||''),()=>taskCard(t))||`<article class="card"><h3>${esc(t.title||'Việc chưa có tên')}</h3><p class="meta">Mục này đang dùng giao diện an toàn.</p></article>`).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>'});
+  renderSafely('todayCoach',()=>renderTodayCoach(open));
+  renderSafely('assistantBrief',renderAssistantBrief);
+  renderSafely('journeyControl',renderJourneyControl);
+  renderSafely('kanban',renderKanban);
+  renderSafely('notifications',renderNotifications);
+  renderSafely('timeAnchor',renderTimeAnchor);
+  renderSafely('currentPage',renderCurrentPage);
 }
 function renderCurrentPage(){
   const page=document.querySelector('.page.active')?.id||'today';
-  if(page==='profile')renderProfile();
-  if(page==='money')renderMoney();
-  if(page==='cv')renderCvs();
-  if(page==='study')renderStudyAbroad();
-  if(page==='food')renderHealth();
-  if(page==='travel')renderTravel();
-  if(page==='time')renderTime();
-  if(page==='install')renderInstall();
+  if(page==='profile')renderSafely('profile',renderProfile);
+  if(page==='money')renderSafely('money',renderMoney);
+  if(page==='cv')renderSafely('cv',renderCvs);
+  if(page==='study')renderSafely('study',renderStudyAbroad);
+  if(page==='food')renderSafely('food',renderHealth);
+  if(page==='travel')renderSafely('travel',renderTravel);
+  if(page==='time')renderSafely('time',renderTime);
+  if(page==='install')renderSafely('install',renderInstall);
 }
 function taskCard(t){
   const steps=taskSteps(t.id),doneSteps=steps.filter(s=>truth(s.done)).length,next=steps.find(s=>!truth(s.done)),updates=taskUpdates(t.id),progress=steps.length?Math.round(doneSteps/steps.length*100):0,project=(data.projects||[]).find(p=>p.id===t.projectId);
@@ -73,10 +74,10 @@ function renderTodayCoach(open){
   box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY · CHẾ ĐỘ ${assistantMode==='overwhelmed'?'GIẢI CỨU':assistantMode==='low'?'ÍT NĂNG LƯỢNG':'TẬP TRUNG'}</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu ${session} phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button>${appSettings().spotifyFocusEnabled!=='no'?'<button class="outline" onclick="openSpotifyFocus()">🎧 Spotify</button>':''}</div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
 }
 function loadAssistantBrief(force=false){
-  if(assistantBriefLoading)return;assistantBriefLoading=true;renderAssistantBrief();
-  google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief()}).withFailureHandler(e=>{assistantBriefLoading=false;renderAssistantBrief();fail(e)}).getAssistantBrief(force);
+  if(assistantBriefLoading)return;assistantBriefLoading=true;renderSafely('assistantBriefLoading',renderAssistantBrief);
+  google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderSafely('assistantBriefLoaded',renderAssistantBrief)}).withFailureHandler(e=>{assistantBriefLoading=false;renderSafely('assistantBriefFailure',renderAssistantBrief);fail(e)}).getAssistantBrief(force);
 }
-function setAssistantMode(mode){assistantMode=mode;safeStorageSet('my-assistant-mode-v1',mode);renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'));renderAssistantBrief()}
+function setAssistantMode(mode){assistantMode=mode;safeStorageSet('my-assistant-mode-v1',mode);renderSafely('todayCoachMode',()=>renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done')));renderSafely('assistantBriefMode',renderAssistantBrief)}
 function assistantMoney(value){return appSettings().hideFinancialAmounts==='yes'?'••••':vnd(value)}
 function assistantCheckKey(){return `my-assistant-day-check-v1:${localDateKey(new Date())}`}
 function assistantChecks(){return safeStoredJson(assistantCheckKey(),{})}
