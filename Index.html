@@ -78,6 +78,7 @@
 
     <section id="profile" class="page">
       <div class="section-head"><h2>Hồ sơ cá nhân</h2><button onclick="openProfileForm()">Cập nhật</button></div>
+      <div id="profileInsights" class="insight-grid"></div>
       <div id="profileCard" class="cards"></div>
       <div class="section-head subhead"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div>
       <div id="walletsProfile" class="cards"></div>
@@ -101,6 +102,7 @@
         <button data-money-period="twoYears" onclick="setMoneyPeriod('twoYears')">2 năm</button>
       </div>
       <div id="financeInsights" class="insight-grid"></div>
+      <div id="financeWarnings" class="finance-warnings"></div>
       <div class="money-grid">
         <article class="card chart-card"><div class="section-head compact"><h3>Phân bổ dòng tiền</h3><button class="text-button" onclick="openForm('allocation')">Thiết lập %</button></div><div id="allocationChart"></div></article>
         <article class="card"><h3>Số dư ví & tài khoản</h3><div id="walletsMoney" class="wallet-list"></div></article>
@@ -161,6 +163,10 @@
       <p class="hint">Lộ trình dành cho người đang ít vận động: khởi đầu rất nhỏ, ưu tiên bài ít tác động và tăng dần. Đây không phải chẩn đoán hay phác đồ y khoa.</p>
       <div id="healthMetrics" class="insight-grid"></div>
       <div id="weightProgress" class="health-progress"></div>
+      <div class="health-tools-grid">
+        <article class="card"><h3>Hôm nay: nước · bữa ăn · đi bộ</h3><div id="healthHabits" class="habit-dashboard"></div><div class="habit-actions"><button onclick="quickHealthLog('water')">+ 250 ml</button><button class="outline" onclick="quickHealthLog('meal')">+ Bữa ăn</button><button class="outline" onclick="startTimeLog('walk','Đi bộ')">Bắt đầu đi bộ</button></div></article>
+        <article class="card calorie-calculator"><h3>Máy tính calorie vận động</h3><p class="hint">Ước tính theo cân nặng, thời lượng và MET; không phải số đo y tế.</p><div class="calculator-inputs"><select id="calorieActivity" onchange="calculateCalories()"><option value="2.8">Đi bộ chậm</option><option value="3.5" selected>Đi bộ vừa</option><option value="4.3">Đi bộ nhanh</option><option value="4">Đạp xe nhẹ</option><option value="3">Bài sức mạnh với ghế</option><option value="5.8">Bơi nhẹ</option></select><input id="calorieMinutes" type="number" min="1" value="20" oninput="calculateCalories()" aria-label="Số phút"><input id="calorieTargetBurn" type="number" min="1" value="300" oninput="calculateCalories()" aria-label="Mục tiêu calorie"></div><div id="calorieCalculatorResult" class="calculator-result"></div></article>
+      </div>
       <div class="section-head subhead"><h2>Bài tập hôm nay</h2><button class="outline" onclick="installHealthCalendarUi()">Nhắc mỗi ngày</button></div>
       <div id="workoutSuggestions" class="workout-grid"></div>
       <div class="section-head subhead"><h2>Thực đơn đã lưu</h2><button onclick="openForm('meal')">+ Lưu món</button></div>

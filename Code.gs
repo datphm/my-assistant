@@ -2,8 +2,9 @@ const HEADERS = {
   Tasks: ['id', 'title', 'dueAt', 'area', 'minutes', 'done', 'lastEmailedAt', 'status', 'calendarEventId', 'chaseMode', 'startedAt', 'snoozedUntil'],
   Debts: ['id', 'name', 'balance', 'annualRate', 'minimumPayment', 'dueDay'],
   Meals: ['id', 'title', 'calories', 'ingredients', 'notes'],
-  HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'limitations', 'updatedAt'],
+  HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'walkingGoalMinutes', 'waterGoalMl', 'calorieDeficitTarget', 'dailyCalorieTarget', 'limitations', 'updatedAt'],
   WeightLogs: ['id', 'date', 'weightKg', 'note'],
+  HealthLogs: ['id', 'date', 'type', 'amount', 'label', 'note', 'createdAt'],
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
@@ -15,17 +16,17 @@ const HEADERS = {
   StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
   StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
   AppSettings: ['id', 'timezone', 'locale', 'startupPage', 'theme', 'fontScale', 'reducedMotion', 'compactMode', 'hideFinancialAmounts', 'defaultTaskMinutes', 'defaultChaseMode', 'quietHoursStart', 'quietHoursEnd', 'emailReminders', 'calendarReminders', 'routineReminders', 'flightReminders', 'confirmBeforeDelete', 'updatedAt'],
-  Profile: ['id', 'fullName', 'dateOfBirth', 'bloodType', 'emergencyContact', 'medicalNotes', 'updatedAt'],
+  Profile: ['id', 'fullName', 'preferredName', 'dateOfBirth', 'bloodType', 'phone', 'email', 'address', 'nationality', 'emergencyContact', 'emergencyContactRelation', 'allergies', 'medications', 'medicalConditions', 'medicalNotes', 'passportNumber', 'passportExpiry', 'insuranceProvider', 'insuranceNumber', 'documentFolderUrl', 'personalGoals', 'privateNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
-  RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'updatedAt'],
+  RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'waterReminderEnabled', 'waterStartTime', 'waterEndTime', 'waterIntervalMinutes', 'mealLogReminderEnabled', 'mealLogReminderTime', 'walkReminderEnabled', 'walkReminderTime', 'updatedAt'],
   Plans: ['id', 'name', 'type', 'targetDate', 'estimatedCost', 'savedAmount', 'priority', 'notes'],
   Notifications: ['id', 'type', 'title', 'message', 'targetType', 'targetId', 'priority', 'dedupeKey', 'createdAt', 'readAt']
 };
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-17-app-settings-v5';
+const SCHEMA_VERSION = '2026-07-17-health-finance-profile-v6';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -45,6 +46,7 @@ function getData() {
   ensureDefaultFlights_(ss);
   ensureDefaultRoutine_(ss);
   ensureDefaultHealth_(ss);
+  ensureHabitDefaults_(ss);
   ensureDefaultReflection_(ss);
   seedReflectionDetails_(ss);
   ensureReflectionSynthesis_(ss);
@@ -402,7 +404,8 @@ function ensureDefaultHealth_(ss) {
   upsertRow_(sheet, {
     id: 'default', heightCm: 165, startWeightKg: 90, currentWeightKg: 90,
     goal1Kg: 75, goal2Kg: 70, targetDate: '2026-10-31', activityLevel: 'sedentary',
-    exerciseTime: '18:30:00', limitations: '', updatedAt: new Date()
+    exerciseTime: '18:30:00', walkingGoalMinutes: 20, waterGoalMl: 2500,
+    calorieDeficitTarget: 500, dailyCalorieTarget: '', limitations: '', updatedAt: new Date()
   });
 }
 
@@ -430,6 +433,21 @@ function logWeight(item) {
   return 'Đã ghi cân nặng ' + weight + ' kg.';
 }
 
+function logHealthHabit(item) {
+  const type = String(item && item.type || '');
+  if (!/^(water|meal|walk)$/.test(type)) throw new Error('Loại log sức khỏe không hợp lệ.');
+  const amount = Math.max(0, Number(item.amount || 0));
+  if (type === 'water' && (!amount || amount > 5000)) throw new Error('Lượng nước cần nằm trong khoảng 1–5000 ml.');
+  const sheet = getBook_().getSheetByName('HealthLogs');
+  const value = {
+    id: Utilities.getUuid(), date: item.date ? new Date(item.date) : new Date(), type: type,
+    amount: amount, label: String(item.label || (type === 'water' ? 'Uống nước' : type === 'meal' ? 'Bữa ăn' : 'Đi bộ')).slice(0, 120),
+    note: String(item.note || '').slice(0, 500), createdAt: new Date()
+  };
+  sheet.appendRow(HEADERS.HealthLogs.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  return Object.assign({}, value, { date: value.date.toISOString(), createdAt: value.createdAt.toISOString() });
+}
+
 function deleteWeightLog(id) {
   deleteItem('WeightLogs', id);
   const ss = getBook_();
@@ -448,13 +466,35 @@ function ensureDefaultRoutine_(ss) {
   upsertRow_(sheet, {
     id: 'default', breakfastTime: '08:00:00', lunchTime: '12:30:00', dinnerTime: '19:00:00',
     bedtime: '23:30:00', wakeTime: '07:30:00', targetSleepHours: 8,
-    sleepLatencyMinutes: 15, logIntervalMinutes: 60, updatedAt: new Date()
+    sleepLatencyMinutes: 15, logIntervalMinutes: 60, waterReminderEnabled: 'yes',
+    waterStartTime: '08:00:00', waterEndTime: '21:00:00', waterIntervalMinutes: 120,
+    mealLogReminderEnabled: 'yes', mealLogReminderTime: '20:30:00',
+    walkReminderEnabled: 'yes', walkReminderTime: '18:30:00', updatedAt: new Date()
   });
+}
+
+function ensureHabitDefaults_(ss) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('HEALTH_HABIT_DEFAULTS_V1')) return;
+  const healthSheet = ss.getSheetByName('HealthProfile');
+  const health = readRows_(healthSheet)[0] || { id: 'default' };
+  const healthDefaults = { walkingGoalMinutes: 20, waterGoalMl: 2500, calorieDeficitTarget: 500 };
+  Object.keys(healthDefaults).forEach(function(key) { if (health[key] === '' || health[key] === undefined) health[key] = healthDefaults[key]; });
+  health.updatedAt = new Date();
+  upsertRow_(healthSheet, health);
+  const routineSheet = ss.getSheetByName('RoutineSettings');
+  const routine = readRows_(routineSheet)[0] || { id: 'default' };
+  const routineDefaults = { waterReminderEnabled: 'yes', waterStartTime: '08:00:00', waterEndTime: '21:00:00', waterIntervalMinutes: 120, mealLogReminderEnabled: 'yes', mealLogReminderTime: '20:30:00', walkReminderEnabled: 'yes', walkReminderTime: '18:30:00' };
+  Object.keys(routineDefaults).forEach(function(key) { if (routine[key] === '' || routine[key] === undefined) routine[key] = routineDefaults[key]; });
+  routine.updatedAt = new Date();
+  upsertRow_(routineSheet, routine);
+  props.setProperty('HEALTH_HABIT_DEFAULTS_V1', '1');
 }
 
 function saveRoutineSettings(item) {
   const sheet = getBook_().getSheetByName('RoutineSettings');
-  upsertRow_(sheet, Object.assign({}, item, { id: 'default', updatedAt: new Date() }));
+  const current = readRows_(sheet)[0] || {};
+  upsertRow_(sheet, Object.assign({}, current, item, { id: 'default', updatedAt: new Date() }));
   return 'Đã lưu lịch sinh hoạt. Bấm “Tạo nhắc Calendar” để cập nhật lịch Google.';
 }
 
@@ -641,6 +681,12 @@ function deleteItem(type, id) {
   if (row < 1) throw new Error('Không tìm thấy mục cần xoá.');
   const existing = readRows_(sheet).find(r => r.id === id) || {};
   if (type === 'Expenses') applyExpenseImpact_(existing, -1);
+  if (type === 'Tasks' && existing.calendarEventId) {
+    try {
+      const event = CalendarApp.getDefaultCalendar().getEventById(existing.calendarEventId);
+      if (event) event.deleteEvent();
+    } catch (error) {}
+  }
   sheet.deleteRow(row + 1);
   return { ok: true };
 }
@@ -1162,6 +1208,36 @@ function sendRoutineReminders_(recipient, now) {
     lastRoutineSent.exercise = dateKey;
     props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
   }
+  const healthLogs = readRows_(ss.getSheetByName('HealthLogs')).filter(function(log) {
+    return log.date && Utilities.formatDate(new Date(log.date), tz, 'yyyy-MM-dd') === dateKey;
+  });
+  const waterToday = healthLogs.filter(function(log) { return log.type === 'water'; }).reduce(function(sum, log) { return sum + Number(log.amount || 0); }, 0);
+  const waterGoal = Math.max(250, Number(health.waterGoalMl || 2500));
+  const waterStart = String(settings.waterStartTime || '08:00').slice(0, 5);
+  const waterEnd = String(settings.waterEndTime || '21:00').slice(0, 5);
+  const waterInterval = Math.max(60, Number(settings.waterIntervalMinutes || 120)) * 60000;
+  const lastWaterPrompt = Number(props.getProperty('LAST_WATER_PROMPT') || 0);
+  if (settings.waterReminderEnabled !== 'no' && hhmm >= waterStart && hhmm <= waterEnd && waterToday < waterGoal && now.getTime() - lastWaterPrompt >= waterInterval) {
+    const remainingWater = Math.max(0, waterGoal - waterToday);
+    MailApp.sendEmail(recipient, 'My Assistant · Uống một cốc nước', 'Bạn đã log ' + waterToday + '/' + waterGoal + ' ml hôm nay. Uống một cốc vừa phải và bấm +250 ml trong tab Sức khỏe. Còn ' + remainingWater + ' ml theo mục tiêu bạn tự đặt.');
+    createNotification_('health_water', 'Đến giờ uống nước', 'Đã log ' + waterToday + '/' + waterGoal + ' ml hôm nay.', 'health', 'default', 'normal', 'health-water:' + dateKey + ':' + Math.floor(now.getTime() / waterInterval));
+    props.setProperty('LAST_WATER_PROMPT', String(now.getTime()));
+  }
+  const mealCount = healthLogs.filter(function(log) { return log.type === 'meal'; }).length;
+  const mealLogTime = String(settings.mealLogReminderTime || '20:30').slice(0, 5);
+  if (settings.mealLogReminderEnabled !== 'no' && hhmm >= mealLogTime && mealCount < 3 && lastRoutineSent.mealLog !== dateKey) {
+    MailApp.sendEmail(recipient, 'My Assistant · Log nhanh bữa ăn', 'Hôm nay bạn mới log ' + mealCount + ' bữa. Chỉ cần ghi tên bữa/món; không cần hoàn hảo hay nhớ chính xác từng gram.');
+    createNotification_('health_meal', 'Bạn đã log bữa ăn chưa?', 'Đã ghi ' + mealCount + ' bữa hôm nay.', 'health', 'default', 'normal', 'health-meal:' + dateKey);
+    lastRoutineSent.mealLog = dateKey;
+  }
+  const walkTime = String(settings.walkReminderTime || health.exerciseTime || '18:30').slice(0, 5);
+  const walkedInHealthLog = healthLogs.some(function(log) { return log.type === 'walk'; });
+  if (settings.walkReminderEnabled !== 'no' && !movedToday && !walkedInHealthLog && hhmm >= walkTime && lastRoutineSent.walkLog !== dateKey) {
+    MailApp.sendEmail(recipient, 'My Assistant · Đi bộ 10 phút rồi log', 'Không cần đủ 20 phút ngay. Đi 5–10 phút, sau đó bấm Bắt đầu trong tab Sức khỏe để app ghi thời gian và ước tính calorie.');
+    createNotification_('health_walk', 'Đi bộ bản nhỏ nhất', '5–10 phút vẫn được tính. Bắt đầu ngay trong tab Sức khỏe.', 'health', 'default', 'high', 'health-walk:' + dateKey);
+    lastRoutineSent.walkLog = dateKey;
+  }
+  props.setProperty('ROUTINE_LAST_SENT', JSON.stringify(lastRoutineSent));
   ensureDefaultReflection_(ss);
   const reflectionProfile = readRows_(ss.getSheetByName('ReflectionProfile'))[0] || {};
   const guidanceTime = String(settings.wakeTime || '07:30').slice(0, 5);
@@ -1206,7 +1282,9 @@ function installRoutineCalendar() {
     ['Ăn sáng · My Assistant', settings.breakfastTime, 30],
     ['Ăn trưa · My Assistant', settings.lunchTime, 45],
     ['Ăn tối · My Assistant', settings.dinnerTime, 45],
-    ['Chuẩn bị ngủ · My Assistant', settings.bedtime, 30]
+    ['Chuẩn bị ngủ · My Assistant', settings.bedtime, 30],
+    ['Log bữa ăn hôm nay · My Assistant', settings.mealLogReminderTime || '20:30', 10],
+    ['Đi bộ bản nhỏ nhất · My Assistant', settings.walkReminderTime || '18:30', 15]
   ];
   const ids = definitions.map(function(def) {
     const start = nextDateAt_(def[1]);
@@ -1216,7 +1294,7 @@ function installRoutineCalendar() {
     return series.getId();
   });
   props.setProperty('ROUTINE_EVENT_IDS', JSON.stringify(ids));
-  return 'Đã tạo 4 điểm neo hằng ngày trong Google Calendar trong 1 năm.';
+  return 'Đã tạo 6 điểm neo hằng ngày trong Google Calendar trong 1 năm, gồm log bữa ăn và đi bộ.';
 }
 
 function installHealthCalendar() {
