@@ -1,0 +1,36 @@
+#!/bin/sh
+
+# My Assistant publishes every intentional commit on main. Run detached so a
+# temporary GitHub/DNS outage never makes the commit itself feel slow.
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+branch=$(git branch --show-current 2>/dev/null)
+remote=$(git remote get-url origin 2>/dev/null)
+
+[ "$branch" = "main" ] || exit 0
+case "$remote" in
+  *github.com/datphm/my-assistant.git) ;;
+  *) exit 0 ;;
+esac
+
+log_file="${TMPDIR:-/tmp}/my-assistant-auto-push.log"
+lock_dir="${TMPDIR:-/tmp}/my-assistant-auto-push.lock"
+
+nohup sh -c '
+  repo_root=$1
+  log_file=$2
+  lock_dir=$3
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    exit 0
+  fi
+  trap '\''rmdir "$lock_dir" 2>/dev/null'\'' EXIT
+  cd "$repo_root" || exit 0
+  for delay in 0 10 30 60 120; do
+    if [ "$delay" -gt 0 ]; then sleep "$delay"; fi
+    if git push origin main >>"$log_file" 2>&1; then
+      exit 0
+    fi
+  done
+  exit 1
+' sh "$repo_root" "$log_file" "$lock_dir" </dev/null >/dev/null 2>&1 &
+
+exit 0
