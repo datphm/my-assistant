@@ -5,6 +5,9 @@ let viewingCvId='';
 let initialPageApplied=false;
 let fullDataLoaded=false,todayLoading=false,fullLoading=false,formSaving=false;
 const pendingActions=new Set();
+const defaultKanbanFold={overdue:false,upcoming:false,done:true};
+let kanbanCollapsed=(()=>{try{return Object.assign({},defaultKanbanFold,JSON.parse(localStorage.getItem('my-assistant-kanban-fold-v1')||'{}'))}catch(e){return Object.assign({},defaultKanbanFold)}})();
+const kanbanScrollPositions={};
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 const $=id=>document.getElementById(id);
 const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
@@ -122,14 +125,26 @@ function calculateSleepWindow(){
   $('sleepSuggestions').innerHTML=`<div><b>${wake(5)}</b><span>5 chu kỳ · khoảng 7 giờ 30 phút</span></div><div class="best"><b>${wake(6)}</b><span>6 chu kỳ · khoảng 9 giờ</span></div><p class="hint">Nếu phải dậy lúc ${esc(target)}, hãy ưu tiên đủ ít nhất 7 giờ ngủ. Đây là ước tính, không phải chẩn đoán y khoa.</p>`;
 }
 function renderKanban(){
+  document.querySelectorAll('.kanban-list[data-kanban-key]').forEach(list=>kanbanScrollPositions[list.dataset.kanbanKey]=list.scrollTop);
   const now=new Date();
   const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   const overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now);
   const upcoming=open.filter(t=>!t.dueAt||new Date(t.dueAt)>now);
-  const done=data.tasks.filter(t=>truth(t.done)||t.status==='done').slice(-6).reverse();
-  const col=(title,items,empty)=>`<section class="kanban-col"><h3>${title}</h3>${items.length?items.slice(0,6).map(t=>`<article class="kanban-card"><b>${esc(t.title)}</b><span>${dateTime(t.dueAt)}</span><div><button onclick="editItem('task','${t.id}')">Sửa</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button>${truth(t.done)?'':`<button onclick="complete('${t.id}')">Xong</button>`}</div></article>`).join(''):`<p class="meta">${empty}</p>`}</section>`;
-  $('kanban').innerHTML=col('Đang cháy / hôm nay',overdue,'Không có việc quá hạn.')+col('Sắp tới',upcoming,'Chưa có việc sắp tới.')+col('Đã xong',done,'Chưa tick xong việc nào.');
+  const done=data.tasks.filter(t=>truth(t.done)||t.status==='done').slice(-12).reverse();
+  const card=t=>`<article class="kanban-card"><b>${esc(t.title)}</b><span>${dateTime(t.dueAt)}</span><div><button onclick="editItem('task','${t.id}')">Sửa</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button>${truth(t.done)?'':`<button onclick="complete('${t.id}')">Xong</button>`}</div></article>`;
+  const col=(key,title,items,empty)=>{
+    const folded=!!kanbanCollapsed[key],hidden=Math.max(0,items.length-2);
+    const nearest=items.length?(key==='done'?`${items.length} việc hoàn thành gần đây`:(items[0].dueAt?`Gần nhất: ${dateTime(items[0].dueAt)}`:'Có việc chưa đặt hạn')):empty;
+    return `<section class="kanban-col ${folded?'collapsed':''}">
+      <div class="kanban-col-head"><div><h3>${title}<span class="kanban-count">${items.length}</span></h3><small>${esc(nearest)}</small></div><button class="kanban-toggle" onclick="toggleKanbanColumn('${key}')" aria-expanded="${!folded}">${folded?'Mở':'Thu gọn'} <span aria-hidden="true">${folded?'⌄':'⌃'}</span></button></div>
+      ${items.length?`<div class="kanban-list" data-kanban-key="${key}" onscroll="rememberKanbanScroll('${key}',this.scrollTop)">${items.map(card).join('')}</div>${folded&&hidden?`<button class="kanban-more" onclick="toggleKanbanColumn('${key}')">+ ${hidden} việc khác · mở để xem</button>`:''}`:`<p class="meta kanban-empty">${empty}</p>`}
+    </section>`;
+  };
+  $('kanban').innerHTML=col('overdue','Đang cháy / hôm nay',overdue,'Không có việc quá hạn.')+col('upcoming','Sắp tới',upcoming,'Chưa có việc sắp tới.')+col('done','Đã xong',done,'Chưa tick xong việc nào.');
+  requestAnimationFrame(()=>document.querySelectorAll('.kanban-list[data-kanban-key]').forEach(list=>list.scrollTop=kanbanScrollPositions[list.dataset.kanbanKey]||0));
 }
+function rememberKanbanScroll(key,value){kanbanScrollPositions[key]=value}
+function toggleKanbanColumn(key){kanbanCollapsed[key]=!kanbanCollapsed[key];localStorage.setItem('my-assistant-kanban-fold-v1',JSON.stringify(kanbanCollapsed));renderKanban()}
 
 function renderNotifications(){
   const box=$('notificationCenter');if(!box)return;
