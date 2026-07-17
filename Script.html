@@ -706,6 +706,7 @@ function bootApp(){
   document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
   applyAppSettings();renderTimeAnchor();
   load();
+  window.__maMainReady=true;
 }
 try{bootApp()}catch(error){
   document.body.classList.remove('today-loading','full-loading');

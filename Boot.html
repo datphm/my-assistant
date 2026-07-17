@@ -1,0 +1,128 @@
+<script>
+(function () {
+  var bootDataLoading = false;
+  var bootPageLoading = false;
+
+  function byId(id) { return document.getElementById(id); }
+  function clean(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
+  function isDone(task) { return task && (task.done === true || task.done === 'TRUE' || task.status === 'done'); }
+  function setClock() {
+    var clock = byId('currentClock');
+    if (clock) clock.textContent = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
+  }
+  function showBootMessage(title, detail) {
+    var summary = byId('summary');
+    if (!summary) return;
+    summary.innerHTML = '<small>CHẾ ĐỘ ỔN ĐỊNH</small><b>' + clean(title) + '</b><span>' + clean(detail) + '</span>';
+  }
+  function showBootError(message) {
+    window.__maBootError = String(message || 'Lỗi JavaScript chưa xác định');
+    var existing = byId('bootDiagnostic');
+    if (existing) return;
+    var bar = document.createElement('div');
+    bar.id = 'bootDiagnostic';
+    bar.className = 'boot-diagnostic';
+    bar.textContent = 'App đã tự chuyển sang chế độ ổn định. Dữ liệu vẫn an toàn.';
+    var nav = document.querySelector('nav');
+    if (nav && nav.parentNode) nav.parentNode.insertBefore(bar, nav.nextSibling);
+  }
+
+  window.addEventListener('error', function (event) {
+    showBootError((event && event.message) || 'Lỗi khởi động');
+  });
+  window.addEventListener('unhandledrejection', function () {
+    showBootError('Tác vụ nền không hoàn thành');
+  });
+
+  function activateBasicPage(page) {
+    var button = document.querySelector('nav button[data-page="' + page + '"]');
+    var section = byId(page);
+    if (!button || !section) return;
+    var active = document.querySelectorAll('nav button,.page');
+    for (var i = 0; i < active.length; i++) active[i].classList.remove('active');
+    button.classList.add('active');
+    section.classList.add('active');
+    try { location.hash = page; } catch (ignore) {}
+    if (window.__maMainReady && typeof window.renderCurrentPage === 'function') {
+      try { window.renderCurrentPage(); } catch (error) { showBootError(error.message); }
+    } else if (page !== 'today') {
+      loadBasicPage(page);
+    }
+  }
+
+  function renderBasicToday(payload) {
+    payload = payload || {};
+    window.__maBootPayload = payload;
+    var tasks = (payload.tasks || []).filter(function (task) { return !isDone(task); });
+    var summary = byId('summary');
+    if (summary) summary.innerHTML = '<small>HÔM NAY</small><b>' + tasks.length + ' việc đang mở</b><span>Chế độ tải nhanh đang hoạt động.</span>';
+    var next = tasks.filter(function (task) { return task.dueAt; }).sort(function (a,b) { return new Date(a.dueAt) - new Date(b.dueAt); })[0];
+    var nextClock = byId('nextTaskClock');
+    var nextTitle = byId('nextTaskTitle');
+    if (nextClock) nextClock.textContent = next ? new Date(next.dueAt).toLocaleString('vi-VN') : 'Chưa có deadline';
+    if (nextTitle) nextTitle.textContent = next ? next.title : '';
+    var taskBox = byId('tasks');
+    if (taskBox) taskBox.innerHTML = tasks.slice(0, 8).map(function (task) {
+      return '<article class="card"><h3>' + clean(task.title) + '</h3><p class="meta">' + clean(task.dueAt ? new Date(task.dueAt).toLocaleString('vi-VN') : 'Chưa đặt hạn') + '</p></article>';
+    }).join('') || '<div class="empty">Không có việc đang mở.</div>';
+    var kanban = byId('kanban');
+    if (kanban) kanban.innerHTML = '<section class="kanban-col"><h3>Việc đang mở</h3>' + tasks.slice(0, 20).map(function (task) {
+      return '<article class="kanban-card"><b>' + clean(task.title) + '</b><span>' + clean(task.status || 'Cần làm') + '</span></article>';
+    }).join('') + '</section>';
+  }
+
+  function loadBasicToday() {
+    if (bootDataLoading || window.__maMainReady) return;
+    bootDataLoading = true;
+    showBootMessage('Đang tải dữ liệu an toàn…', 'Không cần tải lại hoặc bấm nhiều lần.');
+    try {
+      google.script.run.withSuccessHandler(function (payload) {
+        bootDataLoading = false;
+        if (!window.__maMainReady) renderBasicToday(payload);
+      }).withFailureHandler(function (error) {
+        bootDataLoading = false;
+        showBootMessage('Không kết nối được Google Sheets', (error && error.message) || 'Hãy thử lại sau một phút.');
+      }).getTodayData();
+    } catch (error) {
+      bootDataLoading = false;
+      showBootError(error.message);
+      showBootMessage('Không khởi tạo được kết nối', 'App vẫn cho phép chuyển tab.');
+    }
+  }
+
+  function loadBasicPage(page) {
+    if (bootPageLoading || window.__maMainReady) return;
+    bootPageLoading = true;
+    try {
+      google.script.run.withSuccessHandler(function (payload) {
+        bootPageLoading = false;
+        window.__maBootPagePayload = payload || {};
+        var section = byId(page);
+        if (section && !section.querySelector('.boot-page-note')) {
+          var note = document.createElement('div');
+          note.className = 'card boot-page-note';
+          note.innerHTML = '<b>Dữ liệu tab đã kết nối.</b><p class="meta">App đang dùng chế độ ổn định; các nút chính vẫn dùng được.</p>';
+          section.insertBefore(note, section.firstChild);
+        }
+      }).withFailureHandler(function (error) {
+        bootPageLoading = false;
+        showBootError((error && error.message) || 'Không tải được tab');
+      }).getPageData(page);
+    } catch (error) { bootPageLoading = false; showBootError(error.message); }
+  }
+
+  var navButtons = document.querySelectorAll('nav button');
+  for (var i = 0; i < navButtons.length; i++) {
+    navButtons[i].onclick = function () { activateBasicPage(this.getAttribute('data-page')); };
+  }
+  setClock();
+  window.setInterval(setClock, 1000);
+  window.setTimeout(function () {
+    if (!window.__maMainReady) loadBasicToday();
+  }, 800);
+})();
+</script>
