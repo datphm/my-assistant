@@ -289,10 +289,24 @@ function renderMoney(){
   renderAllocation(tx);
   renderMoneyCharts(tx,totalBalance,totalDebt);
   renderDebtPayoffPlan(totalDebt);
-  $('debts').innerHTML=data.debts.map(d=>`<article class="card"><div class="card-top"><div><h3>${esc(d.name)} <span class="amount">${vnd(d.balance)}</span></h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay}</p></div><div class="card-actions"><button class="outline small" onclick="openForm('debtAdjust',{debtId:'${d.id}',direction:'decrease'})">+ / − số nợ</button><button class="outline small" onclick="editItem('debt','${d.id}')">Sửa thông tin</button><button class="outline small danger" onclick="removeItem('Debts','${d.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
+  $('debts').innerHTML=data.debts.map(debtCard).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
   const recent=data.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,12);
   $('expenses').innerHTML=recent.map(e=>`<article class="card"><div class="card-top"><div><h3>${esc(e.merchant)} <span class="amount ${e.direction==='income'?'positive':''}">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')}${e.debtId?' · đã trừ vào khoản nợ':''} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('expense','${e.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Expenses','${e.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
   renderPlans(totalBalance,totalDebt);
+}
+
+function debtCard(d){
+  return `<article class="card debt-card"><div class="debt-card-head"><div><span class="section-kicker">KHOẢN NỢ</span><h3>${esc(d.name)}</h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay||'—'}</p></div><div class="debt-balance"><small>SỐ NỢ HIỆN TẠI</small><b>${vnd(d.balance)}</b></div></div><div class="debt-actions"><button class="debt-paid" onclick="openDebtAdjustment('${d.id}','decrease')">✓ Đã trả bớt</button><button class="outline" onclick="openDebtAdjustment('${d.id}','increase')">+ Tăng số nợ</button><button class="outline" onclick="openDebtAdjustment('${d.id}','set')">✎ Đặt số nợ mới</button><button class="outline" onclick="editItem('debt','${d.id}')">Sửa lãi / hạn</button><button class="outline danger" onclick="removeItem('Debts','${d.id}')">Xoá khoản nợ</button></div></article>`;
+}
+function openDebtAdjustment(id,direction){
+  const debt=(data.debts||[]).find(d=>d.id===id);if(!debt){toast('Không tìm thấy khoản nợ.');return}
+  openForm('debtAdjust',{debtId:id,direction});
+  $('formFields').innerHTML=`<div class="debt-adjust-summary"><small>${direction==='decrease'?'GHI NHẬN ĐÃ TRẢ':direction==='increase'?'GHI NHẬN NỢ TĂNG':'ĐẶT LẠI SỐ DƯ NỢ'}</small><b>${esc(debt.name)}</b><span>Hiện tại: ${vnd(debt.balance)}</span></div>`+$('formFields').innerHTML;
+}
+function debtAdjustmentPreview(item){
+  const debt=(data.debts||[]).find(d=>d.id===item.debtId),current=Number(debt?.balance||0),amount=Math.abs(Number(item.amount||0));
+  const next=item.direction==='increase'?current+amount:item.direction==='decrease'?Math.max(0,current-amount):amount;
+  return {debt,current,amount,next};
 }
 
 function renderDebtPayoffPlan(totalDebt){
@@ -669,7 +683,12 @@ function saveForm(event){
   if(currentType==='routine'){runner.saveRoutineSettings(item);return}
   if(currentType==='balance'){runner.updateWalletBalanceManual(item);return}
   if(currentType==='walletAdjust'){runner.adjustWalletManual(item);return}
-  if(currentType==='debtAdjust'){runner.adjustDebtManual(item);return}
+  if(currentType==='debtAdjust'){
+    const preview=debtAdjustmentPreview(item),verb=item.direction==='decrease'?'Đã trả':item.direction==='increase'?'Tăng nợ':'Đặt lại';
+    if(!preview.debt){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}toast('Không tìm thấy khoản nợ.');return}
+    if(!confirm(`${verb}: ${vnd(preview.amount)}\n\nSố nợ: ${vnd(preview.current)} → ${vnd(preview.next)}\n\nXác nhận cập nhật?`)){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}return}
+    runner.adjustDebtManual(item);return
+  }
   const type={task:'Tasks',debt:'Debts',meal:'Meals',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans',studyOption:'StudyAbroadOptions',studyChecklist:'StudyAbroadChecklist'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }

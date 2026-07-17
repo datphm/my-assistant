@@ -112,6 +112,7 @@ try {
   if (!getElement('tasks').innerHTML.includes('task-checklist-panel') || getElement('tasks').innerHTML.includes('task-checklist-panel" open')) throw new Error('Task checklist must render collapsed');
   if (!getElement('reflectionProfile').innerHTML.includes('Đường đời 4 (13)') || !getElement('reflectionProfile').innerHTML.includes('MANIFEST CÓ CĂN CỨ')) throw new Error('Reflection corrections did not render');
   if (getElement('studyScholarship').innerHTML.includes('scholarship-pillar done')) throw new Error('Scholarship layout class collision returned');
+  if (!getElement('debts').innerHTML.includes('Đã trả bớt') || !getElement('debts').innerHTML.includes('Đặt số nợ mới')) throw new Error('Debt adjustment controls did not render');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);

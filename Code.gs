@@ -1288,6 +1288,7 @@ function adjustDebtManual(item) {
   const amount = Math.abs(Number(item.amount || 0));
   if (!Number.isFinite(amount)) throw new Error('Số tiền không hợp lệ.');
   const direction = item.direction || 'set';
+  if (direction !== 'set' && !amount) throw new Error('Hãy nhập số tiền lớn hơn 0.');
   const current = Number(debt.balance || 0);
   const balance = direction === 'increase' ? current + amount : direction === 'decrease' ? Math.max(0, current - amount) : amount;
   upsertRow_(sheet, Object.assign({}, debt, { balance: balance }));
