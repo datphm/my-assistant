@@ -964,7 +964,8 @@ function addItem(type, item) {
   const sheet = getBook_().getSheetByName(type);
   if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
   const id = item.id || Utilities.getUuid();
-  const row = HEADERS[type].map(key => {
+  const sheetHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const row = sheetHeaders.map(key => {
     if (key === 'id') return id;
     if (key === 'done') return false;
     if (key === 'lastEmailedAt' || key === 'gmailMessageId' || key === 'lastUpdatedAt') return '';
@@ -975,6 +976,7 @@ function addItem(type, item) {
     return item[key] === undefined ? '' : item[key];
   });
   sheet.appendRow(row);
+  if (type === 'Flights') CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
   if (type === 'Expenses') applyExpenseImpact_(item, 1);
   let calendarWarning = '';
   if (type === 'Tasks' && item.dueAt && PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') {
@@ -997,6 +999,7 @@ function updateItem(type, item) {
   const existing = readRows_(sheet).find(row => row.id === item.id) || {};
   if (type === 'Expenses') applyExpenseImpact_(existing, -1);
   upsertRow_(sheet, Object.assign({}, existing, item));
+  if (type === 'Flights') CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
   if (type === 'Expenses') applyExpenseImpact_(Object.assign({}, existing, item), 1);
   let calendarWarning = '';
   if (type === 'Tasks' && item.dueAt && PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') {
@@ -1019,7 +1022,7 @@ function deleteItem(type, id) {
   if (row < 1) throw new Error('Không tìm thấy mục cần xoá.');
   const existing = readRows_(sheet).find(r => r.id === id) || {};
   if (type === 'Expenses') applyExpenseImpact_(existing, -1);
-  if ((type === 'Tasks' || type === 'Appointments') && existing.calendarEventId) {
+  if ((type === 'Tasks' || type === 'Appointments' || type === 'Flights') && existing.calendarEventId) {
     try {
       const event = CalendarApp.getDefaultCalendar().getEventById(existing.calendarEventId);
       if (event) event.deleteEvent();
@@ -1035,6 +1038,7 @@ function deleteItem(type, id) {
     });
   }
   sheet.deleteRow(row + 1);
+  if (type === 'Flights') CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
   return { ok: true };
 }
 
@@ -1998,6 +2002,7 @@ function ensureDefaultFlights_(ss) {
   const props = PropertiesService.getUserProperties();
   if (props.getProperty('DEFAULT_FLIGHTS_SEEDED')) return;
   const sheet = ss.getSheetByName('Flights');
+  const sheetHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const existing = readRows_(sheet);
   if (existing.some(row => row.source === 'PDF flight tracking import')) { props.setProperty('DEFAULT_FLIGHTS_SEEDED', '1'); return; }
   defaultFlightCsv_().split('\n').filter(Boolean).forEach(line => {
@@ -2021,7 +2026,7 @@ function ensureDefaultFlights_(ss) {
       source: 'PDF flight tracking import',
       gmailMessageId: ''
     };
-    sheet.appendRow(HEADERS.Flights.map(key => value[key] === undefined ? '' : value[key]));
+    sheet.appendRow(sheetHeaders.map(key => value[key] === undefined ? '' : value[key]));
   });
   props.setProperty('DEFAULT_FLIGHTS_SEEDED', '1');
 }

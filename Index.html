@@ -297,7 +297,7 @@
       </div>
     </section>
   </main>
-  <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()" aria-label="Đóng cửa sổ">×</button></div><div id="formFields"></div><div class="dialog-actions"><button type="button" class="cancel" onclick="formDialog.close()">Huỷ</button><button type="submit" class="save" value="default">Lưu</button></div></form></dialog>
+  <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()" aria-label="Đóng cửa sổ">×</button></div><div id="formFields"></div><div class="dialog-actions"><button id="formDelete" type="button" class="form-delete" onclick="deleteCurrentFormItem()" hidden>Xoá chuyến</button><button type="button" class="cancel" onclick="formDialog.close()">Huỷ</button><button type="submit" class="save" value="default">Lưu</button></div></form></dialog>
   <dialog id="cvViewDialog" class="cv-view-dialog">
     <div class="cv-view-shell">
       <div class="dialog-head"><div><span class="section-kicker">CV ĐẦY ĐỦ</span><h2 id="cvViewTitle">CV</h2><p id="cvViewMeta" class="meta"></p></div><button type="button" class="close" onclick="cvViewDialog.close()">×</button></div>

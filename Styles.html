@@ -141,11 +141,14 @@ html[data-theme=pastel] .reflection-card blockquote b{color:#263f3c!important}
 .dialog-head{position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:inherit;padding:4px 0 12px}
 .dialog-head .close{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;border:1px solid var(--line);border-radius:50%;background:#ffffff12;color:#fff;font-size:28px;line-height:1;box-shadow:none}
 .dialog-actions{position:sticky;bottom:0;z-index:3;display:grid;grid-template-columns:minmax(100px,.35fr) minmax(0,1fr);gap:10px;padding:12px 0 2px;background:inherit}
+.dialog-actions.has-delete{grid-template-columns:minmax(110px,.8fr) minmax(90px,.65fr) minmax(0,1.25fr)}
 .dialog-actions button{min-height:48px;border-radius:13px;font-weight:800}
+.dialog-actions .form-delete{border:1px solid #e06d7e88;background:#e06d7e20;color:#ff9eac}
 .dialog-actions .cancel{border:1px solid var(--line);background:#ffffff0d;color:var(--ink)}
 .dialog-actions .save{width:auto;margin:0}
 html[data-theme=pastel] .dialog-head .close{background:#edf5f2;color:#244b45;border-color:#9fc5ba}
 html[data-theme=pastel] .dialog-actions .cancel{background:#f3f7f6;color:#315f55;border-color:#abc9c1}
+html[data-theme=pastel] .dialog-actions .form-delete{background:#fff0f2;color:#a8324b;border-color:#e5a4af}
 
 .health-calorie-grid{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:12px;margin-bottom:12px}
 .calorie-balance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
