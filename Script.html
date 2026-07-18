@@ -15,7 +15,7 @@ let taskFoldState=(()=>{try{return JSON.parse(localStorage.getItem('my-assistant
 let tickerHidden=localStorage.getItem('my-assistant-ticker-hidden-v1')==='yes';
 let tickerCustomMessage=localStorage.getItem('my-assistant-ticker-message-v1')||'';
 let miniCalendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);
-let flightBoardPages=[],flightBoardPage=0,flightBoardTurning=false;
+let flightBoardPages=[],flightBoardPage=0,assistantGateIndex=0;
 const $=id=>document.getElementById(id);
 const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
 const num=n=>new Intl.NumberFormat('vi-VN').format(Number(n||0));
@@ -145,7 +145,10 @@ function renderAssistantBrief(){
     <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">SỨC KHỎE & MỤC TIÊU</span><h3>Nhịp hệ thống cá nhân</h3></div><button onclick="activatePage('food')">Mở sức khỏe</button></div><div id="opsLifeChart"></div></article>
   </section>
   <article class="card mini-calendar-card"><div class="operation-chart-head"><div><span class="section-kicker">LỊCH NHỊP SỐNG</span><h3 id="miniCalendarTitle">Lịch tháng</h3></div><div class="mini-calendar-nav"><button onclick="moveMiniCalendar(-1)" aria-label="Tháng trước">‹</button><button onclick="resetMiniCalendar()">Hôm nay</button><button onclick="moveMiniCalendar(1)" aria-label="Tháng sau">›</button></div></div><div id="miniCalendar" class="mini-calendar"></div><div class="mini-calendar-legend"><span>✈️ Bay</span><span>☕ Hẹn</span><span>🛏️ Ở</span><span>🎓 Du học</span><span><b>2</b> deadline</span></div></article>
-  <article class="card operation-queue"><div class="operation-chart-head"><div><span class="section-kicker">HÀNG ĐỢI ĐIỀU HÀNH</span><h3>5 việc cần mắt bạn nhất</h3></div><button onclick="activatePage('today')">Xem toàn bộ</button></div><div id="opsPriorityQueue"></div></article>`;
+  <section class="assistant-side-grid">
+    <article class="card assistant-gate-card"><div class="operation-chart-head"><div><span class="section-kicker">DISPLAY AT GATE</span><h3>Chuyến bay gần nhất</h3></div><button onclick="activatePage('travel')">Mở chuyến đi</button></div><div id="assistantGateDisplay"></div></article>
+    <article class="card operation-queue"><div class="operation-chart-head"><div><span class="section-kicker">HÀNG ĐỢI ĐIỀU HÀNH</span><h3>5 việc cần mắt bạn nhất</h3></div><button onclick="activatePage('today')">Xem toàn bộ</button></div><div id="opsPriorityQueue"></div></article>
+  </section>`;
   renderOperationCenter(b);
 }
 
@@ -158,7 +161,7 @@ function renderOperationCenter(b){
   const days=[];for(let offset=6;offset>=0;offset--){const date=new Date();date.setHours(12,0,0,0);date.setDate(date.getDate()-offset);const logs=(data.timelogs||[]).filter(log=>log.startAt&&localDateKey(log.startAt)===localDateKey(date));days.push({date,total:logs.reduce((s,x)=>s+Number(x.durationMinutes||0),0),work:logs.filter(x=>x.kind==='work').reduce((s,x)=>s+Number(x.durationMinutes||0),0),life:logs.filter(x=>x.kind!=='work').reduce((s,x)=>s+Number(x.durationMinutes||0),0)})}const timeMax=Math.max(1,...days.map(d=>d.total));timeChart.innerHTML=fullDataLoaded?`<div class="weekly-bars ops-weekly">${days.map(d=>`<div class="time-day"><b>${d.total?minutesText(d.total):'—'}</b><div class="time-day-column" style="height:${d.total?Math.max(7,d.total/timeMax*100):2}%"><i style="height:${d.total?d.work/d.total*100:0}%;background:#5478a6"></i><i style="height:${d.total?d.life/d.total*100:0}%;background:#4f806d"></i></div><span>${d.date.toLocaleDateString('vi-VN',{weekday:'short'})}</span></div>`).join('')}</div><div class="chart-legend"><span><i style="background:#5478a6"></i>Công việc</span><span><i style="background:#4f806d"></i>Đời sống</span></div>`:'<div class="empty-chart">Đang tải nhật ký thời gian…</div>';
   const waterGoal=Number(b.health.waterGoalMl||2500),walkGoal=Number(b.health.walkGoalMinutes||20),weight=Number(b.health.currentWeightKg||0),goal=Number(b.health.goalKg||0),healthProfile=(data.healthprofile||[])[0]||{},startWeight=Number(healthProfile.startWeightKg||weight),weightProgress=startWeight&&goal&&startWeight!==goal?Math.max(0,Math.min(100,(startWeight-weight)/(startWeight-goal)*100)):0,studyPending=Number(b.study.pending||0),studyRows=data.studyabroadchecklist||[],studyDone=studyRows.filter(row=>row.status==='done').length,studyTotal=studyRows.length||Math.max(8,studyPending);lifeChart.innerHTML=`<div class="ops-progress-list">${operationProgress('Nước hôm nay',Number(b.health.waterMl||0),waterGoal,`${num(b.health.waterMl||0)}/${num(waterGoal)} ml`)}${operationProgress('Đi bộ hôm nay',Number(b.health.walkMinutes||0),walkGoal,`${num(b.health.walkMinutes||0)}/${num(walkGoal)} phút`)}${operationProgress('Mục tiêu cân nặng',weightProgress,100,weight&&goal?`${weight} → ${goal} kg`:'Chưa đủ dữ liệu')}${operationProgress('Hồ sơ du học',studyRows.length?studyDone:Math.max(0,studyTotal-studyPending),studyTotal,`${studyPending} bước đang mở`)}</div>`;
   const priority=open.slice().sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a)).slice(0,5);queue.innerHTML=priority.map((task,index)=>`<button onclick="openOperationTask('${escAttr(task.id)}')"><b>${index+1}</b><span><strong>${esc(task.title)}</strong><small>${dateTime(task.dueAt)} · ${esc(taskStatusLabel(task))}</small></span><i>→</i></button>`).join('')||'<div class="empty">Không còn việc mở. Hãy dùng thời gian này để chuẩn bị ngày mai.</div>';
-  renderMiniCalendar();
+  renderMiniCalendar();renderAssistantGateDisplay();
 }
 function operationProgress(label,value,target,detail){const percent=Math.max(0,Math.min(100,Number(target)?Number(value)/Number(target)*100:0));return `<div><p><span>${esc(label)}</span><b>${esc(detail)}</b></p><i><em style="width:${percent}%"></em></i></div>`}
 function openOperationTask(id){activatePage('today');setTimeout(()=>$(`task-${id}`)?.scrollIntoView({behavior:'smooth',block:'start'}),120)}
@@ -198,6 +201,7 @@ function renderTimeAnchor(){
 }
 setInterval(()=>{renderTimeAnchor();renderActiveTime();renderFlightBoardClock()},1000);
 setInterval(()=>cycleFlightBoard(),20000);
+setInterval(()=>rotateAssistantGate(),60000);
 // Keep the local counter smooth without continuously competing with save calls
 // for an Apps Script execution slot. Cross-device state still refreshes when
 // the app becomes visible and once per minute in the background.
@@ -621,42 +625,33 @@ function renderTravel(){
   $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))} ${flightStatusBadge(f.status)}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}${f.lastCheckedAt?`<p class="meta">Rà lần cuối ${dateTime(f.lastCheckedAt)}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
   $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
 }
-function splitFlapText(value,length){
-  const text=String(value||'—').toUpperCase().slice(0,length).padEnd(length,' ');
-  return [...text].map(char=>`<i class="flap-char"><span>${char===' '?'&nbsp;':esc(char)}</span></i>`).join('');
-}
 function flightBoardStatus(f){if(f.status==='cancelled')return 'CANCELLED';if(f.status==='delayed')return 'DELAYED';if(f.status==='changed')return 'CHANGED';if(f.departure&&new Date(f.departure)<new Date())return 'DEPARTED';return 'ON TIME'}
+const airportCities={HAN:'Hanoi',SGN:'Ho Chi Minh City',DAD:'Da Nang',CXR:'Nha Trang',PQC:'Phu Quoc',HPH:'Hai Phong',HUI:'Hue',VII:'Vinh',VCA:'Can Tho',BMV:'Buon Ma Thuot',UIH:'Quy Nhon',VCS:'Con Dao',THD:'Thanh Hoa',VDO:'Van Don',DIN:'Dien Bien',VCL:'Chu Lai',SIN:'Singapore',JHB:'Johor Bahru',KUL:'Kuala Lumpur',BKK:'Bangkok',DMK:'Bangkok',HKG:'Hong Kong',TPE:'Taipei',NRT:'Tokyo Narita',HND:'Tokyo Haneda',ICN:'Seoul Incheon',PUS:'Busan',PEK:'Beijing',PVG:'Shanghai',CAN:'Guangzhou',SZX:'Shenzhen',MNL:'Manila',CGK:'Jakarta',DPS:'Bali',SYD:'Sydney',MEL:'Melbourne',LHR:'London',CDG:'Paris',FRA:'Frankfurt',DXB:'Dubai',DOH:'Doha'};
+function airportLabel(code,fallback=''){const key=String(code||'').trim().toUpperCase(),city=airportCities[key]||String(fallback||'').trim();if(!key)return city||'—';if(!city||city.toUpperCase()===key)return key;return `${key} ${city}`}
+const airlineLogoFiles={VU:'vietravel.png',VN:'vietnam-airlines.png',VJ:'vietjet.png',QH:'bamboo.png',TR:'scoot.png',MH:'malaysia-airlines.png',BL:'pacific-airlines.png','9G':'sun-phuquoc.png',SQ:'singapore-airlines.png',AK:'airasia.png',TG:'thai-airways.png'};
 function airlineMark(f){
   const prefix=String(f.code||'').replace(/[^A-Z0-9]/gi,'').slice(0,2).toUpperCase()||'✈';
-  const brands={VJ:['vietjet','VJ','VietJet Air'],VN:['vietnam','✦ VN','Vietnam Airlines'],QH:['bamboo','QH','Bamboo Airways'],SQ:['singapore','SQ','Singapore Airlines'],TR:['scoot','TR','Scoot'],MH:['malaysia','MH','Malaysia Airlines'],AK:['airasia','AK','AirAsia'],TG:['thai','TG','Thai Airways'],JQ:['jetstar','JQ','Jetstar']};
-  const brand=brands[prefix]||['generic',prefix,f.airline||prefix];return `<span class="airline-mark ${brand[0]}" title="${escAttr(f.airline||brand[2])}">${esc(brand[1])}</span>`;
+  const file=airlineLogoFiles[prefix],name=f.airline||prefix;return `<span class="airline-mark" title="${escAttr(name)}">${file?`<img src="https://datphm.github.io/my-assistant/assets/airlines/${file}" loading="lazy" decoding="async" alt="">`:''}<b>${esc(prefix)}</b></span>`;
 }
-function boardDate(value){const a=appSettings();try{return new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(value)).replace(' ','').toUpperCase()}catch(e){return '—'}}
+function boardDate(value){const a=appSettings();try{return new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(value)).toUpperCase()}catch(e){return '—'}}
 function chunkBoardRows(items,size=6){const pages=[];for(let i=0;i<items.length;i+=size)pages.push(items.slice(i,i+size));return pages}
 function renderFlightBoard(list){
   const box=$('flightBoard');if(!box)return;renderFlightBoardClock();
   const now=new Date(),valid=(list||[]).filter(f=>f.departure),upcoming=valid.filter(f=>new Date(f.departure)>=now&&f.status!=='cancelled').sort((a,b)=>new Date(a.departure)-new Date(b.departure)),departed=valid.filter(f=>new Date(f.departure)<now||f.status==='cancelled').sort((a,b)=>new Date(b.departure)-new Date(a.departure));
-  flightBoardPages=[...chunkBoardRows(upcoming).map(rows=>({mode:'UPCOMING',rows})),...chunkBoardRows(departed).map(rows=>({mode:'DEPARTED',rows}))];
-  if(!flightBoardPages.length)flightBoardPages=[{mode:'UPCOMING',rows:[]}];flightBoardPage=Math.min(flightBoardPage,flightBoardPages.length-1);paintFlightBoard();requestAnimationFrame(()=>animateFlightBoard(true));
+  const selected=upcoming.slice(0,12);selected.push(...departed.slice(0,18-selected.length));flightBoardPages=chunkBoardRows(selected.slice(0,18)).map(rows=>({mode:'FLIGHTS',rows}));
+  if(!flightBoardPages.length)flightBoardPages=[{mode:'FLIGHTS',rows:[]}];flightBoardPage=Math.min(flightBoardPage,flightBoardPages.length-1);paintFlightBoard();
 }
 function paintFlightBoard(){
   const box=$('flightBoard');if(!box)return;const page=flightBoardPages[flightBoardPage]||{mode:'UPCOMING',rows:[]},mode=$('flightBoardMode');if(mode)mode.textContent=`${page.mode} · ${flightBoardPage+1}/${flightBoardPages.length}`;
-  box.innerHTML=`<div class="flight-board-row board-labels"><span>DATE</span><span>AIRLINE</span><span>FLIGHT</span><span>ORIGIN</span><span>DESTINATION</span><span>TIME</span><span>STATUS</span><span>GATE</span></div>`+(page.rows.length?page.rows.map(f=>{const dep=new Date(f.departure),status=flightBoardStatus(f),gate=f.terminal||'—';return `<div class="flight-board-row"><span class="flap-cell date">${splitFlapText(boardDate(dep),5)}</span><span class="airline-cell">${airlineMark(f)}</span><span class="flap-cell code">${splitFlapText(f.code||'—',6)}</span><span class="flap-cell origin">${splitFlapText(f.fromCode||'—',3)}</span><span class="flap-cell destination">${splitFlapText(f.toCode||f.destination||'—',3)}</span><span class="flap-cell time">${splitFlapText(timeOnly(dep),5)}</span><span class="flap-cell status ${escAttr(String(f.status||'scheduled'))} ${status==='DEPARTED'?'departed':''}">${splitFlapText(status,9)}</span><span class="flap-cell gate">${splitFlapText(gate,4)}</span></div>`}).join(''):`<div class="flight-board-empty">NO FLIGHTS TO DISPLAY · SELECT “+ FLIGHT” TO ADD ONE</div>`);
+  box.innerHTML=`<div class="flight-info-row board-labels"><span>DATE</span><span>AIRLINE</span><span>FLIGHT</span><span>ORIGIN</span><span>DESTINATION</span><span>TIME</span><span>STATUS</span><span>GATE</span></div>`+(page.rows.length?page.rows.map(f=>{const dep=new Date(f.departure),status=flightBoardStatus(f),gate=f.gate||f.terminal||'—';return `<div class="flight-info-row"><b>${esc(boardDate(dep))}</b><span>${airlineMark(f)}</span><b>${esc(f.code||'—')}</b><span>${esc(airportLabel(f.fromCode,f.from||f.origin))}</span><span>${esc(airportLabel(f.toCode,f.destination))}</span><b>${esc(timeOnly(dep))}</b><strong class="board-status ${escAttr(status.toLowerCase().replace(/\s+/g,'-'))}">${esc(status)}</strong><b>${esc(gate)}</b></div>`}).join(''):`<div class="flight-board-empty">NO FLIGHTS TO DISPLAY · SELECT “+ FLIGHT” TO ADD ONE</div>`);
 }
 function renderFlightBoardClock(){const el=$('flightBoardClock');if(el)el.textContent=timeOnly(new Date(),true)}
-function animateFlightBoard(all=false){
-  if(appSettings().reducedMotion==='yes')return;
-  const chars=[...document.querySelectorAll('.flight-board .flap-char')];if(!chars.length)return;
-  const targets=all?chars:chars.filter(()=>Math.random()<.08);
-  targets.forEach((node,index)=>{setTimeout(()=>{node.classList.remove('flipping');void node.offsetWidth;node.classList.add('flipping')},Math.min(index*12,420))});
-}
 function cycleFlightBoard(){
-  const wrap=$('flightBoardWrap');if(!wrap||flightBoardTurning||flightBoardPages.length<2)return;
-  if(appSettings().reducedMotion==='yes'){flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();return}
-  flightBoardTurning=true;wrap.classList.add('board-turning');
-  setTimeout(()=>{flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();animateFlightBoard(true)},350);
-  setTimeout(()=>{wrap.classList.remove('board-turning');flightBoardTurning=false},760);
+  if(!$('flightBoard')||flightBoardPages.length<2)return;flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();
 }
+function assistantGateFlights(){const now=Date.now(),rows=(data.flights||[]).filter(f=>f.departure&&f.status!=='cancelled'&&new Date(f.departure).getTime()>=now).sort((a,b)=>new Date(a.departure)-new Date(b.departure)).slice(0,4);if(rows.length)return rows;return assistantBrief?.travel?[assistantBrief.travel]:[]}
+function renderAssistantGateDisplay(){const box=$('assistantGateDisplay');if(!box)return;const rows=assistantGateFlights();if(!rows.length){box.innerHTML='<div class="gate-empty">NO UPCOMING FLIGHT</div>';return}const f=rows[assistantGateIndex%rows.length],dep=new Date(f.departure),status=flightBoardStatus(f);box.innerHTML=`<div class="gate-display"><div class="gate-airline">${airlineMark(f)}<span>DISPLAY AT GATE · ${assistantGateIndex%rows.length+1}/${rows.length}</span></div><div class="gate-main"><b>${esc(f.code||'—')}</b><span>${esc(airportLabel(f.toCode,f.destination))}</span><strong>DEPARTING ${esc(timeOnly(dep))}</strong></div><div class="gate-status">${esc(status)}</div><div class="gate-footer"><span>${esc(boardDate(dep))}</span><span>${esc(airportLabel(f.fromCode,f.from||f.origin))}</span><span>${esc(f.gate||f.terminal||'GATE —')}</span></div></div>`}
+function rotateAssistantGate(){const rows=assistantGateFlights();if(rows.length>1)assistantGateIndex=(assistantGateIndex+1)%rows.length;renderAssistantGateDisplay()}
 function flightPlanCard(f){
   const dep=new Date(f.departure),international=(f.flightType||inferFlightType(f))==='international',airportLead=international?180:120,travel=Number(f.airportTravelMinutes||45),checkin=new Date(dep-24*3600000),leave=new Date(dep-(airportLead+travel)*60000),airport=new Date(dep-airportLead*60000);
   const checkinReady=Date.now()>=checkin&&Date.now()<dep;
