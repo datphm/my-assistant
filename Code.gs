@@ -131,7 +131,7 @@ function getPageData(page) {
 // already interactive and cached so the assistant overview never blocks clicks.
 function getAssistantBrief(forceRefresh) {
   const cache = CacheService.getUserCache();
-  const cacheKey = 'MY_ASSISTANT_BRIEF_V3';
+  const cacheKey = 'MY_ASSISTANT_BRIEF_V4';
   if (!forceRefresh) {
     const cached = cache.get(cacheKey);
     if (cached) try { return JSON.parse(cached); } catch (error) {}
@@ -147,8 +147,15 @@ function getAssistantBrief(forceRefresh) {
   const weights = readRecentRows_(ss.getSheetByName('WeightLogs'), 60);
   const healthLogs = readRecentRows_(ss.getSheetByName('HealthLogs'), 180);
   const flights = readRows_(ss.getSheetByName('Flights')).filter(function(flight) {
-    return flight.departure && new Date(flight.departure) > now && flight.status !== 'cancelled';
-  }).sort(function(a, b) { return new Date(a.departure) - new Date(b.departure); });
+    if (!flight.departure || flight.status === 'cancelled') return false;
+    const departure = new Date(flight.departure);
+    return flightArrivalDate_(departure, flight.arrTime) > now;
+  }).sort(function(a, b) {
+    const aDeparture = new Date(a.departure), bDeparture = new Date(b.departure);
+    const aInFlight = aDeparture <= now, bInFlight = bDeparture <= now;
+    if (aInFlight !== bInFlight) return aInFlight ? -1 : 1;
+    return aInFlight ? bDeparture - aDeparture : aDeparture - bDeparture;
+  });
   const studyItems = readRows_(ss.getSheetByName('StudyAbroadChecklist')).filter(function(item) { return item.status !== 'done'; });
   const timeLogs = readRecentRows_(ss.getSheetByName('TimeLogs'), 240).filter(function(log) {
     return log.startAt && Utilities.formatDate(new Date(log.startAt), timezone, 'yyyy-MM-dd') === todayKey;
@@ -194,7 +201,7 @@ function getAssistantBrief(forceRefresh) {
       return {
         id: flight.id, code: flight.code, airline: flight.airline, fromCode: flight.fromCode,
         toCode: flight.toCode, destination: flight.destination, departure: flight.departure,
-        status: flight.status, terminal: flight.terminal, gate: flight.gate
+        status: flight.status, terminal: flight.terminal, gate: flight.gate, arrTime: flight.arrTime
       };
     }),
     study: {
@@ -948,7 +955,7 @@ function saveDailyLog(item) {
     updatedAt: new Date()
   });
   upsertRow_(sheet, value);
-  CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V2');
+  CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
   return Object.assign({}, value, { date: value.date.toISOString(), updatedAt: value.updatedAt.toISOString() });
 }
 
