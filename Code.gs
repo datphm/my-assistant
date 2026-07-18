@@ -7,7 +7,7 @@ const HEADERS = {
   HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'walkingGoalMinutes', 'waterGoalMl', 'calorieDeficitTarget', 'dailyCalorieTarget', 'limitations', 'updatedAt'],
   WeightLogs: ['id', 'date', 'weightKg', 'note'],
   HealthLogs: ['id', 'date', 'type', 'amount', 'durationMinutes', 'steps', 'label', 'source', 'note', 'createdAt'],
-  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
+  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'gate', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Appointments: ['id', 'title', 'type', 'startAt', 'endAt', 'location', 'withWhom', 'transport', 'notes', 'calendarEventId', 'createdAt'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
@@ -31,7 +31,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-18-appointments-calendar-v11';
+const SCHEMA_VERSION = '2026-07-19-flight-gate-v12';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -1958,7 +1958,7 @@ function getBook_() {
     // A brand-new account needs every sheet. Existing accounts only need the
     // sheets changed by the current schema, avoiding dozens of Spreadsheet API
     // calls on the first load after every deployment.
-    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile', 'HealthLogs', 'Appointments'].map(function(name) { return [name, HEADERS[name]]; });
+    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile', 'HealthLogs', 'Appointments', 'Flights'].map(function(name) { return [name, HEADERS[name]]; });
     schemaEntries.forEach(([name, headers]) => {
       let sheet = ss.getSheetByName(name);
       if (!sheet) sheet = ss.insertSheet(name);
