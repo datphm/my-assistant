@@ -628,9 +628,8 @@ function splitFlapText(value,length){
 function flightBoardStatus(f){if(f.status==='cancelled')return 'CANCELLED';if(f.status==='delayed')return 'DELAYED';if(f.status==='changed')return 'CHANGED';if(f.departure&&new Date(f.departure)<new Date())return 'DEPARTED';return 'ON TIME'}
 function airlineMark(f){
   const prefix=String(f.code||'').replace(/[^A-Z0-9]/gi,'').slice(0,2).toUpperCase()||'✈';
-  const brands={VJ:['vietjet','VJ','VietJet Air','vietjet-air.png'],VN:['vietnam','VN','Vietnam Airlines','vietnam-airlines.png'],QH:['bamboo','QH','Bamboo Airways','bamboo-airways.png'],'9G':['sunphuquoc','9G','Sun PhuQuoc Airways','sun-phuquoc-airways.png'],SQ:['singapore','SQ','Singapore Airlines','singapore-airlines.png'],TR:['scoot','TR','Scoot','scoot.png'],MH:['malaysia','MH','Malaysia Airlines','malaysia-airlines.png'],AK:['airasia','AK','AirAsia','airasia.png'],TG:['thai','TG','Thai Airways',''],JQ:['jetstar','JQ','Jetstar','']};
-  const brand=brands[prefix]||['generic',prefix,f.airline||prefix,''],logo=brand[3]?`<img src="https://datphm.github.io/my-assistant/assets/airlines/${brand[3]}" alt="${escAttr(brand[2])}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`:'';
-  return `<span class="airline-mark ${brand[0]} ${logo?'has-logo':''}" title="${escAttr(f.airline||brand[2])}">${logo}<b style="${logo?'display:none':''}">${esc(brand[1])}</b></span>`;
+  const brands={VJ:['vietjet','VJ','VietJet Air'],VN:['vietnam','✦ VN','Vietnam Airlines'],QH:['bamboo','QH','Bamboo Airways'],SQ:['singapore','SQ','Singapore Airlines'],TR:['scoot','TR','Scoot'],MH:['malaysia','MH','Malaysia Airlines'],AK:['airasia','AK','AirAsia'],TG:['thai','TG','Thai Airways'],JQ:['jetstar','JQ','Jetstar']};
+  const brand=brands[prefix]||['generic',prefix,f.airline||prefix];return `<span class="airline-mark ${brand[0]}" title="${escAttr(f.airline||brand[2])}">${esc(brand[1])}</span>`;
 }
 function boardDate(value){const a=appSettings();try{return new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(value)).replace(' ','').toUpperCase()}catch(e){return '—'}}
 function chunkBoardRows(items,size=6){const pages=[];for(let i=0;i<items.length;i+=size)pages.push(items.slice(i,i+size));return pages}
@@ -654,9 +653,9 @@ function animateFlightBoard(all=false){
 function cycleFlightBoard(){
   const wrap=$('flightBoardWrap');if(!wrap||flightBoardTurning||flightBoardPages.length<2)return;
   if(appSettings().reducedMotion==='yes'){flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();return}
-  flightBoardTurning=true;animateFlightBoard(true);
-  setTimeout(()=>{flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();animateFlightBoard(true)},260);
-  setTimeout(()=>{flightBoardTurning=false},760);
+  flightBoardTurning=true;wrap.classList.add('board-turning');
+  setTimeout(()=>{flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();animateFlightBoard(true)},350);
+  setTimeout(()=>{wrap.classList.remove('board-turning');flightBoardTurning=false},760);
 }
 function flightPlanCard(f){
   const dep=new Date(f.departure),international=(f.flightType||inferFlightType(f))==='international',airportLead=international?180:120,travel=Number(f.airportTravelMinutes||45),checkin=new Date(dep-24*3600000),leave=new Date(dep-(airportLead+travel)*60000),airport=new Date(dep-airportLead*60000);

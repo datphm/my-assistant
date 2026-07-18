@@ -133,8 +133,7 @@ try {
   if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant tab, mobile dialog actions, Health import, or manual time UI missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
   const styleSource=fs.readFileSync(path.join(__dirname,'..','Styles.html'),'utf8');
-  if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar') || !styleSource.includes('@keyframes airport-flip') || styleSource.includes('airport-board-turn')) throw new Error('Health progress, mini calendar, or character-only split-flap styles missing');
-  if (!fs.existsSync(path.join(__dirname,'..','docs','assets','airlines','vietnam-airlines.png')) || !fs.existsSync(path.join(__dirname,'..','docs','assets','airlines','singapore-airlines.png'))) throw new Error('Supplied airline logos missing');
+  if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar') || !styleSource.includes('@keyframes airport-flip')) throw new Error('Health progress, mini calendar, or split-flap styles missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);
