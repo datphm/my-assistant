@@ -131,7 +131,7 @@ function getPageData(page) {
 // already interactive and cached so the assistant overview never blocks clicks.
 function getAssistantBrief(forceRefresh) {
   const cache = CacheService.getUserCache();
-  const cacheKey = 'MY_ASSISTANT_BRIEF_V2';
+  const cacheKey = 'MY_ASSISTANT_BRIEF_V3';
   if (!forceRefresh) {
     const cached = cache.get(cacheKey);
     if (cached) try { return JSON.parse(cached); } catch (error) {}
@@ -190,6 +190,13 @@ function getAssistantBrief(forceRefresh) {
       destination: nextFlight.destination, departure: nextFlight.departure, status: nextFlight.status,
       checkinAt: new Date(new Date(nextFlight.departure).getTime() - 24 * 60 * 60 * 1000).toISOString()
     } : null,
+    travelFlights: flights.slice(0, 8).map(function(flight) {
+      return {
+        id: flight.id, code: flight.code, airline: flight.airline, fromCode: flight.fromCode,
+        toCode: flight.toCode, destination: flight.destination, departure: flight.departure,
+        status: flight.status, terminal: flight.terminal, gate: flight.gate
+      };
+    }),
     study: {
       pending: studyItems.length,
       next: datedStudy[0] || null
