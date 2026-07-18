@@ -195,7 +195,8 @@ function renderTimeAnchor(){
   const ms=new Date(next.dueAt)-now; const past=ms<0; const total=Math.abs(ms); const hours=Math.floor(total/3600000); const mins=Math.floor(total%3600000/60000); const secs=Math.floor(total%60000/1000);
   countdown.textContent=past?`Quá ${hours}h ${mins}m ${secs}s`:`Còn ${hours}h ${mins}m ${secs}s`; title.textContent=next.title;
 }
-setInterval(()=>{renderTimeAnchor();renderActiveTime()},1000);
+setInterval(()=>{renderTimeAnchor();renderActiveTime();renderFlightBoardClock()},1000);
+setInterval(()=>animateFlightBoard(),6000);
 // Keep the local counter smooth without continuously competing with save calls
 // for an Apps Script execution slot. Cross-device state still refreshes when
 // the app becomes visible and once per minute in the background.
@@ -217,6 +218,10 @@ function startTimeLog(kind,label){
   google.script.run.withSuccessHandler(active=>{activeTimeLog=active;localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(active));renderTime();toast('Đã bắt đầu · tập trung vào đúng việc này')}).withFailureHandler(fail).beginTimeLog(kind,label);
 }
 function startCustomTimeLog(){const input=$('customTimeLabel'),label=input.value.trim();if(!label){toast('Nhập tên hoạt động trước.');return}startTimeLog('custom',label);input.value=''}
+function openManualTimeLog(){
+  const end=new Date(),start=new Date(end.getTime()-30*60000);
+  openForm('timeLog',{kind:'work',label:'Công việc',startAt:start.toISOString(),endAt:end.toISOString(),note:''});
+}
 function stopTimeLog(){
   if(!activeTimeLog)return;
   google.script.run.withSuccessHandler(result=>{
@@ -237,8 +242,15 @@ function renderTime(){
   const total=logs.reduce((sum,log)=>sum+Number(log.durationMinutes||0),0),groups={};logs.forEach(log=>{const key=log.label||log.kind||'Khác';groups[key]=(groups[key]||0)+Number(log.durationMinutes||0)});
   renderTimeCharts(selected,logs);
   const top=Object.entries(groups).sort((a,b)=>b[1]-a[1]);$('timeStats').innerHTML=[metricCard('Đã log',`${Math.floor(total/60)}h ${total%60}m`,`${logs.length} hoạt động`),...top.slice(0,3).map(([name,minutes])=>metricCard(name,`${Math.floor(minutes/60)}h ${minutes%60}m`,total?`${Math.round(minutes/total*100)}% trong ngày`:'0%'))].join('');
-  $('timeEntries').innerHTML=logs.map(log=>`<article class="card"><div class="card-top"><div><h3>${esc(log.label||log.kind||'Hoạt động')}</h3><p class="meta">${timeOnly(log.startAt)} → ${timeOnly(log.endAt)} · ${log.durationMinutes||0} phút</p></div><button class="outline small danger" onclick="removeItem('TimeLogs','${log.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa log thời gian trong ngày này.</div>';
+  $('timeEntries').innerHTML=logs.map(log=>`<article class="card"><div class="card-top"><div><span class="pill">${esc(timeKindName(log.kind,log.label))}</span><h3>${esc(log.label||log.kind||'Hoạt động')}</h3><p class="meta">${timeOnly(log.startAt)} → ${timeOnly(log.endAt)} · ${log.durationMinutes||0} phút</p>${log.note?`<p class="hint">${esc(log.note)}</p>`:''}</div><div class="card-actions"><button class="outline small" onclick="editItem('timeLog','${log.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('TimeLogs','${log.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa log thời gian trong ngày này.</div>';
+  renderAppointments();
   renderRoutine();
+}
+
+function renderAppointments(){
+  const box=$('appointments');if(!box)return;
+  const appointments=(data.appointments||[]).slice().sort((a,b)=>new Date(a.startAt)-new Date(b.startAt));
+  box.innerHTML=appointments.map(a=>`<article class="card appointment-card"><div class="appointment-icon">${appointmentIcon(a.type)}</div><div><span class="pill">${esc(labelForOption(a.type))}</span><h3>${esc(a.title||'Cuộc hẹn')}</h3><p class="meta">${dateTime(a.startAt)}${a.endAt?' → '+timeOnly(a.endAt):''} · ${esc(a.location||'Chưa nhập địa điểm')}${a.withWhom?' · với '+esc(a.withWhom):''}</p>${a.transport||a.notes?`<p class="hint">${a.transport?'Di chuyển: '+esc(a.transport):''}${a.transport&&a.notes?' · ':''}${esc(a.notes||'')}</p>`:''}</div><div class="card-actions"><button class="outline small" onclick="editItem('appointment','${a.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Appointments','${a.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa có cuộc hẹn. Thêm lịch cà phê, gặp bạn hoặc về quê để app nhắc và đưa vào lịch mini.</div>';
 }
 
 function timeKindName(kind,label){return {work:'Công việc',dead:'Thời gian chết',travel:'Di chuyển',sleep:'Ngủ',play:'Đi chơi',personal:'Cá nhân',walk:'Đi bộ',exercise:'Thể dục',meal:'Ăn uống',custom:'Mục riêng'}[kind]||label||kind||'Khác'}
@@ -591,7 +603,6 @@ function workoutPlanCards(h){
 
 function renderTravel(){
   const flights=data.flights.slice().sort((a,b)=>new Date(b.departure)-new Date(a.departure));
-  const appointments=(data.appointments||[]).slice().sort((a,b)=>new Date(a.startAt)-new Date(b.startAt));
   const upcoming=flights.filter(f=>f.departure&&new Date(f.departure)>new Date()&&f.status!=='cancelled').sort((a,b)=>new Date(a.departure)-new Date(b.departure));
   const totalKm=flights.reduce((s,f)=>s+Number(f.distanceKm||0),0);
   const yearKm=flights.filter(f=>new Date(f.departure).getFullYear()===new Date().getFullYear()).reduce((s,f)=>s+Number(f.distanceKm||0),0);
@@ -603,11 +614,29 @@ function renderTravel(){
     metricCard('Sắp tới',upcoming.length+' chuyến',upcoming[0]?countdownLabel(upcoming[0].departure):'Chưa có lịch bay'),
     metricCard('Top route / hãng',`${esc(topRoute.name)} · ${esc(topAirline.name)}`,`${topRoute.count} lần · ${topAirline.count} lần`)
   ].join('');
-  $('appointments').innerHTML=appointments.map(a=>`<article class="card appointment-card"><div class="appointment-icon">${appointmentIcon(a.type)}</div><div><span class="pill">${esc(labelForOption(a.type))}</span><h3>${esc(a.title||'Cuộc hẹn')}</h3><p class="meta">${dateTime(a.startAt)}${a.endAt?' → '+timeOnly(a.endAt):''} · ${esc(a.location||'Chưa nhập địa điểm')}${a.withWhom?' · với '+esc(a.withWhom):''}</p>${a.transport||a.notes?`<p class="hint">${a.transport?'Di chuyển: '+esc(a.transport):''}${a.transport&&a.notes?' · ':''}${esc(a.notes||'')}</p>`:''}</div><div class="card-actions"><button class="outline small" onclick="editItem('appointment','${a.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Appointments','${a.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa có cuộc hẹn. Thêm một lịch cà phê, gặp bạn hoặc về quê để app đưa vào lịch mini.</div>';
+  renderFlightBoard(upcoming.length?upcoming:flights.slice().sort((a,b)=>new Date(b.departure)-new Date(a.departure)));
   $('upcomingFlightPlan').innerHTML=upcoming.length?upcoming.slice(0,4).map(f=>flightPlanCard(f)).join(''):'<div class="empty">Chưa có chuyến bay tương lai. Thêm chuyến hoặc bật đồng bộ Gmail.</div>';
   const visibleFlights=flights.slice(0,flightLimit);
   $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))} ${flightStatusBadge(f.status)}</h3><p class="meta">${dateTime(f.departure)} · ${esc(f.airline||'Hãng chưa rõ')} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}${f.lastCheckedAt?`<p class="meta">Rà lần cuối ${dateTime(f.lastCheckedAt)}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
   $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
+}
+function splitFlapText(value,length){
+  const text=String(value||'—').toUpperCase().slice(0,length).padEnd(length,' ');
+  return [...text].map(char=>`<i class="flap-char"><span>${char===' '?'&nbsp;':esc(char)}</span></i>`).join('');
+}
+function flightBoardStatus(status){return {changed:'ĐỔI GIỜ',delayed:'DELAY',cancelled:'HUỶ',scheduled:'ĐÚNG GIỜ'}[status]||'LÊN LỊCH'}
+function renderFlightBoard(list){
+  const box=$('flightBoard');if(!box)return;renderFlightBoardClock();
+  const rows=(list||[]).slice(0,8);
+  box.innerHTML=`<div class="flight-board-row board-labels"><span>GIỜ</span><span>CHUYẾN</span><span>HÀNH TRÌNH</span><span>TRẠNG THÁI</span><span>CỬA</span></div>`+(rows.length?rows.map(f=>{const dep=new Date(f.departure),route=`${f.fromCode||'?'}-${f.toCode||f.destination||'?'}`,gate=f.terminal||'—';return `<div class="flight-board-row"><span class="flap-cell time">${splitFlapText(timeOnly(dep),5)}</span><span class="flap-cell code">${splitFlapText(f.code||'—',6)}</span><span class="flap-cell route">${splitFlapText(route,11)}</span><span class="flap-cell status ${escAttr(f.status||'scheduled')}">${splitFlapText(flightBoardStatus(f.status),8)}</span><span class="flap-cell gate">${splitFlapText(gate,4)}</span></div>`}).join(''):`<div class="flight-board-empty">CHƯA CÓ CHUYẾN BAY · BẤM “+ CHUYẾN BAY” ĐỂ THÊM</div>`);
+  requestAnimationFrame(()=>animateFlightBoard(true));
+}
+function renderFlightBoardClock(){const el=$('flightBoardClock');if(el)el.textContent=timeOnly(new Date(),true)}
+function animateFlightBoard(all=false){
+  if(appSettings().reducedMotion==='yes')return;
+  const chars=[...document.querySelectorAll('.flight-board .flap-char')];if(!chars.length)return;
+  const targets=all?chars:chars.filter(()=>Math.random()<.08);
+  targets.forEach((node,index)=>{setTimeout(()=>{node.classList.remove('flipping');void node.offsetWidth;node.classList.add('flipping')},Math.min(index*12,420))});
 }
 function flightPlanCard(f){
   const dep=new Date(f.departure),international=(f.flightType||inferFlightType(f))==='international',airportLead=international?180:120,travel=Number(f.airportTravelMinutes||45),checkin=new Date(dep-24*3600000),leave=new Date(dep-(airportLead+travel)*60000),airport=new Date(dep-airportLead*60000);
@@ -676,6 +705,7 @@ function safeUrl(url){return /^https:\/\//i.test(url||'')}
 
 const fields={
  task:[['title','Việc cần làm','text'],['outcome','Đầu ra cụ thể phải bàn giao','textarea'],['definitionOfDone','Khi nào được coi là hoàn thành?','textarea'],['nextAction','Bước nhỏ tiếp theo','text'],['dueAt','Deadline cuối','datetime-local'],['followUpAt','Mốc phải follow-up / cập nhật','datetime-local'],['waitingFor','Đang chờ ai / điều gì','text'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Thời lượng phiên bắt đầu (phút)','number'],['priority','Ưu tiên','select','high,medium,low'],['energy','Năng lượng cần','select','low,medium,high'],['chaseMode','Mức nhắc','select','normal,urgent'],['status','Trạng thái','select','todo,doing,waiting,blocked,done']],
+ timeLog:[['kind','Nhóm thời gian','select','work,dead,travel,sleep,play,personal,walk,exercise,meal,custom'],['label','Tên hoạt động','text'],['startAt','Bắt đầu lúc','datetime-local'],['endAt','Kết thúc lúc','datetime-local'],['note','Ghi chú / nhớ lại việc đã làm','textarea']],
  taskUpdate:[['taskId','Mã việc','hidden'],['note','Cập nhật: đã chốt gì, còn kẹt gì, bước tiếp theo','textarea'],['status','Trạng thái sau cập nhật','select','doing,waiting,blocked,todo'],['nextFollowUpAt','Mốc follow-up tiếp theo','datetime-local']],
  debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
  debtAdjust:[['debtId','Mã khoản nợ','hidden'],['direction','Cách cập nhật','select','decrease,increase,set'],['amount','Số tiền','number']],
@@ -715,7 +745,7 @@ function viewCv(id){
 }
 function editViewedCv(){const id=viewingCvId;cvViewDialog.close();if(id)editCv(id)}
 function editItem(kind,id){
-  const map={task:['task',data.tasks],flight:['flight',data.flights],hotel:['hotel',data.hotels],appointment:['appointment',data.appointments],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans],studyOption:['studyOption',data.studyabroadoptions],studyChecklist:['studyChecklist',data.studyabroadchecklist]};
+  const map={task:['task',data.tasks],timeLog:['timeLog',data.timelogs],flight:['flight',data.flights],hotel:['hotel',data.hotels],appointment:['appointment',data.appointments],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans],studyOption:['studyOption',data.studyabroadoptions],studyChecklist:['studyChecklist',data.studyabroadchecklist]};
   const found=map[kind]?.[1].find(x=>x.id===id);
   if(!found){toast('Không tìm thấy mục để sửa.');return}
   openForm(map[kind][0],found);
@@ -724,9 +754,10 @@ function openTaskUpdate(id){const task=data.tasks.find(t=>t.id===id);if(!task)re
 function openForm(type,item={}){
   if(type==='task'&&!item.id)item=Object.assign({minutes:appSettings().defaultTaskMinutes||15,chaseMode:appSettings().defaultChaseMode||'normal',status:'todo',priority:'medium',energy:'medium',definitionOfDone:'Đã cập nhật tài liệu/lịch liên quan và báo lại người giao việc.'},item);
   if(type==='healthEntry')item=Object.assign({date:localDateKey(new Date()),type:'exercise',source:'iPhone Health'},item);
+  if(type==='timeLog'&&!item.id){const end=new Date(),start=new Date(end.getTime()-30*60000);item=Object.assign({kind:'work',label:'Công việc',startAt:start.toISOString(),endAt:end.toISOString()},item)}
   currentType=type;editingId=item.id||'';
   formDialog.classList.toggle('cv-editor-dialog',type==='cv');
-  const names={task:editingId?'Sửa việc':'Thêm việc',taskUpdate:'Cập nhật tiến độ & follow-up',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',debtAdjust:'Cập nhật số nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',healthEntry:'Nhập dữ liệu iPhone Health',weightLog:'Ghi cân nặng',appointment:editingId?'Sửa cuộc hẹn':'Thêm cuộc hẹn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn',studyProfile:'Mục tiêu du học',studyOption:editingId?'Sửa trường / chương trình':'Thêm trường / chương trình',studyChecklist:editingId?'Sửa bước hồ sơ':'Thêm bước hồ sơ',appSettings:'Thiết lập ứng dụng'};
+  const names={task:editingId?'Sửa việc':'Thêm việc',timeLog:editingId?'Sửa thời gian đã log':'Thêm thời gian thủ công',taskUpdate:'Cập nhật tiến độ & follow-up',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',debtAdjust:'Cập nhật số nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',healthEntry:'Nhập dữ liệu iPhone Health',weightLog:'Ghi cân nặng',appointment:editingId?'Sửa cuộc hẹn':'Thêm cuộc hẹn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn',studyProfile:'Mục tiêu du học',studyOption:editingId?'Sửa trường / chương trình':'Thêm trường / chương trình',studyChecklist:editingId?'Sửa bước hồ sơ':'Thêm bước hồ sơ',appSettings:'Thiết lập ứng dụng'};
   $('formTitle').textContent=names[type];
   $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
   formDialog.showModal();
@@ -739,7 +770,7 @@ function fieldHtml(name,label,input,options,value){
   if(input==='debt'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Không liên kết khoản nợ</option>${data.debts.map(d=>`<option value="${escAttr(d.id)}" ${d.id===val?'selected':''}>${esc(d.name)} · ${vnd(d.balance)}</option>`).join('')}</select></div>`}
   if(input==='textarea')return `<div class="field"><label>${label}</label><textarea name="${name}">${esc(val)}</textarea></div>`;
   if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
-  let normalized=val;if(input==='datetime-local'&&val)normalized=new Date(val).toISOString().slice(0,16);if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
+  let normalized=val;if(input==='datetime-local'&&val){const d=new Date(val);normalized=isNaN(d)?'':`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
   const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#245647"':'';
   const optional=['terminal','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl','birthPlace','currentGpa','currentEnglishScore','otherLanguages','budgetVnd','savingsVnd','passportStatus','applicationDeadline','tuitionAnnual','livingCostAnnual','website','intake','dailyCalorieTarget','preferredName','phone','email','nationality','emergencyContactRelation','passportNumber','passportExpiry','insuranceProvider','insuranceNumber','documentFolderUrl','nextAction','followUpAt','waitingFor','nextFollowUpAt','durationMinutes','steps','label','endAt','withWhom','transport'];
   return `<div class="field"><label>${label}</label><input ${input==='color'||optional.includes(name)?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
@@ -750,6 +781,11 @@ function saveForm(event){
   const item=Object.fromEntries(new FormData(event.target)); if(editingId)item.id=editingId;
   delete item.cvFile;
   ['dueAt','departure','followUpAt','nextFollowUpAt','startAt','endAt'].forEach(k=>{if(item[k])item[k]=new Date(item[k]).toISOString()});
+  if(currentType==='timeLog'){
+    const start=new Date(item.startAt),end=new Date(item.endAt);
+    if(isNaN(start)||isNaN(end)||end<=start){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}toast('Giờ kết thúc phải sau giờ bắt đầu.');return}
+    item.durationMinutes=Math.max(1,Math.round((end-start)/60000));
+  }
   if(item.date)item.date=new Date(item.date).toISOString();
   if(currentType==='cv'){saveCvForm(event.target,item,saveButton);return}
   const runner=google.script.run.withSuccessHandler(result=>{formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}formDialog.close();toast(result&&result.calendarWarning?'Đã lưu việc; hãy bấm Calendar để cấp lại quyền Google.':'Đã lưu và đồng bộ');load()}).withFailureHandler(e=>{formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}fail(e)});
@@ -770,10 +806,10 @@ function saveForm(event){
     if(!confirm(`${verb}: ${vnd(preview.amount)}\n\nSố nợ: ${vnd(preview.current)} → ${vnd(preview.next)}\n\nXác nhận cập nhật?`)){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}return}
     runner.adjustDebtManual(item);return
   }
-  const type={task:'Tasks',debt:'Debts',meal:'Meals',appointment:'Appointments',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans',studyOption:'StudyAbroadOptions',studyChecklist:'StudyAbroadChecklist'}[currentType];
+  const type={task:'Tasks',timeLog:'TimeLogs',debt:'Debts',meal:'Meals',appointment:'Appointments',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans',studyOption:'StudyAbroadOptions',studyChecklist:'StudyAbroadChecklist'}[currentType];
   editingId?runner.updateItem(type,item):runner.addItem(type,item);
 }
-function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',calorie_in:'Calories nạp vào',calorie_out:'Calories vận động / tiêu hao',exercise:'Buổi thể dục',coffee:'Cà phê',friend:'Đi chơi với bạn',meeting:'Cuộc hẹn / gặp mặt',hometown:'Về quê',personal:'Lịch cá nhân',decrease:'Giảm số nợ / đã trả',increase:'Tăng số nợ',set:'Đặt số dư nợ mới',todo:'Cần làm',doing:'Đang làm',waiting:'Đang chờ / follow-up',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',male:'Nam',female:'Nữ',yes:'Bật',no:'Tắt',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ',researching:'Đang tìm hiểu',shortlisted:'Đã vào shortlist',applying:'Đang làm hồ sơ',submitted:'Đã nộp',offer:'Có offer',rejected:'Không được nhận',safe:'An toàn',match:'Phù hợp',reach:'Tham vọng',system:'Theo thiết bị',dark:'Tối',pastel:'Pastel sáng',light:'Sáng',today:'Hôm nay',assistant:'Trợ lý',study:'Du học',money:'Tiền',time:'Thời gian',travel:'Chuyến đi',food:'Sức khỏe',cv:'CV',profile:'Hồ sơ',install:'Cài đặt'}[o]||o}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',calorie_in:'Calories nạp vào',calorie_out:'Calories vận động / tiêu hao',work:'Công việc',dead:'Thời gian chết',travel:'Di chuyển',sleep:'Ngủ',play:'Đi chơi',personal:'Cá nhân',walk:'Đi bộ',exercise:'Thể dục',meal:'Ăn uống',custom:'Mục riêng',coffee:'Cà phê',friend:'Đi chơi với bạn',meeting:'Cuộc hẹn / gặp mặt',hometown:'Về quê',decrease:'Giảm số nợ / đã trả',increase:'Tăng số nợ',set:'Đặt số dư nợ mới',todo:'Cần làm',doing:'Đang làm',waiting:'Đang chờ / follow-up',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',male:'Nam',female:'Nữ',yes:'Bật',no:'Tắt',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ',researching:'Đang tìm hiểu',shortlisted:'Đã vào shortlist',applying:'Đang làm hồ sơ',submitted:'Đã nộp',offer:'Có offer',rejected:'Không được nhận',safe:'An toàn',match:'Phù hợp',reach:'Tham vọng',system:'Theo thiết bị',dark:'Tối',pastel:'Pastel sáng',light:'Sáng',today:'Hôm nay',assistant:'Trợ lý',study:'Du học',money:'Tiền',time:'Thời gian',food:'Sức khỏe',cv:'CV',profile:'Hồ sơ',install:'Cài đặt'}[o]||o}
 function beginAction(key){if(pendingActions.has(key)){toast('Đang xử lý — không cần bấm lại.');return false}pendingActions.add(key);return true}
 function endAction(key){pendingActions.delete(key)}
 function confirmDelete(message){return appSettings().confirmBeforeDelete==='no'||confirm(message)}

@@ -127,11 +127,12 @@ try {
   if (!getElement('assistantBrief').innerHTML.includes('Trung tâm') && !getElement('opsTaskChart').innerHTML) throw new Error('Operation Center did not render');
   if (!getElement('opsTaskChart').innerHTML || !getElement('opsMoneyChart').innerHTML || !getElement('opsTimeChart').innerHTML || !getElement('opsLifeChart').innerHTML || !getElement('operationKpis').innerHTML) throw new Error('Operation Center charts did not render');
   if (!getElement('miniCalendar').innerHTML.includes('✈️') || !getElement('miniCalendar').innerHTML.includes('☕') || !getElement('appointments').innerHTML.includes('Cà phê với Minh')) throw new Error('Mini calendar or appointments did not render');
+  if (!getElement('flightBoard').innerHTML.includes('flap-char') || !getElement('flightBoard').innerHTML.includes('flight-board-row')) throw new Error('Airport split-flap board did not render');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
-  if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health')) throw new Error('Assistant tab, mobile dialog actions, or Health import UI missing');
+  if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant tab, mobile dialog actions, Health import, or manual time UI missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
   const styleSource=fs.readFileSync(path.join(__dirname,'..','Styles.html'),'utf8');
-  if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar')) throw new Error('Health progress fix or mini calendar styles missing');
+  if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar') || !styleSource.includes('@keyframes airport-flip')) throw new Error('Health progress, mini calendar, or split-flap styles missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);

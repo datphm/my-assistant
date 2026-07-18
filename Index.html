@@ -197,7 +197,7 @@
     <section id="travel" class="page">
       <div class="section-head">
         <h2>Chuyến đi</h2>
-        <div class="actions"><button class="outline" onclick="openForm('appointment')">+ Cuộc hẹn</button><button class="outline" onclick="reviewFutureFlightsUi()">Rà lại lịch bay</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
+        <div class="actions"><button class="outline" onclick="reviewFutureFlightsUi()">Rà lại lịch bay</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
       </div>
       <p class="hint">Đã nạp sẵn list chuyến bay từ file PDF bạn gửi. Gmail chỉ quét khi bạn nhập query, ví dụ từ hãng bay/Booking/Agoda trong 2 năm.</p>
       <div class="inline wrap travel-tools">
@@ -207,8 +207,10 @@
         <button class="outline danger" onclick="disableTravelSync()">Tắt tự động</button>
       </div>
       <div id="travelInsights" class="insight-grid"></div>
-      <div class="section-head subhead"><div><h3>Cuộc hẹn & đi chơi</h3><p class="hint">Cà phê, gặp bạn, về quê hoặc một lịch hẹn cá nhân có người–địa điểm–giờ rõ ràng.</p></div><button onclick="openForm('appointment')">+ Thêm cuộc hẹn</button></div>
-      <div id="appointments" class="cards appointment-list"></div>
+      <article class="flight-board-wrap" aria-label="Bảng chuyến bay kiểu sân bay">
+        <div class="flight-board-head"><div><span>MY ASSISTANT AIRPORT</span><h3>BẢNG CHUYẾN BAY</h3></div><span class="flight-board-clock" id="flightBoardClock">--:--:--</span></div>
+        <div id="flightBoard" class="flight-board"></div>
+      </article>
       <div id="upcomingFlightPlan" class="cards flight-plans"></div>
       <h3>Chuyến bay</h3>
       <div id="flights" class="cards"></div>
@@ -217,7 +219,7 @@
     </section>
 
     <section id="time" class="page">
-      <div class="section-head"><h2>Nhật ký thời gian</h2><input id="timeDate" type="date" onchange="renderTime()"></div>
+      <div class="section-head"><h2>Nhật ký thời gian</h2><div class="actions"><input id="timeDate" type="date" onchange="renderTime()"><button onclick="openManualTimeLog()">+ Log thủ công</button></div></div>
       <article class="card time-tracker">
         <div><span>ĐANG LÀM</span><b id="activeTimeLabel">Chưa bắt đầu</b><small id="activeTimeClock">00:00:00</small></div>
         <button id="stopTimeButton" class="stop-time" onclick="stopTimeLog()" disabled>Dừng & lưu</button>
@@ -226,6 +228,8 @@
         <button onclick="startTimeLog('work','Công việc')">💼 Công việc</button><button onclick="startTimeLog('dead','Thời gian chết')">🫥 Thời gian chết</button><button onclick="startTimeLog('travel','Di chuyển')">🚗 Di chuyển</button><button onclick="startTimeLog('sleep','Ngủ')">😴 Ngủ</button><button onclick="startTimeLog('play','Đi chơi')">🎉 Đi chơi</button><button onclick="startTimeLog('personal','Cá nhân')">🧍 Cá nhân</button><button onclick="startTimeLog('walk','Đi bộ')">🚶 Đi bộ</button><button onclick="startTimeLog('exercise','Thể dục')">🏃 Thể dục</button><button onclick="startTimeLog('meal','Ăn uống')">🍜 Ăn uống</button>
       </div>
       <article class="card custom-time"><h3>Mục riêng</h3><div class="inline wrap"><input id="customTimeLabel" placeholder="Ví dụ: đọc sách, gọi điện, học tiếng Trung"><button onclick="startCustomTimeLog()">Bắt đầu</button></div></article>
+      <div class="section-head subhead"><div><h2>Cuộc hẹn & đi chơi</h2><p class="hint">Cà phê, gặp bạn, về quê hoặc lịch cá nhân — có người, địa điểm và giờ rõ ràng.</p></div><button onclick="openForm('appointment')">+ Thêm cuộc hẹn</button></div>
+      <div id="appointments" class="cards appointment-list"></div>
       <div class="two-col routine-grid">
         <article class="card">
           <div class="section-head compact"><h3>Điểm neo sinh hoạt</h3><button class="outline small" onclick="openRoutineForm()">Sửa giờ</button></div>
@@ -245,7 +249,7 @@
         <article class="card chart-card"><h3>Nhịp 7 ngày</h3><p class="hint">Tổng thời gian đã log và cơ cấu từng ngày.</p><div id="timeWeeklyChart" class="weekly-time-chart"></div></article>
       </div>
       <div id="timeStats" class="insight-grid"></div>
-      <div class="section-head subhead"><h2>Dòng thời gian</h2></div>
+      <div class="section-head subhead"><div><h2>Dòng thời gian</h2><p class="hint">Bạn có thể sửa hoặc xoá cả bản ghi tự động lẫn bản ghi nhập lại.</p></div><button class="outline" onclick="openManualTimeLog()">+ Thêm thời gian đã quên</button></div>
       <div id="timeEntries" class="cards"></div>
     </section>
 

@@ -111,8 +111,8 @@ function getPageData(page) {
     cv: ['CVs', 'ReflectionProfile'],
     study: ['StudyAbroadProfile', 'StudyAbroadOptions', 'StudyAbroadChecklist'],
     food: ['Meals', 'HealthProfile', 'WeightLogs', 'HealthLogs', 'RoutineSettings'],
-    travel: ['Flights', 'Hotels', 'Appointments'],
-    time: ['TimeLogs', 'TimeState', 'RoutineSettings'],
+    travel: ['Flights', 'Hotels'],
+    time: ['TimeLogs', 'TimeState', 'RoutineSettings', 'Appointments'],
     install: ['AppSettings']
   };
   if (page === 'cv') { ensureDefaultCv_(ss); ensureDefaultReflection_(ss); seedReflectionDetails_(ss); ensureReflectionSynthesis_(ss); }
