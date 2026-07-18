@@ -99,7 +99,7 @@ try {
     ];
     data.timelogs=[{id:'time-1',kind:'work',label:'Công việc',startAt:new Date().toISOString(),endAt:new Date().toISOString(),durationMinutes:90}];
     data.appointments=[{id:'appointment-1',title:'Cà phê với Minh',type:'coffee',startAt:new Date(Date.now()+86400000).toISOString(),location:'Quận 1',withWhom:'Minh'}];
-    data.flights=[{id:'flight-1',code:'VJ161',fromCode:'HAN',toCode:'SGN',departure:new Date(Date.now()+3*86400000).toISOString(),status:'scheduled'}];
+    data.flights=[{id:'flight-1',code:'VJ161',fromCode:'HAN',toCode:'SGN',departure:new Date(Date.now()+3*86400000).toISOString(),status:'scheduled'},{id:'flight-0',code:'VN210',fromCode:'SGN',toCode:'HAN',departure:new Date(Date.now()-86400000).toISOString(),status:'scheduled'}];
     data.healthprofile=[{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',dailyCalorieTarget:1900}];
     data.healthlogs=[
       {id:'health-1',date:new Date().toISOString(),type:'calorie_in',amount:1700,label:'Tổng bữa ăn',source:'iPhone Health'},
@@ -116,6 +116,7 @@ try {
     renderCvs();
     renderHealth();
     renderTravel();
+    cycleFlightBoard();
     document.getElementById('timeDate').value=localDateKey(new Date());
     renderTime();
   `, context, {filename:'smoke-fixtures.js'});
@@ -127,7 +128,7 @@ try {
   if (!getElement('assistantBrief').innerHTML.includes('Trung tâm') && !getElement('opsTaskChart').innerHTML) throw new Error('Operation Center did not render');
   if (!getElement('opsTaskChart').innerHTML || !getElement('opsMoneyChart').innerHTML || !getElement('opsTimeChart').innerHTML || !getElement('opsLifeChart').innerHTML || !getElement('operationKpis').innerHTML) throw new Error('Operation Center charts did not render');
   if (!getElement('miniCalendar').innerHTML.includes('✈️') || !getElement('miniCalendar').innerHTML.includes('☕') || !getElement('appointments').innerHTML.includes('Cà phê với Minh')) throw new Error('Mini calendar or appointments did not render');
-  if (!getElement('flightBoard').innerHTML.includes('flap-char') || !getElement('flightBoard').innerHTML.includes('flight-board-row')) throw new Error('Airport split-flap board did not render');
+  if (!getElement('flightBoard').innerHTML.includes('flap-char') || !getElement('flightBoard').innerHTML.includes('ORIGIN') || !getElement('flightBoard').innerHTML.includes('DESTINATION') || !getElement('flightBoard').innerHTML.includes('airline-mark') || !getElement('flightBoardMode').textContent.includes('DEPARTED')) throw new Error('Airport split-flap board did not render or rotate to departed flights');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
   if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('class="dialog-actions"') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant tab, mobile dialog actions, Health import, or manual time UI missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');

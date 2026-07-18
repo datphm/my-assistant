@@ -207,8 +207,8 @@
         <button class="outline danger" onclick="disableTravelSync()">Tắt tự động</button>
       </div>
       <div id="travelInsights" class="insight-grid"></div>
-      <article class="flight-board-wrap" aria-label="Bảng chuyến bay kiểu sân bay">
-        <div class="flight-board-head"><div><span>MY ASSISTANT AIRPORT</span><h3>BẢNG CHUYẾN BAY</h3></div><span class="flight-board-clock" id="flightBoardClock">--:--:--</span></div>
+      <article id="flightBoardWrap" class="flight-board-wrap" aria-label="Airport-style departures board">
+        <div class="flight-board-head"><div><span>MY ASSISTANT AIRPORT</span><h3>DEPARTURES</h3></div><div class="flight-board-live"><span id="flightBoardMode">UPCOMING · 1/1</span><b class="flight-board-clock" id="flightBoardClock">--:--:--</b></div></div>
         <div id="flightBoard" class="flight-board"></div>
       </article>
       <div id="upcomingFlightPlan" class="cards flight-plans"></div>
