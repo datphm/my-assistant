@@ -99,12 +99,49 @@ function assistantMoney(value){return appSettings().hideFinancialAmounts==='yes'
 function assistantCheckKey(){return `my-assistant-day-check-v1:${localDateKey(new Date())}`}
 function assistantChecks(){try{return JSON.parse(localStorage.getItem(assistantCheckKey())||'{}')}catch(e){return {}}}
 function toggleAssistantCheck(id,checked){const state=assistantChecks();state[id]=checked;localStorage.setItem(assistantCheckKey(),JSON.stringify(state));renderAssistantBrief()}
+function assistantNowTask(){
+  if(activeTimeLog){const running=data.tasks.find(task=>!truth(task.done)&&task.status!=='done'&&task.title===activeTimeLog.label);if(running)return running}
+  return assistantTopTask();
+}
+function openAssistantNowTask(id){
+  taskFoldState[id]=false;localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));activatePage('today');
+  setTimeout(()=>{render();$(`task-${id}`)?.scrollIntoView({behavior:'smooth',block:'start'})},80);
+}
+function rescueMe(){
+  assistantMode='overwhelmed';localStorage.setItem('my-assistant-mode-v1','overwhelmed');const task=assistantTopTask();
+  if(!task){activatePage('today');openForm('task');return}
+  taskFoldState[task.id]=false;localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));
+  activatePage('today');render();setTimeout(()=>$(`task-${task.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),80);toast('Chế độ Cứu tôi: chỉ làm một bước trong 5 phút.');
+}
+function assistantQuickBlocked(id){
+  const task=data.tasks.find(item=>item.id===id);if(!task)return;
+  openForm('taskUpdate',{taskId:id,status:'blocked',note:'Tôi đang kẹt vì: ',nextFollowUpAt:task.followUpAt||''});
+}
+function assistantDayEvents(){
+  const start=new Date();start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);
+  const rows=[];
+  (data.tasks||[]).filter(task=>!truth(task.done)&&task.status!=='done'&&task.dueAt).forEach(task=>{const at=new Date(task.dueAt);if(at>=start&&at<end)rows.push({at,icon:'✓',label:task.title,page:'today'})});
+  (data.appointments||[]).filter(item=>item.startAt).forEach(item=>{const at=new Date(item.startAt);if(at>=start&&at<end)rows.push({at,icon:appointmentIcon(item.type),label:item.title||'Cuộc hẹn',page:'time'})});
+  (data.flights||[]).filter(item=>item.departure).forEach(item=>{const at=new Date(item.departure);if(at>=start&&at<end)rows.push({at,icon:'✈',label:item.code||'Chuyến bay',page:'travel'})});
+  return rows.sort((a,b)=>a.at-b.at).slice(0,5);
+}
+function assistantMomentum(b){
+  const today=localDateKey(new Date()),doneUpdates=(data.taskupdates||[]).filter(item=>item.status==='done'&&item.createdAt&&localDateKey(item.createdAt)===today).length,doneSteps=(data.tasksteps||[]).filter(item=>truth(item.done)&&item.completedAt&&localDateKey(item.completedAt)===today).length,logged=Number(b.time.loggedMinutes||0),health=(data.healthlogs||[]).filter(item=>item.date&&localDateKey(item.date)===today).length,checks=Object.values(assistantChecks()).filter(Boolean).length;
+  const score=Math.min(100,doneUpdates*18+doneSteps*4+Math.min(25,Math.floor(logged/10))+Math.min(12,health*3)+checks*5),stage=score>=80?'🌳':score>=55?'🌿':score>=30?'🌱':'🪴';
+  return {score,stage,label:score>=80?'Ngày đang chạy rất tốt':score>=55?'Đà đang lên':score>=30?'Bạn đã tạo được nhịp':'Chỉ cần bắt đầu một bước'};
+}
+function updateAssistantNowClock(){
+  const clock=$('assistantNowClock'),countdown=$('assistantNowCountdown'),progress=$('assistantNowProgress');if(!clock||!countdown||!progress)return;
+  const now=new Date();clock.textContent=timeOnly(now,true);const task=assistantNowTask();
+  if(!task?.dueAt){countdown.textContent=activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline';progress.style.setProperty?.('--now-progress','0deg');return}
+  const remaining=new Date(task.dueAt)-now,minutes=Math.max(0,Math.ceil(remaining/60000)),duration=Math.max(10,Number(task.minutes||15)),ratio=Math.max(0,Math.min(1,1-minutes/duration));countdown.textContent=remaining<=0?'ĐÃ ĐẾN HẠN':minutes<60?`Còn ${minutes} phút`:`Còn ${Math.floor(minutes/60)}h ${minutes%60}m`;progress.style.setProperty?.('--now-progress',`${Math.round(ratio*360)}deg`);
+}
 function renderAssistantBrief(){
   const box=$('assistantBrief');if(!box)return;
   if(!assistantBrief){
     box.innerHTML=`<article class="card assistant-loading"><b>${assistantBriefLoading?'Trợ lý đang tổng hợp ngày của bạn…':'Bản brief chưa tải'}</b><span>Việc vẫn dùng được ngay; tiền, sức khỏe, chuyến đi và du học đang tải nền.</span>${assistantBriefLoading?'':`<button onclick="loadAssistantBrief(true)">Tải bản brief</button>`}</article>`;return;
   }
-  const b=assistantBrief,now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),focus=assistantTopTask();
+  const b=assistantBrief,now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),focus=assistantNowTask();
   const net=Number(b.finance.balance||0)-Number(b.finance.debt||0),flight=b.travel,checkinDue=flight&&new Date(flight.checkinAt)<=now,studyNext=b.study.next,studyDays=studyNext?.dueAt?Math.ceil((new Date(studyNext.dueAt)-now)/86400000):null;
   const alerts=[];
   if(overdue.length)alerts.push({tone:'danger',kind:'overdue',title:`${overdue.length} việc đã quá hạn`,detail:'Chọn một việc để xử lý hoặc đặt lại deadline thật.',page:'today'});
@@ -115,11 +152,16 @@ function renderAssistantBrief(){
   if(studyDays!==null&&studyDays<=30)alerts.push({tone:studyDays<7?'danger':'info',kind:'study',title:`Hồ sơ du học: còn ${Math.max(0,studyDays)} ngày`,detail:studyNext.title||'Có bước hồ sơ sắp đến hạn.',page:'study'});
   const card=(icon,label,value,detail,page)=>`<button class="assistant-domain" onclick="activatePage('${page}')"><span>${icon} ${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></button>`;
   const checks=assistantChecks(),checkItems=[['top3','Chốt tối đa 3 đầu ra quan trọng'],['follow','Đặt giờ báo lại/follow-up'],['focus','Chặn một phiên tập trung không gián đoạn'],['close','Cuối ngày: cập nhật, dời việc và chuẩn bị ngày mai']];
-  const plannedMinutes=open.reduce((sum,task)=>sum+Number(task.minutes||15),0),blocked=open.filter(task=>task.status==='blocked'),waiting=open.filter(task=>task.status==='waiting'||task.waitingFor);
+  const plannedMinutes=open.reduce((sum,task)=>sum+Number(task.minutes||15),0),blocked=open.filter(task=>task.status==='blocked'),waiting=open.filter(task=>task.status==='waiting'||task.waitingFor),focusStep=focus&&taskSteps(focus.id).find(step=>!truth(step.done)),dayEvents=assistantDayEvents(),momentum=assistantMomentum(b),focusMinutes=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
   const monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);const monthTx=(data.expenses||[]).filter(item=>item.date&&new Date(item.date)>=monthStart),monthIncome=monthTx.filter(item=>item.direction==='income').reduce((sum,item)=>sum+Number(item.amount||0),0),monthExpense=monthTx.filter(item=>item.direction!=='income').reduce((sum,item)=>sum+Number(item.amount||0),0);
   const operationAdvice=overdue.length?`Khoanh đúng 1 việc quá hạn, đặt lại deadline thật hoặc hoàn thành bước giao được trong 10 phút.`:blocked.length?`Có ${blocked.length} việc đang kẹt. Gọi người có quyền quyết định và ghi rõ điều kiện để mở khoá.`:waiting.length?`Có ${waiting.length} việc đang chờ. Gửi follow-up có câu hỏi chốt và một mốc phản hồi cụ thể.`:plannedMinutes>360?'Khối lượng dự kiến vượt 6 giờ. Dời ít nhất một việc để lịch hôm nay có thể thực hiện được.':focus?`Bắt đầu “${focus.title}” trong 10 phút, cập nhật file rồi báo lại trước khi mở việc mới.`:'Chốt tối đa 3 đầu ra đo được cho hôm nay.';
   const financeAdvice=Number(b.finance.debt||0)>Number(b.finance.balance||0)?`Dư nợ cao hơn số dư ${assistantMoney(Math.abs(net))}. Giữ đủ khoản tối thiểu đến hạn, sau đó dồn phần dư vào khoản lãi cao nhất.`:monthExpense>monthIncome&&monthExpense?`Chi tháng này đang vượt thu ${assistantMoney(monthExpense-monthIncome)}. Hoãn một khoản không cấp thiết và cập nhật lại ngân sách tuần.`:b.finance.nextPlan?`Kế hoạch gần nhất là “${b.finance.nextPlan.name||'khoản chi lớn'}”. Tách tiền dành riêng trước khi chi tiêu linh hoạt.`:'Dòng tiền chưa có cảnh báo lớn. Tiếp tục cập nhật số dư và dành tiền cho nợ/mục tiêu trước khi chi linh hoạt.';
-  box.innerHTML=`<section class="assistant-top-grid"><article class="card assistant-gate-card assistant-gate-top"><div class="operation-chart-head"><div><span class="section-kicker">DISPLAY AT GATE</span><h3>8 chuyến bay gần nhất</h3></div><button onclick="activatePage('travel')">Mở chuyến đi</button></div><div id="assistantGateDisplay"></div></article>
+  box.innerHTML=`<article class="card assistant-now">
+    <div class="assistant-now-main"><div class="assistant-now-ring" id="assistantNowProgress"><span id="assistantNowClock">${timeOnly(new Date(),true)}</span><b id="assistantNowCountdown">${focus?.dueAt?'Đang tính thời gian…':activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline'}</b></div><div class="assistant-now-copy"><span class="section-kicker">${activeTimeLog?'ĐANG LÀM':'BÂY GIỜ · MỘT VIỆC DUY NHẤT'}</span><h2>${esc(focus?.title||'Chọn một việc để bắt đầu')}</h2><p>${esc(focusStep?.title||focus?.nextAction||'Đừng lập thêm kế hoạch. Chọn một bước có thể làm trong 5–10 phút.')}</p>${focus?.outcome?`<small>Đầu ra cần giao: ${esc(focus.outcome)}</small>`:''}</div></div>
+    <div class="assistant-now-actions">${focus?`<button class="primary" onclick="focusTask('${focus.id}')">▶ Bắt đầu ${focusMinutes} phút</button><button onclick="openTaskUpdate('${focus.id}')">↻ Cập nhật</button><button onclick="assistantQuickBlocked('${focus.id}')">Tôi đang kẹt</button><button onclick="complete('${focus.id}')">✓ Đóng việc</button>`:`<button class="primary" onclick="openForm('task')">+ Ghi việc đầu tiên</button>`}<button class="rescue" onclick="rescueMe()">🛟 Cứu tôi</button></div>
+    <div class="assistant-day-strip">${dayEvents.length?dayEvents.map(item=>`<button onclick="activatePage('${item.page}')"><span>${timeOnly(item.at)}</span><b>${item.icon}</b><small>${esc(item.label)}</small></button>`).join(''):'<p>Hôm nay chưa có mốc giờ cố định. Hãy chặn một phiên tập trung ngắn.</p>'}</div>
+  </article>
+  <section class="assistant-top-grid"><article class="card assistant-gate-card assistant-gate-top"><div class="operation-chart-head"><div><span class="section-kicker">DISPLAY AT GATE</span><h3>8 chuyến bay gần nhất</h3></div><button onclick="activatePage('travel')">Mở chuyến đi</button></div><div id="assistantGateDisplay"></div></article>
   <article class="card operation-queue assistant-top-queue"><div class="operation-chart-head"><div><span class="section-kicker">HÀNG ĐỢI ĐIỀU HÀNH</span><h3>5 việc cần mắt bạn nhất</h3></div><button onclick="activatePage('today')">Xem toàn bộ</button></div><div id="opsPriorityQueue"></div></article></section>
   <article class="card assistant-hq">
     <div class="assistant-head"><div><span class="pill">TRỢ LÝ TOÀN PHẦN · CẬP NHẬT ${timeOnly(b.generatedAt)}</span><h2>${assistantMode==='overwhelmed'?'Hôm nay chỉ cần thoát khỏi trạng thái đứng hình.':'Bức tranh toàn ngày của bạn'}</h2></div><button class="assistant-refresh" onclick="loadAssistantBrief(true)" ${assistantBriefLoading?'disabled':''}>${assistantBriefLoading?'Đang cập nhật…':'↻ Làm mới'}</button></div>
@@ -135,6 +177,7 @@ function renderAssistantBrief(){
     ${alerts.length?`<div class="assistant-alert-list">${alerts.slice(0,4).map(a=>`<button class="assistant-alert ${a.tone}" onclick="openAssistantAction('${a.page}','${a.kind}')"><b>${esc(a.title)}</b><span>${esc(a.detail)}</span><i>Mở xử lý →</i></button>`).join('')}</div>`:'<div class="assistant-clear">Không có cảnh báo chéo nào cần xử lý ngay.</div>'}
     <details class="assistant-day-loop"><summary>Mở ngày / đóng ngày <span>${Object.values(checks).filter(Boolean).length}/4</span></summary><div>${checkItems.map(item=>`<label><input type="checkbox" ${checks[item[0]]?'checked':''} onchange="toggleAssistantCheck('${item[0]}',this.checked)"> ${item[1]}</label>`).join('')}</div></details>
   </article>
+  <article class="card daily-capsule"><div class="capsule-symbol"><b>${momentum.stage}</b><span>${momentum.score}/100</span></div><div><span class="section-kicker">DAILY CAPSULE · MOMENTUM</span><h3>${esc(momentum.label)}</h3><p>${esc(b.dailyGuidance?.headline||operationAdvice)}</p></div><div class="capsule-chips"><span>✅ ${open.length} việc mở</span><span>⏱ ${minutesText(Number(b.time.loggedMinutes||0))} đã log</span><span>💧 ${num(b.health.waterMl||0)} ml</span><span>🎓 ${b.study.pending||0} bước hồ sơ</span></div></article>
   <section class="operation-advice-grid">
     <article class="card operation-advice"><span class="section-kicker">LỜI KHUYÊN VẬN HÀNH</span><h3>${overdue.length?'Đóng vòng việc cũ trước khi nhận thêm':'Giữ một luồng công việc có thể chốt'}</h3><p>${esc(operationAdvice)}</p><button onclick="openAssistantAction('today','${overdue.length?'overdue':'followup'}')">Mở vùng xử lý →</button></article>
     <article class="card operation-advice finance"><span class="section-kicker">LỜI KHUYÊN TÀI CHÍNH</span><h3>${Number(b.finance.debt||0)>Number(b.finance.balance||0)?'Ưu tiên giảm áp lực dư nợ':'Bảo vệ dòng tiền trước'}</h3><p>${esc(financeAdvice)}</p><button onclick="openAssistantAction('money','debt')">Mở kế hoạch tiền →</button></article>
@@ -148,6 +191,7 @@ function renderAssistantBrief(){
   </section>
   <article class="card mini-calendar-card"><div class="operation-chart-head"><div><span class="section-kicker">LỊCH NHỊP SỐNG</span><h3 id="miniCalendarTitle">Lịch tháng</h3></div><div class="mini-calendar-nav"><button onclick="moveMiniCalendar(-1)" aria-label="Tháng trước">‹</button><button onclick="resetMiniCalendar()">Hôm nay</button><button onclick="moveMiniCalendar(1)" aria-label="Tháng sau">›</button></div></div><div id="miniCalendar" class="mini-calendar"></div><div class="mini-calendar-legend"><span>✈️ Bay</span><span>☕ Hẹn</span><span>🛏️ Ở</span><span>🎓 Du học</span><span><b>2</b> deadline</span></div></article>`;
   renderOperationCenter(b);
+  updateAssistantNowClock();
 }
 
 function renderOperationCenter(b){
@@ -197,7 +241,7 @@ function renderTimeAnchor(){
   const ms=new Date(next.dueAt)-now; const past=ms<0; const total=Math.abs(ms); const hours=Math.floor(total/3600000); const mins=Math.floor(total%3600000/60000); const secs=Math.floor(total%60000/1000);
   countdown.textContent=past?`Quá ${hours}h ${mins}m ${secs}s`:`Còn ${hours}h ${mins}m ${secs}s`; title.textContent=next.title;
 }
-setInterval(()=>{renderTimeAnchor();renderActiveTime();renderFlightBoardClock()},1000);
+setInterval(()=>{renderTimeAnchor();renderActiveTime();renderFlightBoardClock();updateAssistantNowClock()},1000);
 setInterval(()=>cycleFlightBoard(),20000);
 setInterval(()=>{rotateAssistantGate();renderLiveFlightStatuses()},30000);
 // Keep the local counter smooth without continuously competing with save calls
