@@ -48,14 +48,14 @@
     </nav>
 
     <section id="today" class="page">
-      <div class="section-head"><h2>Việc kế tiếp</h2><button onclick="openForm('task')">+ Thêm việc</button></div>
+      <div class="section-head tab-heading"><div><span class="section-kicker">HÔM NAY · CHỈ VIỆC CẦN LÀM</span><h2>Việc kế tiếp</h2><p class="hint">Nhìn Kanban, chọn một bước nhỏ rồi bắt đầu. Công cụ phụ được thu gọn bên dưới.</p></div><button onclick="openForm('task')">+ Thêm việc</button></div>
       <article class="card time-anchor" data-home-panel="clock">
         <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
         <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
       </article>
       <div id="todayCoach" class="today-coach" data-home-panel="coach"></div>
-      <section id="notificationCenter" class="notification-center" data-home-panel="notifications"></section>
-      <article class="card quick-capture" data-home-panel="capture">
+      <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
+      <details class="compact-section" data-ui-fold="today-capture" ontoggle="rememberUiFold('today-capture',this)"><summary><span><b>＋ Nhận nhiệm vụ mới</b><small>Dán tin nhắn giao việc và để app phân rã</small></span><i></i></summary><article class="card quick-capture" data-home-panel="capture">
         <h3>Dán nguyên nhiệm vụ bạn vừa nhận</h3>
         <p class="hint">App sẽ gợi ý chuỗi hành động để bạn chủ động chốt việc, cập nhật tài liệu và báo lại.</p>
         <div class="inline wrap">
@@ -64,9 +64,9 @@
           <button onclick="suggestTaskPlan()">Phân rã nhiệm vụ</button>
         </div>
         <div id="taskSuggestions" class="task-suggestions"></div>
-      </article>
-      <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
-      <article class="card think-deep" data-home-panel="thinkdeep">
+      </article></details>
+      <details class="compact-section" data-ui-fold="today-notifications" ontoggle="rememberUiFold('today-notifications',this)"><summary><span><b>◎ Thông báo & follow-up</b><small>Mở khi cần rà cảnh báo</small></span><i></i></summary><section id="notificationCenter" class="notification-center" data-home-panel="notifications"></section></details>
+      <details class="compact-section" data-ui-fold="today-think" ontoggle="rememberUiFold('today-think',this)"><summary><span><b>◇ Think Deep</b><small>6 câu hỏi chốt đầu ra trước khi làm</small></span><i></i></summary><article class="card think-deep" data-home-panel="thinkdeep">
         <div class="think-head"><span class="pill">THINK DEEP · 5 PHÚT</span><button class="outline small" onclick="resetDeepChecklist()">Làm mới</button></div>
         <h2>Đừng chỉ nhận việc. Hãy chốt đầu ra.</h2>
         <p>Mỗi nhiệm vụ mới phải đi qua 6 câu hỏi trước khi bạn rời màn hình này.</p>
@@ -79,8 +79,8 @@
           <label><input data-deep type="checkbox"> Khi nào gửi recap cho người giao?</label>
         </div>
         <p class="deep-mantra">Hỏi rõ → gọi người quyết định → chốt → cập nhật tài liệu → báo lại.</p>
-      </article>
-      <section data-home-panel="tasks"><div class="task-view-tools"><div><h2>Chi tiết công việc</h2><p class="hint">Checklist mặc định được thu gọn; mở đúng việc bạn đang làm.</p></div><div><button class="outline small" onclick="setAllTaskFolds(true)">Thu gọn tất cả</button><button class="outline small" onclick="setAllTaskFolds(false)">Mở tất cả</button></div></div><div id="tasks" class="cards"></div></section>
+      </article></details>
+      <details class="compact-section" data-ui-fold="today-details" ontoggle="rememberUiFold('today-details',this)"><summary><span><b>☷ Chi tiết công việc</b><small>Checklist, cập nhật và lịch sử của từng việc</small></span><i></i></summary><section data-home-panel="tasks"><div class="task-view-tools"><div><h2>Chi tiết công việc</h2><p class="hint">Checklist mặc định được thu gọn; mở đúng việc bạn đang làm.</p></div><div><button class="outline small" onclick="setAllTaskFolds(true)">Thu gọn tất cả</button><button class="outline small" onclick="setAllTaskFolds(false)">Mở tất cả</button></div></div><div id="tasks" class="cards"></div></section></details>
     </section>
 
     <section id="assistant" class="page active">
@@ -123,15 +123,17 @@
         <article class="card chart-card"><h3>Dòng tiền theo thời gian</h3><p class="hint">So sánh tiền vào và tiền ra trong kỳ đang chọn.</p><div id="moneyFlowChart" class="flow-chart"></div></article>
         <article class="card chart-card"><h3>Tài sản khả dụng & dư nợ</h3><p class="hint">Nhìn nhanh tài khoản nào đang chiếm tỷ trọng lớn.</p><div id="balanceDebtChart" class="balance-chart"></div></article>
       </div>
-      <h3>Đồng bộ email ngân hàng</h3>
-      <p class="hint">Quét Gmail theo truy vấn bạn tự chọn. Nếu email có “Số dư”, app cập nhật số dư; nếu là “ghi có/received/refund” thì cộng tiền, còn giao dịch chi thì trừ tiền.</p>
-      <div class="inline wrap">
-        <input id="gmailQuery" placeholder='from:alerts@yourbank.com newer_than:730d'>
-        <select id="gmailWallet"></select>
-        <button onclick="importExpenses()">Nhập ngay</button>
-        <button class="outline" onclick="enableBankSync()">Bật tự động</button>
-        <button class="outline danger" onclick="disableBankSync()">Tắt tự động</button>
-      </div>
+      <details class="compact-section sync-section" data-ui-fold="money-bank-sync" ontoggle="rememberUiFold('money-bank-sync',this)"><summary><span><b>↻ Đồng bộ email ngân hàng</b><small>Gmail · cập nhật giao dịch và số dư tự động</small></span><i></i></summary><div class="compact-section-body">
+        <p class="hint">Quét Gmail theo truy vấn bạn tự chọn. Nếu email có “Số dư”, app cập nhật số dư; nếu là “ghi có/received/refund” thì cộng tiền, còn giao dịch chi thì trừ tiền.</p>
+        <div class="inline wrap">
+          <input id="gmailQuery" placeholder='from:alerts@yourbank.com newer_than:730d'>
+          <select id="gmailWallet"></select>
+          <button onclick="importExpenses()">Nhập ngay</button>
+          <button class="outline" onclick="enableBankSync()">Bật tự động</button>
+          <button class="outline danger" onclick="disableBankSync()">Tắt tự động</button>
+        </div>
+      </div></details>
+      <div class="section-head subhead compact"><h3>Giao dịch gần đây</h3><button class="outline small" onclick="openForm('expense')">+ Giao dịch</button></div>
       <div id="expenses" class="cards compact-cards"></div>
       <h3>Khoản nợ</h3>
       <div id="debtPayoffPlan"></div>
@@ -199,13 +201,15 @@
         <h2>Chuyến đi</h2>
         <div class="actions"><button class="outline" onclick="reviewFutureFlightsUi()">Rà lại lịch bay</button><button onclick="openForm('flight')">+ Chuyến bay</button></div>
       </div>
-      <p class="hint">Đã nạp sẵn list chuyến bay từ file PDF bạn gửi. Gmail chỉ quét khi bạn nhập query, ví dụ từ hãng bay/Booking/Agoda trong 2 năm.</p>
-      <div class="inline wrap travel-tools">
-        <input id="travelQuery" placeholder='(from:vietjetair.com OR from:booking.com OR from:agoda.com) newer_than:730d'>
-        <button onclick="importTravel()">Nhập ngay</button>
-        <button class="outline" onclick="enableTravelSync()">Bật tự động</button>
-        <button class="outline danger" onclick="disableTravelSync()">Tắt tự động</button>
-      </div>
+      <details class="compact-section sync-section" data-ui-fold="travel-email-sync" ontoggle="rememberUiFold('travel-email-sync',this)"><summary><span><b>↻ Đồng bộ email vé máy bay & khách sạn</b><small>Gmail · Booking · Agoda · hãng bay</small></span><i></i></summary><div class="compact-section-body">
+        <p class="hint">Đã nạp sẵn list chuyến bay từ file PDF bạn gửi. Gmail chỉ quét khi bạn nhập query, ví dụ từ hãng bay/Booking/Agoda trong 2 năm.</p>
+        <div class="inline wrap travel-tools">
+          <input id="travelQuery" placeholder='(from:vietjetair.com OR from:booking.com OR from:agoda.com) newer_than:730d'>
+          <button onclick="importTravel()">Nhập ngay</button>
+          <button class="outline" onclick="enableTravelSync()">Bật tự động</button>
+          <button class="outline danger" onclick="disableTravelSync()">Tắt tự động</button>
+        </div>
+      </div></details>
       <div id="travelInsights" class="insight-grid"></div>
       <article id="flightBoardWrap" class="flight-board-wrap" aria-label="Airport-style departures board">
         <div class="flight-board-head"><div><span>MY ASSISTANT AIRPORT</span><h3>DEPARTURES</h3></div><div class="flight-board-live"><span id="flightBoardMode">UPCOMING · 1/1</span><b class="flight-board-clock" id="flightBoardClock">--:--:--</b></div></div>

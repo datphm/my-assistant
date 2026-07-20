@@ -139,9 +139,11 @@ try {
   if (!getElement('assistantBrief').innerHTML.includes('BÂY GIỜ · MỘT VIỆC DUY NHẤT') || !getElement('assistantBrief').innerHTML.includes('🛟 Cứu tôi') || !getElement('assistantBrief').innerHTML.includes('DAILY CAPSULE · MOMENTUM')) throw new Error('Hourly assistant return loop did not render');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
   if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('id="formDelete"') || !indexSource.includes('deleteCurrentFormItem()') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant tab, flight delete action, Health import, or manual time UI missing');
+  if (!indexSource.includes('data-ui-fold="money-bank-sync"') || !indexSource.includes('data-ui-fold="today-capture"') || !indexSource.includes('data-ui-fold="travel-email-sync"') || !source.includes('rememberUiFold')) throw new Error('Compact remembered tab controls are missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
   const styleSource=fs.readFileSync(path.join(__dirname,'..','Styles.html'),'utf8');
   if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar') || !styleSource.includes('Stable Changi-style flight information board') || styleSource.includes('airport-board-turn')) throw new Error('Health, calendar, or stable Changi board styles missing');
+  if (!styleSource.includes('2026 compact tab system') || !styleSource.includes('.compact-section') || !styleSource.includes('.mini-calendar-card .mini-day{min-height:36px')) throw new Error('Compact tab or half-height life calendar styles missing');
   if (!styleSource.includes('.flight-info-row:not(.board-labels)>b:nth-child(3)') || !styleSource.includes('background:#facc15')) throw new Error('Yellow full-cell flight number styling is missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {

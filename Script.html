@@ -12,6 +12,7 @@ let assistantBrief=null,assistantBriefLoading=false;
 let assistantMode=localStorage.getItem('my-assistant-mode-v1')||'focus';
 let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
 let taskFoldState=(()=>{try{return JSON.parse(localStorage.getItem('my-assistant-task-fold-v1')||'{}')}catch(e){return {}}})();
+let uiFoldState=(()=>{try{return JSON.parse(localStorage.getItem('my-assistant-ui-fold-v1')||'{}')}catch(e){return {}}})();
 let tickerHidden=localStorage.getItem('my-assistant-ticker-hidden-v1')==='yes';
 let tickerCustomMessage=localStorage.getItem('my-assistant-ticker-message-v1')||'';
 let miniCalendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);
@@ -28,6 +29,8 @@ function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(
 function refreshFullData(){if(fullLoading)return;fullLoading=true;document.body.classList.add('full-loading');google.script.run.withSuccessHandler(d=>{fullLoading=false;fullDataLoaded=true;document.body.classList.remove('full-loading');applyServerData(d);render()}).withFailureHandler(e=>{fullLoading=false;document.body.classList.remove('full-loading');fail(e)}).getData()}
 function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',startupPage:'assistant',theme:'pastel',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes'}}
 function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
+function rememberUiFold(key,details){uiFoldState[key]=details.open;localStorage.setItem('my-assistant-ui-fold-v1',JSON.stringify(uiFoldState))}
+function restoreUiFolds(){document.querySelectorAll('details[data-ui-fold]').forEach(details=>{details.open=uiFoldState[details.dataset.uiFold]===true})}
 function render(){
   const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
@@ -949,5 +952,6 @@ function activatePage(page){
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
 function fail(e){toast(e.message||String(e))}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
+restoreUiFolds();
 load();
 </script>
