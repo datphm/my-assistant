@@ -92,8 +92,7 @@
       <div class="section-head"><h2>Hồ sơ cá nhân</h2><button onclick="openProfileForm()">Cập nhật</button></div>
       <div id="profileInsights" class="insight-grid"></div>
       <div id="profileCard" class="cards"></div>
-      <div class="section-head subhead"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div>
-      <div id="walletsProfile" class="cards"></div>
+      <details class="compact-section" data-ui-fold="profile-wallets" ontoggle="rememberUiFold('profile-wallets',this)"><summary><span><b>◉ Ví & tài khoản trong hồ sơ</b><small>Xem, sửa hoặc xoá tài khoản đã lưu</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div><div id="walletsProfile" class="cards"></div></div></details>
     </section>
 
     <section id="money" class="page">
@@ -133,14 +132,9 @@
           <button class="outline danger" onclick="disableBankSync()">Tắt tự động</button>
         </div>
       </div></details>
-      <div class="section-head subhead compact"><h3>Giao dịch gần đây</h3><button class="outline small" onclick="openForm('expense')">+ Giao dịch</button></div>
-      <div id="expenses" class="cards compact-cards"></div>
-      <h3>Khoản nợ</h3>
-      <div id="debtPayoffPlan"></div>
-      <div id="debts" class="cards"></div>
-      <div class="section-head subhead"><h3>Kế hoạch chi lớn / chuyến đi sắp tới</h3><button class="outline" onclick="openForm('plan')">+ Kế hoạch</button></div>
-      <div id="moneyCoach" class="cards"></div>
-      <div id="plans" class="cards"></div>
+      <details class="compact-section" data-ui-fold="money-recent-transactions" ontoggle="rememberUiFold('money-recent-transactions',this)"><summary><span><b>₫ Giao dịch gần đây</b><small>12 giao dịch mới nhất · mở để sửa hoặc xoá</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Giao dịch gần đây</h3><button class="outline small" onclick="openForm('expense')">+ Giao dịch</button></div><div id="expenses" class="cards compact-cards"></div></div></details>
+      <details class="compact-section" data-ui-fold="money-debts" ontoggle="rememberUiFold('money-debts',this)"><summary><span><b>◎ Khoản nợ & kế hoạch trả</b><small>Ưu tiên, cập nhật số nợ và ghi nhận thanh toán</small></span><i></i></summary><div class="compact-section-body"><div id="debtPayoffPlan"></div><div id="debts" class="cards"></div></div></details>
+      <details class="compact-section" data-ui-fold="money-plans" ontoggle="rememberUiFold('money-plans',this)"><summary><span><b>◇ Kế hoạch chi lớn</b><small>Chuyến đi và khoản chi cần chuẩn bị trước</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Kế hoạch chi lớn / chuyến đi sắp tới</h3><button class="outline" onclick="openForm('plan')">+ Kế hoạch</button></div><div id="moneyCoach" class="cards"></div><div id="plans" class="cards"></div></div></details>
     </section>
 
     <section id="cv" class="page">
@@ -150,10 +144,10 @@
       <div class="section-head subhead"><h2>Định hướng & chiêm nghiệm</h2><button class="outline" onclick="openReflectionForm()">Cập nhật hồ sơ</button></div>
       <p class="hint">Phân tích nghề nghiệp dựa trên CV, thế mạnh và sở thích. Tử vi, bát tự, horoscope và thần số học được lưu như góc tự suy ngẫm, không dùng để quyết định thay bạn.</p>
       <div id="dailyGuidance" class="daily-guidance"></div>
-      <div class="career-reflection-grid">
+      <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Điểm mạnh, điểm cần cải thiện, tử vi, bát tự và horoscope</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
         <div id="careerAnalysis" class="cards"></div>
         <div id="reflectionProfile" class="cards"></div>
-      </div>
+      </div></div></details>
     </section>
 
     <section id="study" class="page">
@@ -168,10 +162,8 @@
         <article class="card"><div class="section-head compact"><h3>Hồ sơ cần đạt</h3><button class="text-button" onclick="openStudyProfileForm()">Sửa</button></div><div id="studyProfileSummary" class="study-profile-summary"></div></article>
         <article class="card"><h3>Kế hoạch tài chính</h3><div id="studyFinance"></div></article>
       </div>
-      <div class="section-head subhead"><h2>Trường & chương trình đang cân nhắc</h2><button class="outline" onclick="openForm('studyOption')">+ Thêm lựa chọn</button></div>
-      <div id="studyOptions" class="cards"></div>
-      <div class="section-head subhead"><h2>Lộ trình hồ sơ</h2><button class="outline" onclick="openForm('studyChecklist')">+ Thêm bước</button></div>
-      <div id="studyRoadmap" class="study-roadmap"></div>
+      <details class="compact-section" data-ui-fold="study-options" ontoggle="rememberUiFold('study-options',this)"><summary><span><b>☆ Trường & chương trình đang cân nhắc</b><small>Shortlist, học bổng và deadline</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Danh sách lựa chọn</h2><button class="outline" onclick="openForm('studyOption')">+ Thêm lựa chọn</button></div><div id="studyOptions" class="cards"></div></div></details>
+      <details class="compact-section" data-ui-fold="study-roadmap" ontoggle="rememberUiFold('study-roadmap',this)"><summary><span><b>✓ Lộ trình hồ sơ</b><small>Các bước phải hoàn thành để săn học bổng toàn phần</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Lộ trình hồ sơ</h2><button class="outline" onclick="openForm('studyChecklist')">+ Thêm bước</button></div><div id="studyRoadmap" class="study-roadmap"></div></div></details>
       <article class="card study-reminder"><h3>Quy tắc chống trì hoãn</h3><p>Mỗi tuần chỉ cần chốt một đầu ra du học: một bài thi thử, một trường được nghiên cứu, một tài liệu hoàn chỉnh hoặc một khoản tiền được chuyển vào quỹ. Không để “tìm hiểu du học” tồn tại như một việc vô hạn.</p></article>
     </section>
 
@@ -187,13 +179,10 @@
         <article class="card"><h3>Hôm nay: nước · bữa ăn · đi bộ</h3><div id="healthHabits" class="habit-dashboard"></div><div class="habit-actions"><button onclick="quickHealthLog('water')">+ 250 ml</button><button class="outline" onclick="quickHealthLog('meal')">+ Bữa ăn</button><button class="outline" onclick="startTimeLog('walk','Đi bộ')">Bắt đầu đi bộ</button></div></article>
         <article class="card calorie-calculator"><h3>Máy tính calorie vận động</h3><p class="hint">Ước tính theo cân nặng, thời lượng và MET; không phải số đo y tế.</p><div class="calculator-inputs"><select id="calorieActivity" onchange="calculateCalories()"><option value="2.8">Đi bộ chậm</option><option value="3.5" selected>Đi bộ vừa</option><option value="4.3">Đi bộ nhanh</option><option value="4">Đạp xe nhẹ</option><option value="3">Bài sức mạnh với ghế</option><option value="5.8">Bơi nhẹ</option></select><input id="calorieMinutes" type="number" min="1" value="20" oninput="calculateCalories()" aria-label="Số phút"><input id="calorieTargetBurn" type="number" min="1" value="300" oninput="calculateCalories()" aria-label="Mục tiêu calorie"></div><div id="calorieCalculatorResult" class="calculator-result"></div></article>
       </div>
-      <div class="section-head subhead"><div><h2>Calorie nạp vào & tiêu hao</h2><p class="hint">Nhập thủ công số liệu từ Apple Health, đồng hồ hoặc nhãn dinh dưỡng.</p></div><button onclick="openForm('healthEntry')">+ Dữ liệu Health</button></div>
-      <div class="health-calorie-grid"><article class="card chart-card"><div id="calorieBalanceSummary"></div><div id="calorieBalanceChart"></div></article><article class="card"><h3>Dữ liệu gần đây</h3><div id="healthEntries" class="health-entry-list"></div></article></div>
+      <details class="compact-section" data-ui-fold="health-calories" ontoggle="rememberUiFold('health-calories',this)"><summary><span><b>⌁ Calorie nạp vào & tiêu hao</b><small>Dữ liệu thủ công từ Apple Health, đồng hồ và bữa ăn</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><div><h2>Calorie nạp vào & tiêu hao</h2><p class="hint">Nhập thủ công số liệu từ Apple Health, đồng hồ hoặc nhãn dinh dưỡng.</p></div><button onclick="openForm('healthEntry')">+ Dữ liệu Health</button></div><div class="health-calorie-grid"><article class="card chart-card"><div id="calorieBalanceSummary"></div><div id="calorieBalanceChart"></div></article><article class="card"><h3>Dữ liệu gần đây</h3><div id="healthEntries" class="health-entry-list"></div></article></div></div></details>
       <div class="section-head subhead"><h2>Bài tập hôm nay</h2><button class="outline" onclick="installHealthCalendarUi()">Nhắc mỗi ngày</button></div>
       <div id="workoutSuggestions" class="workout-grid"></div>
-      <div class="section-head subhead"><h2>Thực đơn đã lưu</h2><button onclick="openForm('meal')">+ Lưu món</button></div>
-      <article class="card meal-guide"><h3>Quy tắc bữa ăn không phải đếm quá nhiều</h3><p class="meta">½ đĩa rau · ¼ đạm · ¼ tinh bột; ưu tiên nước lọc, ăn chậm và chuẩn bị sẵn một bữa “cứu hộ” đơn giản cho ngày ADHD quá tải.</p></article>
-      <div id="meals" class="cards"></div>
+      <details class="compact-section" data-ui-fold="health-meals" ontoggle="rememberUiFold('health-meals',this)"><summary><span><b>🥗 Thực đơn đã lưu</b><small>Món ăn và quy tắc bữa ăn cứu hộ</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Thực đơn đã lưu</h2><button onclick="openForm('meal')">+ Lưu món</button></div><article class="card meal-guide"><h3>Quy tắc bữa ăn không phải đếm quá nhiều</h3><p class="meta">½ đĩa rau · ¼ đạm · ¼ tinh bột; ưu tiên nước lọc, ăn chậm và chuẩn bị sẵn một bữa “cứu hộ” đơn giản cho ngày ADHD quá tải.</p></article><div id="meals" class="cards"></div></div></details>
     </section>
 
     <section id="travel" class="page">
@@ -216,10 +205,8 @@
         <div id="flightBoard" class="flight-board"></div>
       </article>
       <div id="upcomingFlightPlan" class="cards flight-plans"></div>
-      <h3>Chuyến bay</h3>
-      <div id="flights" class="cards"></div>
-      <div class="section-head subhead"><h3>Khách sạn</h3><button class="outline" onclick="openForm('hotel')">+ Khách sạn</button></div>
-      <div id="hotels" class="cards"></div>
+      <details class="compact-section" data-ui-fold="travel-flights" ontoggle="rememberUiFold('travel-flights',this)"><summary><span><b>✈ Danh sách chuyến bay</b><small>Sửa, xoá, gate, terminal và tình trạng chuyến</small></span><i></i></summary><div class="compact-section-body"><div id="flights" class="cards"></div></div></details>
+      <details class="compact-section" data-ui-fold="travel-hotels" ontoggle="rememberUiFold('travel-hotels',this)"><summary><span><b>▣ Khách sạn</b><small>Địa chỉ, thời gian nhận phòng và chi phí</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Khách sạn</h3><button class="outline" onclick="openForm('hotel')">+ Khách sạn</button></div><div id="hotels" class="cards"></div></div></details>
     </section>
 
     <section id="time" class="page">
@@ -253,8 +240,7 @@
         <article class="card chart-card"><h3>Nhịp 7 ngày</h3><p class="hint">Tổng thời gian đã log và cơ cấu từng ngày.</p><div id="timeWeeklyChart" class="weekly-time-chart"></div></article>
       </div>
       <div id="timeStats" class="insight-grid"></div>
-      <div class="section-head subhead"><div><h2>Dòng thời gian</h2><p class="hint">Bạn có thể sửa hoặc xoá cả bản ghi tự động lẫn bản ghi nhập lại.</p></div><button class="outline" onclick="openManualTimeLog()">+ Thêm thời gian đã quên</button></div>
-      <div id="timeEntries" class="cards"></div>
+      <details class="compact-section" data-ui-fold="time-entries" ontoggle="rememberUiFold('time-entries',this)"><summary><span><b>◷ Dòng thời gian chi tiết</b><small>Sửa hoặc xoá các bản ghi tự động và nhập lại</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><div><h2>Dòng thời gian</h2><p class="hint">Bạn có thể sửa hoặc xoá cả bản ghi tự động lẫn bản ghi nhập lại.</p></div><button class="outline" onclick="openManualTimeLog()">+ Thêm thời gian đã quên</button></div><div id="timeEntries" class="cards"></div></div></details>
     </section>
 
     <section id="install" class="page">
@@ -265,7 +251,7 @@
         <div class="settings-actions"><button class="outline" onclick="openDataSheet()">Mở Google Sheet dữ liệu</button><button class="outline" onclick="resetAppSettingsUi()">Khôi phục cài đặt mặc định</button></div>
         <p class="hint">Múi giờ này dùng cho hiển thị, email nhắc, lịch sinh hoạt và giờ yên lặng. Sự kiện Calendar không bị mất; Google Calendar vẫn hiển thị theo múi giờ bạn đặt trong chính Google Calendar.</p>
       </article>
-      <div class="install-grid">
+      <details class="compact-section" data-ui-fold="install-devices" ontoggle="rememberUiFold('install-devices',this)"><summary><span><b>⚙ Cài trên thiết bị, thông báo & sao lưu</b><small>iPhone, Android, push notification và JSON</small></span><i></i></summary><div class="compact-section-body"><div class="install-grid">
         <article class="card install-card">
           <span class="pill">iPhone / iPad</span>
           <h3>Hồ sơ My Assistant</h3>
@@ -298,7 +284,7 @@
           <p class="meta">Tải toàn bộ dữ liệu từ Google Sheet thành JSON để nhập vào bản GitHub trên thiết bị này.</p>
           <button class="button-link" onclick="exportAllDataFile()">Xuất file JSON</button>
         </article>
-      </div>
+      </div></div></details>
     </section>
   </main>
   <dialog id="formDialog"><form method="dialog" onsubmit="saveForm(event)"><div class="dialog-head"><h2 id="formTitle"></h2><button type="button" class="close" onclick="formDialog.close()" aria-label="Đóng cửa sổ">×</button></div><div id="formFields"></div><div class="dialog-actions"><button id="formDelete" type="button" class="form-delete" onclick="deleteCurrentFormItem()" hidden>Xoá chuyến</button><button type="button" class="cancel" onclick="formDialog.close()">Huỷ</button><button type="submit" class="save" value="default">Lưu</button></div></form></dialog>
