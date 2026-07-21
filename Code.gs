@@ -19,7 +19,7 @@ const HEADERS = {
   StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
   StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
   AppSettings: ['id', 'timezone', 'locale', 'startupPage', 'theme', 'fontScale', 'reducedMotion', 'compactMode', 'hideFinancialAmounts', 'defaultTaskMinutes', 'defaultChaseMode', 'quietHoursStart', 'quietHoursEnd', 'emailReminders', 'calendarReminders', 'routineReminders', 'flightReminders', 'confirmBeforeDelete', 'dailyLogEnabled', 'dailyLogMorningTime', 'dailyLogEveningTime', 'spotifyUrl', 'spotifyFocusEnabled', 'updatedAt'],
-  Profile: ['id', 'fullName', 'preferredName', 'dateOfBirth', 'bloodType', 'phone', 'email', 'address', 'nationality', 'emergencyContact', 'emergencyContactRelation', 'allergies', 'medications', 'medicalConditions', 'medicalNotes', 'passportNumber', 'passportExpiry', 'insuranceProvider', 'insuranceNumber', 'documentFolderUrl', 'personalGoals', 'privateNotes', 'updatedAt'],
+  Profile: ['id', 'fullName', 'preferredName', 'dateOfBirth', 'bloodType', 'phone', 'email', 'address', 'nationality', 'emergencyContact', 'emergencyContactRelation', 'allergies', 'medications', 'medicalConditions', 'medicalNotes', 'citizenId', 'citizenIdIssuedAt', 'citizenIdExpiry', 'passportNumber', 'passportExpiry', 'insuranceProvider', 'insuranceNumber', 'documentFolderUrl', 'personalGoals', 'privateNotes', 'updatedAt'],
   TimeLogs: ['id', 'kind', 'label', 'startAt', 'endAt', 'durationMinutes', 'note'],
   TimeState: ['id', 'kind', 'label', 'startAt'],
   RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'waterReminderEnabled', 'waterStartTime', 'waterEndTime', 'waterIntervalMinutes', 'mealLogReminderEnabled', 'mealLogReminderTime', 'walkReminderEnabled', 'walkReminderTime', 'updatedAt'],
@@ -31,7 +31,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-19-flight-gate-v12';
+const SCHEMA_VERSION = '2026-07-22-profile-cccd-dates-v14';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -218,7 +218,10 @@ function ensureDefaultReflection_(ss) {
   const existing = readRows_(sheet);
   if (existing.length) {
     const current = existing[0], birth = String(current.dateOfBirth || '').slice(0, 10);
-    if (birth === '2003-05-12' && Number(current.lifePathNumber) !== 4) upsertRow_(sheet, Object.assign({}, current, { lifePathNumber: 4, updatedAt: new Date() }));
+    const ownerRecord = current.id === 'default' || String(current.fullName || '').toLowerCase().indexOf('phạm nguyễn gia đạt') >= 0;
+    if (ownerRecord && (birth !== '2003-05-12' || Number(current.lifePathNumber) !== 4)) {
+      upsertRow_(sheet, Object.assign({}, current, { dateOfBirth: '2003-05-12', lifePathNumber: 4, updatedAt: new Date() }));
+    }
     return;
   }
   upsertRow_(sheet, {
