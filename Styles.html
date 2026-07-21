@@ -442,4 +442,24 @@ html[data-theme=pastel] .health-command-bars b{color:#294743!important;opacity:1
   .career-application-actions{grid-template-columns:1fr!important}
   #time .time-command-actions{grid-template-columns:1fr 1fr}
 }
+
+/* Vietnamese-safe typography.
+   DM Sans is only loaded through weight 700; requesting 800–950 made WebKit
+   synthesize heavy glyphs and detach Vietnamese diacritics. */
+:root{--font-vietnamese:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans",sans-serif}
+html,body,button,input,select,textarea{font-family:var(--font-vietnamese)!important;font-synthesis:none;text-rendering:optimizeLegibility}
+.section-kicker,
+.money-health small,
+.money-flow-board small,
+.money-priority span,
+.flight-booking-ref span,
+.flight-timeline small,
+.pill,
+[class*="kicker"],
+[class*="eyebrow"]{font-family:var(--font-vietnamese)!important;font-weight:700!important;font-synthesis:none;letter-spacing:.065em!important}
+.money-health b,.money-flow-board b,.money-priority b{font-family:var(--font-vietnamese)!important;font-weight:700!important;font-synthesis:none}
+.flight-booking-ref span,.flight-timeline small{line-height:1.35}
+.flight-board-head h3{color:#ffd84d!important;font-family:var(--font-vietnamese)!important;font-weight:700!important;letter-spacing:.09em!important;text-shadow:0 0 16px #ffd84d30}
+.flight-board-head>div:first-child>span{font-family:var(--font-vietnamese)!important;font-weight:700!important}
+
 </style>
