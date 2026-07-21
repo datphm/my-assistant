@@ -14,6 +14,7 @@ const HEADERS = {
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
+  JobApplications: ['id', 'company', 'role', 'jobUrl', 'appliedAt', 'status', 'nextStep', 'nextStepAt', 'contact', 'salary', 'source', 'notes', 'updatedAt'],
   ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'spiritualMoney', 'spiritualCareer', 'spiritualTravel', 'spiritualStudy', 'manifestGoal', 'manifestEvidence', 'manifestUpdatedAt', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
   StudyAbroadProfile: ['id', 'targetIntakeYear', 'targetCountries', 'targetDegree', 'targetFields', 'currentEducation', 'currentGpa', 'englishTest', 'currentEnglishScore', 'targetEnglishScore', 'otherLanguages', 'budgetVnd', 'savingsVnd', 'fundingPlan', 'scholarshipTarget', 'passportStatus', 'visaNotes', 'motivation', 'constraints', 'updatedAt'],
   StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
@@ -31,7 +32,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-22-profile-cccd-dates-v14';
+const SCHEMA_VERSION = '2026-07-22-career-pipeline-v15';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -106,9 +107,9 @@ function readRowsSafe_(ss, name) {
 function getPageData(page) {
   const ss = getBook_();
   const map = {
-    profile: ['Profile', 'Wallets', 'CVs', 'ReflectionProfile'],
+    profile: ['Profile', 'Wallets', 'CVs', 'ReflectionProfile', 'JobApplications'],
     money: ['Wallets', 'Expenses', 'Debts', 'Allocations', 'Plans'],
-    cv: ['CVs', 'ReflectionProfile'],
+    cv: ['CVs', 'ReflectionProfile', 'JobApplications'],
     study: ['StudyAbroadProfile', 'StudyAbroadOptions', 'StudyAbroadChecklist'],
     food: ['Meals', 'HealthProfile', 'WeightLogs', 'HealthLogs', 'RoutineSettings'],
     travel: ['Flights', 'Hotels'],
@@ -1121,11 +1122,16 @@ function deleteWallet(id) {
 
 function saveProfile(item) {
   const sheet = getBook_().getSheetByName('Profile');
+  ensureHeaders_(sheet, HEADERS.Profile);
   const rows = readRows_(sheet);
   const id = rows[0] && rows[0].id || Utilities.getUuid();
-  const value = Object.assign({}, item, { id: id, updatedAt: new Date() });
+  const existing = rows[0] || {};
+  const value = Object.assign({}, existing, item, { id: id, updatedAt: new Date() });
+  ['dateOfBirth', 'citizenIdIssuedAt', 'citizenIdExpiry', 'passportExpiry'].forEach(function(key) {
+    if (value[key] instanceof Date && !isNaN(value[key])) value[key] = Utilities.formatDate(value[key], Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+  });
   upsertRow_(sheet, value);
-  return { ok: true };
+  return { ok: true, profile: value };
 }
 
 function saveCv(item) {
@@ -2031,7 +2037,10 @@ function getBook_() {
     // A brand-new account needs every sheet. Existing accounts only need the
     // sheets changed by the current schema, avoiding dozens of Spreadsheet API
     // calls on the first load after every deployment.
-    const schemaEntries = created ? Object.entries(HEADERS) : ['Tasks', 'AppSettings', 'Projects', 'DailyLogs', 'ReflectionProfile', 'HealthLogs', 'Appointments', 'Flights'].map(function(name) { return [name, HEADERS[name]]; });
+    // A schema-version bump is rare, so migrate every sheet once. Limiting this
+    // list previously left new Profile/CCCD columns and JobApplications absent
+    // in existing workbooks even though the UI already exposed those fields.
+    const schemaEntries = Object.entries(HEADERS);
     schemaEntries.forEach(([name, headers]) => {
       let sheet = ss.getSheetByName(name);
       if (!sheet) sheet = ss.insertSheet(name);

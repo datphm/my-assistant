@@ -287,6 +287,54 @@ html[data-theme=pastel] #profile>.section-head:first-child{background:linear-gra
 html[data-theme=dark] .profile-command{background:radial-gradient(circle at 92% -10%,#2f725755,transparent 30%),linear-gradient(145deg,#0b2743,#102e47 48%,#123d35);border-color:#38675f}.profile-command h2{color:inherit}html[data-theme=dark] .profile-readiness,html[data-theme=dark] .profile-quick-actions button,html[data-theme=dark] .profile-section{background:#102b45!important;color:#eef7f4}html[data-theme=dark] .profile-completion::before{background:#102b45}html[data-theme=dark] .profile-readiness b,html[data-theme=dark] .profile-quick-actions button,html[data-theme=dark] .profile-section>summary h3,html[data-theme=dark] .profile-section .detail-grid b{color:#eef7f4!important}
 @media(max-width:760px){.profile-readiness{grid-template-columns:1fr 1fr}.profile-readiness>span:nth-child(2){border-right:0}.profile-readiness>span:nth-child(-n+2){border-bottom:1px solid #dce8e4}.profile-quick-actions{grid-template-columns:1fr 1fr}.profile-sections{grid-template-columns:1fr}}
 @media(max-width:520px){.profile-command{padding:14px;border-radius:18px}.profile-identity{grid-template-columns:auto minmax(0,1fr)}.profile-avatar{width:55px;height:55px;border-radius:17px;font-size:18px}.profile-completion{grid-column:1/-1;width:100%;height:10px;border-radius:99px;background:#dceae6;overflow:visible;display:block}.profile-completion::before{inset:0;width:var(--profile-percent);border-radius:inherit;background:linear-gradient(90deg,#5683b2,#4d9a77)}.profile-completion b{display:block;margin-top:14px;color:#315d54;font-size:10px}.profile-completion span{display:none}.profile-readiness>span{min-height:70px;padding:10px}.profile-next{display:grid}.profile-next button{width:100%}.profile-quick-actions button{min-height:54px}.profile-card>.section-head{display:grid}.profile-card>.section-head button{width:100%}}
+
+/* 2026-07-22: flat, calm command surfaces — no decorative light orbs. */
+html[data-theme=pastel] .time-anchor.deadline-command,
+html[data-theme=pastel] .assistant-now{
+  background:linear-gradient(135deg,#fafdff 0%,#eaf4ff 52%,#eef9f5 100%)!important;
+  border:1px solid #bfd8e5!important;border-left:7px solid #4f83b5!important;
+  box-shadow:0 16px 38px #476f7a1c!important;color:#294743!important
+}
+.time-anchor.deadline-command::before,.assistant-now::after{display:none!important;content:none!important}
+html[data-theme=pastel] .time-anchor.deadline-command h2,html[data-theme=pastel] .time-anchor.deadline-command b,
+html[data-theme=pastel] .assistant-now h2,html[data-theme=pastel] .assistant-now b{color:#294743!important}
+html[data-theme=pastel] .time-anchor.deadline-command p,html[data-theme=pastel] .time-anchor.deadline-command small,
+html[data-theme=pastel] .assistant-now p,html[data-theme=pastel] .assistant-now small{color:#657d78!important}
+html[data-theme=pastel] .current-time-chip{background:#e9f3fb;border-color:#bfd6e5;color:#315a72}
+html[data-theme=pastel] .deadline-ring{background:conic-gradient(#67b798 var(--deadline-progress),#d8e8ed 0)}
+html[data-theme=pastel] .deadline-ring-core,html[data-theme=pastel] .assistant-now-ring::before{background:#fff!important}
+html[data-theme=pastel] .deadline-queue-item{background:#fff;border-color:#c9ded8;color:#294743}
+html[data-theme=pastel] .deadline-queue-item small{color:#6c817c}
+html[data-theme=pastel] .assistant-now-ring{background:conic-gradient(#69b99b var(--now-progress),#d9e8ed 0)}
+html[data-theme=pastel] .assistant-now-ring span{color:#294743}
+html[data-theme=pastel] .assistant-now-actions button{background:#fff;border-color:#c7dcd6;color:#315650}
+html[data-theme=pastel] .assistant-now-actions .primary{color:#fff}
+
+/* Restore contrast in data cards and habit bars. */
+html[data-theme=pastel] .finance-alert{background:linear-gradient(145deg,#fff,#f5faf8);border-color:#c5ddd5;box-shadow:0 8px 20px #496f6310}
+html[data-theme=pastel] .finance-alert span,html[data-theme=pastel] .finance-alert p{color:#607671}
+html[data-theme=pastel] .finance-alert b{color:#294743}
+html[data-theme=pastel] .finance-alert.danger>div>b{color:#cf4f67!important}
+html[data-theme=pastel] .habit-dashboard i{height:9px;background:#dbeae6;border:1px solid #cfdfda}
+html[data-theme=pastel] .habit-dashboard em{min-width:3px;background:linear-gradient(90deg,#4f88bf,#65b794)}
+html[data-theme=pastel] .habit-dashboard span{color:#607772}html[data-theme=pastel] .habit-dashboard b{color:#294743}
+html[data-theme=pastel] .allocation-setup{background:#315f82!important;color:#fff!important;border-color:#315f82!important}
+
+/* Career application workbench and tracker. */
+.career-application-center{min-width:0}.career-application-head>div{min-width:0}.career-application-head h3,.career-application-head p{overflow-wrap:anywhere}
+.career-application-checks span{min-width:0;overflow:hidden}.career-application-checks span b{min-width:0;overflow-wrap:anywhere;font-size:10px}
+.career-workbench{position:relative;z-index:2;margin-top:12px;padding:13px;border:1px solid #c6d9e8;border-radius:15px;background:#fff}.career-workbench[hidden]{display:none}
+.career-tool{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.career-tool>div:first-child{grid-column:1/-1;display:grid;gap:3px}.career-tool textarea,.career-tool input{min-height:48px;width:100%;border:1px solid #c9dce8;background:#f8fbff;color:#294743}.career-tool textarea{grid-column:1/-1;min-height:115px}.career-tool>button{min-width:135px}.career-tool #careerToolResult{grid-column:1/-1}.career-tool #careerToolResult section{padding:12px;border-radius:12px;background:#eff7ff;color:#38524f;line-height:1.55}.career-tool #careerToolResult p{color:#5f7470}.tool-chip{display:inline-block;margin:2px;padding:4px 7px;border-radius:99px;background:#dfeeff;color:#3d6590;font-size:9px;font-weight:850}
+.career-pipeline{grid-column:1/-1;padding:17px;border:1px solid #c3d9d1;border-left:6px solid #4e9978;border-radius:19px;background:linear-gradient(145deg,#fff,#eef9f5);box-shadow:0 12px 30px #466d6317}.career-pipeline-stats{display:grid;grid-template-columns:repeat(4,1fr);overflow:hidden;border:1px solid #d2e1dc;border-radius:13px;background:#fff}.career-pipeline-stats span{display:grid;padding:10px;border-right:1px solid #dfe9e6}.career-pipeline-stats span:last-child{border:0}.career-pipeline-stats b{color:#31594f;font-size:18px}.career-pipeline-stats small{color:#738680;font-size:8px}.career-pipeline-list{display:grid;gap:6px;margin-top:10px}.career-pipeline-list>button{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,.9fr) auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid #cfdfda;border-radius:12px;background:#fff;color:#294743;text-align:left}.career-pipeline-list span{display:grid;min-width:0}.career-pipeline-list small,.career-pipeline-list em{overflow:hidden;color:#6a7e79;font-size:9px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}.career-pipeline-list i{font-style:normal}
+
+/* A real study application cockpit, not another passive summary. */
+.study-application-cockpit{margin:12px 0 15px}.study-cockpit{padding:19px;border:1px solid #c8c8ea;border-left:7px solid #6a68b4;border-radius:22px;background:linear-gradient(135deg,#fbfaff,#eef4ff 55%,#edf9f5);box-shadow:0 16px 38px #55558a1d}.study-cockpit-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:15px;align-items:center}.study-cockpit-head h2{margin:5px 0;color:#383f67}.study-cockpit-head p{margin:0;color:#68738a;font-size:10px}.study-cockpit-head>b{display:grid;place-items:center;width:72px;height:72px;border-radius:19px;background:#fff;color:#5767a7;font-size:21px}.study-cockpit-checks{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:13px 0}.study-cockpit-checks span{padding:9px;border:1px solid #d6d8e8;border-radius:11px;background:#fff;color:#73758b;font-size:9px}.study-cockpit-checks .done{border-color:#b9ddcf;background:#eef9f4;color:#3f765f}.study-cockpit-pipeline{display:grid;grid-template-columns:repeat(5,1fr);overflow:hidden;border:1px solid #dadbea;border-radius:13px;background:#fff}.study-cockpit-pipeline span{display:grid;gap:2px;padding:9px;border-right:1px solid #e4e5ef}.study-cockpit-pipeline span:last-child{border:0}.study-cockpit-pipeline b{color:#424b79}.study-cockpit-pipeline small{color:#767d92;font-size:8px}.study-cockpit-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px}.study-cockpit-actions button{min-height:43px;border:1px solid #ccd2e6;border-radius:11px;background:#fff;color:#454e7e;font-weight:850}
+
+/* Time Control 2.0: crisp blue-white surface and stronger visual rhythm. */
+.time-command{background:linear-gradient(135deg,#fbfdff,#eaf3ff 55%,#edf9f5)!important;border-color:#bfd4e5!important;border-left:7px solid #5686b7!important;box-shadow:0 16px 38px #476c7b1d!important}
+.time-command-head h2{color:#294a5a}.time-command-head p{color:#617982}.time-command-metrics{border-color:#cbdce7}.time-command-metrics span{min-height:74px;background:#fff;box-shadow:inset 0 5px #5c88b8}.time-command-metrics b{font-size:18px;color:#294a5a}.time-command-track{height:11px;background:#d9e6ec}.time-command-timeline span{min-width:175px;border-color:#cadce6;box-shadow:0 5px 14px #496d7710}.time-command-timeline b{font-size:10px;color:#31525d}.time-command-actions button{min-height:46px;border-color:#bfd5df;color:#315965;box-shadow:0 5px 14px #4d6f7610}.time-tracker{border-left:6px solid #4f8cba;background:linear-gradient(135deg,#fff,#edf6ff)!important}.time-kinds button{background:#fff!important;color:#315951!important;border:1px solid #c6dcd5!important;box-shadow:0 6px 15px #4d6f6510}
+
+@media(max-width:760px){.career-pipeline-stats,.study-cockpit-checks,.study-cockpit-pipeline{grid-template-columns:1fr 1fr}.career-pipeline-list>button{grid-template-columns:1fr auto}.career-pipeline-list em{grid-column:1/-1}.study-cockpit-actions{grid-template-columns:1fr}.career-tool{grid-template-columns:1fr}.career-tool>button{width:100%}}
 .travel-checklist-hint{flex:1 1 100%;color:#668079;font-size:9px;font-weight:750;letter-spacing:.02em}
 
 /* Career Passport: travel-ticket clarity for CV and professional growth. */
@@ -320,4 +368,78 @@ html[data-theme=dark] .profile-command{background:radial-gradient(circle at 92% 
 .career-application-center,.career-decision-compass{position:relative;overflow:hidden}.career-application-center{grid-column:1/-1;border-left:6px solid #5b7fb5!important;background:radial-gradient(circle at 100% 0,#a8c8ef35,transparent 34%),linear-gradient(145deg,#fff,#f0f5ff)!important}.career-application-center::after{content:'CV';position:absolute;right:10px;top:-25px;color:#5579ac0b;font-size:120px;font-weight:950}.career-application-head{position:relative;z-index:1;display:flex;justify-content:space-between;gap:12px}.career-application-head h3{margin:5px 0}.career-application-head p{margin:0;color:#657c78}.career-application-head>b{display:grid;place-items:center;width:68px;height:68px;border-radius:50%;background:#e3eefc;color:#476f9f;font-size:20px}.career-application-checks{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:13px 0}.career-application-checks span{display:flex;gap:7px;align-items:center;min-height:42px;padding:9px;border:1px solid #d5e1ec;border-radius:11px;background:#fff;color:#60736f;font-size:10px;font-weight:800}.career-application-checks .done{border-color:#b8ddcd;background:#eef9f4;color:#3d755f}.career-application-checks i{font-style:normal}.career-application-actions{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.career-application-actions button{min-height:43px;border:0;border-radius:11px;background:linear-gradient(135deg,#4c79aa,#43896f);color:#fff;font-weight:850}.career-decision-compass{grid-column:1/-1;border-left:6px solid #8a72b5!important;background:linear-gradient(145deg,#fff,#f8f2ff)!important}.career-decision-compass>div{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.career-decision-compass section{display:grid;gap:5px;padding:12px;border:1px solid #e0d7eb;border-radius:13px;background:#fff}.career-decision-compass small{color:#8064a4;font-size:8px;font-weight:950;letter-spacing:.1em}.career-decision-compass b{color:#344b48}.career-decision-compass p{margin:0;color:#697b77;font-size:10px;line-height:1.45}
 .page>.section-head:first-child{position:relative;overflow:hidden}.page>.section-head:first-child::after{position:absolute;right:18px;top:-44px;color:#507f760a;font-size:128px;font-weight:950;pointer-events:none}#assistant>.section-head:first-child::after{content:'✦'}#today>.section-head:first-child::after{content:'✓'}#money>.section-head:first-child::after{content:'₫'}#profile>.section-head:first-child::after{content:'ID'}#study>.section-head:first-child::after{content:'↗'}#food>.section-head:first-child::after{content:'♡'}#travel>.section-head:first-child::after{content:'✈'}#time>.section-head:first-child::after{content:'◷'}
 @media(max-width:760px){.task-actions-primary,.career-application-actions,.career-decision-compass>div{grid-template-columns:1fr}.career-application-checks{grid-template-columns:1fr 1fr}.allocation-wrap{grid-template-columns:1fr}.allocation-card .section-head{align-items:flex-start}.allocation-setup{white-space:nowrap}}
+/* Final visual guardrail: flat airport-card palette; no glowing orbs. */
+html[data-theme=pastel] .time-anchor.deadline-command,
+html[data-theme=pastel] .assistant-now{
+  background:linear-gradient(135deg,#ffffff 0%,#edf6ff 52%,#edf9f4 100%)!important;
+  border:1px solid #bfd7e2!important;border-left:7px solid #4f83b5!important;
+  color:#294743!important;box-shadow:0 16px 38px #476f7a1a!important
+}
+.time-anchor.deadline-command::before,.time-anchor.deadline-command::after,
+.assistant-now::before,.assistant-now::after{display:none!important;content:none!important;background:none!important}
+html[data-theme=pastel] .time-anchor.deadline-command h2,
+html[data-theme=pastel] .time-anchor.deadline-command b,
+html[data-theme=pastel] .assistant-now h2,
+html[data-theme=pastel] .assistant-now b{color:#294743!important}
+html[data-theme=pastel] .time-anchor.deadline-command p,
+html[data-theme=pastel] .time-anchor.deadline-command small,
+html[data-theme=pastel] .assistant-now p,
+html[data-theme=pastel] .assistant-now small{color:#637c77!important}
+html[data-theme=pastel] .assistant-now-actions button{background:#fff!important;border-color:#bfd8d1!important;color:#315c53!important}
+html[data-theme=pastel] .assistant-now-actions .primary{background:linear-gradient(135deg,#4f82b6,#4b9677)!important;color:#fff!important}
+html[data-theme=pastel] .assistant-now-actions .rescue{background:#fff7e8!important;border-color:#e5bd67!important;color:#8a5e19!important}
+html[data-theme=pastel] .deadline-queue-item{background:#fff!important;border-color:#c7ddd7!important;color:#294743!important}
+html[data-theme=pastel] .deadline-queue-item small{color:#687f7a!important}
+
+/* Strong contrast for calculated advice and daily health controls. */
+html[data-theme=pastel] #financeWarnings .finance-alert{background:#fff!important;border-color:#c4dbd4!important;box-shadow:0 8px 20px #456c6212!important}
+html[data-theme=pastel] #financeWarnings .finance-alert span,
+html[data-theme=pastel] #financeWarnings .finance-alert p{color:#5d746f!important}
+html[data-theme=pastel] #financeWarnings .finance-alert b{color:#294743!important}
+html[data-theme=pastel] #financeWarnings .finance-alert.danger>div>b{color:#c94d65!important}
+html[data-theme=pastel] .habit-dashboard>div{padding:8px 0}
+html[data-theme=pastel] .habit-dashboard i,
+html[data-theme=pastel] .health-command-bars i{display:block!important;height:10px!important;background:#dce9e6!important;border:1px solid #cbded8!important;opacity:1!important;overflow:hidden}
+html[data-theme=pastel] .habit-dashboard em,
+html[data-theme=pastel] .health-command-bars em{display:block!important;min-width:4px;height:100%!important;background:linear-gradient(90deg,#4f87bd,#66b795)!important;opacity:1!important}
+html[data-theme=pastel] .habit-dashboard span,
+html[data-theme=pastel] .habit-dashboard b,
+html[data-theme=pastel] .health-command-bars small,
+html[data-theme=pastel] .health-command-bars b{color:#294743!important;opacity:1!important}
+
+/* Application surfaces must wrap cleanly and remain usable on phones. */
+.career-application-center,.study-cockpit{min-width:0;overflow:hidden!important}
+.career-application-head>div,.study-cockpit-head>div{min-width:0}
+.career-application-head h3,.career-application-head p,.study-cockpit-head h2,.study-cockpit-head p{max-width:100%;overflow-wrap:anywhere;word-break:normal}
+.career-application-checks span,.study-cockpit-checks span{min-width:0;overflow-wrap:anywhere}
+.career-application-actions button,.study-cockpit-actions button{white-space:normal;line-height:1.25}
+.career-workbench{box-shadow:0 14px 32px #486f7a18}
+
+/* Time Control: tighter hierarchy, clearer timeline and modern cards. */
+#time .time-command{position:relative;overflow:hidden;background:linear-gradient(135deg,#fff,#edf6ff 55%,#edf9f4)!important}
+#time .time-command::before,#time .time-command::after{display:none!important;content:none!important}
+#time .time-command-head{padding-bottom:12px;border-bottom:1px solid #ccdfdf}
+#time .time-command-head>button{box-shadow:0 9px 22px #416c6930}
+#time .time-command-metrics{margin-top:13px;background:#fff;border-radius:15px;overflow:hidden}
+#time .time-command-metrics span{background:#fff!important;box-shadow:inset 0 5px #5a88b7!important}
+#time .time-command-metrics .attention{background:#fff5f2!important;box-shadow:inset 0 5px #db735f!important}
+#time .time-command-track{margin:14px 0 10px;border:1px solid #cbdde1}
+#time .time-command-track i{background:linear-gradient(90deg,#5084b9,#58ad89)!important}
+#time .time-command-timeline{padding:3px 1px 6px;scroll-snap-type:x proximity}
+#time .time-command-timeline span{scroll-snap-align:start;background:#fff!important;border-color:#c8dce3!important}
+#time .time-command-actions button{background:#fff!important;color:#315a55!important;border-color:#c5dad4!important}
+#time .time-command-actions button:hover{border-color:#57987e!important;background:#f1faf6!important}
+#time #timeEntries .card{border-left:5px solid #5a8bb7;background:linear-gradient(145deg,#fff,#f1f8ff)!important}
+
+@media(max-width:760px){
+  .career-application-head,.study-cockpit-head{grid-template-columns:1fr}
+  .career-application-head>b,.study-cockpit-head>b{width:auto;height:auto;min-height:48px;border-radius:12px}
+  .career-application-checks,.study-cockpit-checks{grid-template-columns:1fr 1fr}
+  #time .time-command-head{gap:10px}
+}
+@media(max-width:520px){
+  .career-application-checks,.study-cockpit-checks{grid-template-columns:1fr}
+  .career-application-actions{grid-template-columns:1fr!important}
+  #time .time-command-actions{grid-template-columns:1fr 1fr}
+}
 </style>
