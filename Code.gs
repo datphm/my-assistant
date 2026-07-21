@@ -930,13 +930,72 @@ function generateChecklistForTask(taskId) {
   if (!task) throw new Error('Không tìm thấy việc.');
   const sheet = ss.getSheetByName('TaskSteps');
   if (readRows_(sheet).some(function(row) { return row.taskId === taskId; })) throw new Error('Việc này đã có checklist. Bạn có thể thêm từng bước mới.');
-  const suggestions = suggestTaskPlan(task.title).map(function(item) { return item.title; });
+  const travelSuggestions = travelChecklistForTask_(task, ss);
+  const suggestions = travelSuggestions.length ? travelSuggestions : suggestTaskPlan(task.title).map(function(item) { return item.title; });
   suggestions.forEach(function(title, index) {
     const value = { id: Utilities.getUuid(), taskId: taskId, title: title, done: false, position: index + 1, dueAt: '', createdAt: new Date(), completedAt: '' };
     sheet.appendRow(HEADERS.TaskSteps.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
   });
   upsertRow_(ss.getSheetByName('Tasks'), Object.assign({}, task, { nextAction: task.nextAction || suggestions[0] }));
   return suggestions.length;
+}
+
+function travelChecklistForTask_(task, ss) {
+  const title = String(task && task.title || '');
+  if (!/^Chuyến đi\s*·/i.test(title) && !/hành lý|giấy tờ.*(?:chuyến|bay)/i.test(title)) return [];
+  const codeMatch = title.toUpperCase().match(/\b[A-Z0-9]{2}\s?\d{2,4}\b/);
+  const code = codeMatch ? codeMatch[0].replace(/\s+/g, '') : '';
+  const flights = readRows_(ss.getSheetByName('Flights'));
+  const flight = flights.find(function(row) { return code && String(row.code || '').replace(/\s+/g, '').toUpperCase() === code; }) || flights.filter(function(row) { return row.departure && new Date(row.departure) > new Date(); }).sort(function(a, b) { return new Date(a.departure) - new Date(b.departure); })[0];
+  return flight ? travelChecklistForFlight_(flight) : [];
+}
+
+function travelChecklistForFlight_(flight) {
+  const from = String(flight.fromCode || '').toUpperCase(), to = String(flight.toCode || flight.destination || '').toUpperCase();
+  const vietnamAirports = ['HAN','SGN','DAD','CXR','PQC','HPH','HUI','VII','VCA','BMV','UIH','VCS','THD','VDO','DIN','VCL','VTG'];
+  const international = String(flight.flightType || '').toLowerCase() === 'international' || !vietnamAirports.includes(from) || !vietnamAirports.includes(to);
+  const localTransit = to === 'SIN' ? 'thẻ contactless/MRT/SimplyGo' : ['KUL','JHB'].includes(to) ? 'Touch ’n Go/thẻ contactless' : ['BKK','DMK'].includes(to) ? 'BTS/MRT hoặc tiền mặt' : international ? 'thẻ ngân hàng + ít tiền mặt/đi lại địa phương' : 'thẻ ngân hàng + tiền mặt/ứng dụng xe';
+  return [
+    international ? 'Giấy tờ · Hộ chiếu + PNR/vé + yêu cầu nhập cảnh' : 'Giấy tờ · CCCD + PNR/vé máy bay',
+    'Đi lại · ' + localTransit,
+    international ? 'Kết nối · eSIM/roaming + địa chỉ lưu trú' : 'Nơi ở · Địa chỉ + số liên hệ cần thiết',
+    'Quần áo · Đủ số ngày + 1 bộ dự phòng',
+    international ? 'Thiết bị · Điện thoại + sạc + pin + adapter/thuốc' : 'Thiết bị · Điện thoại + sạc + pin + thuốc cá nhân',
+    'Trước khi đi · Check-in + cân hành lý + giờ rời nhà/terminal'
+  ];
+}
+
+function createTravelPrepTask(flightId) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getBook_(), flights = readRows_(ss.getSheetByName('Flights'));
+    const flight = flights.find(function(row) { return row.id === flightId; });
+    if (!flight) throw new Error('Không tìm thấy chuyến bay để tạo checklist.');
+    const code = String(flight.code || [flight.fromCode, flight.toCode].filter(Boolean).join('→') || 'chuyến đi');
+    const title = 'Chuyến đi · Chuẩn bị hành lý và giấy tờ cho ' + code;
+    const taskSheet = ss.getSheetByName('Tasks'), tasks = readRows_(taskSheet);
+    let task = tasks.find(function(row) { return !(row.done === true || row.done === 'TRUE') && row.status !== 'done' && String(row.title || '').toLowerCase() === title.toLowerCase(); });
+    if (!task) {
+      const departure = flight.departure ? new Date(flight.departure).getTime() : Date.now() + 86400000;
+      const dueAt = new Date(Math.max(Date.now() + 5 * 60000, departure - 36 * 3600000));
+      task = { id: Utilities.getUuid(), title: title, dueAt: dueAt, status: 'todo', priority: 'high', minutes: 20, area: 'Cá nhân', done: false, definitionOfDone: 'Đã kiểm tra 6 nhóm thiết yếu và sẵn sàng rời nhà.', outcome: 'Sẵn sàng lên đường mà không thiếu giấy tờ hoặc đồ thiết yếu.', nextAction: '', createdAt: new Date() };
+      taskSheet.appendRow(HEADERS.Tasks.map(function(key) { return task[key] === undefined ? '' : task[key]; }));
+    }
+    const stepSheet = ss.getSheetByName('TaskSteps'), existing = readRows_(stepSheet).filter(function(row) { return row.taskId === task.id; });
+    if (existing.length) return { taskId: task.id, count: existing.length, duplicate: true };
+    const suggestions = travelChecklistForFlight_(flight);
+    suggestions.forEach(function(stepTitle, index) {
+      const step = { id: Utilities.getUuid(), taskId: task.id, title: stepTitle, done: false, position: index + 1, dueAt: '', createdAt: new Date(), completedAt: '' };
+      stepSheet.appendRow(HEADERS.TaskSteps.map(function(key) { return step[key] === undefined ? '' : step[key]; }));
+    });
+    upsertRow_(taskSheet, Object.assign({}, task, { nextAction: suggestions[0] }));
+    if (PropertiesService.getUserProperties().getProperty('APP_CALENDAR_REMINDERS') !== 'no') try { syncTaskToCalendar(task.id); } catch (error) {}
+    CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+    return { taskId: task.id, count: suggestions.length, duplicate: false };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function saveDailyLog(item) {
