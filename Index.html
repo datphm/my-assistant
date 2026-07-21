@@ -108,7 +108,6 @@
         </div>
       </div>
       <div id="moneyControlCenter" class="money-control-center" aria-live="polite"></div>
-      <div id="moneySummary" class="metric"></div>
       <div class="segmented" aria-label="Khoảng thời gian tiền">
         <button class="active" data-money-period="week" onclick="setMoneyPeriod('week')">Tuần</button>
         <button data-money-period="month" onclick="setMoneyPeriod('month')">Tháng</button>
@@ -141,11 +140,12 @@
     </section>
 
     <section id="cv" class="page">
-      <div class="section-head"><h2>CV & hồ sơ nghề nghiệp</h2><button onclick="openForm('cv')">+ Lưu CV</button></div>
-      <p class="hint">Lưu nội dung CV, vai trò hướng tới, link Google Drive/Google Docs hoặc upload file PDF CV từ máy/iPhone.</p>
-      <div id="cvs" class="cards"></div>
-      <div class="section-head subhead"><h2>Định hướng & chiêm nghiệm</h2><button class="outline" onclick="openReflectionForm()">Cập nhật hồ sơ</button></div>
-      <p class="hint">Phân tích nghề nghiệp dựa trên CV, thế mạnh và sở thích. Tử vi, bát tự, horoscope và thần số học được lưu như góc tự suy ngẫm, không dùng để quyết định thay bạn.</p>
+      <div class="section-head tab-heading"><div><span class="section-kicker">CAREER PASSPORT</span><h2>CV & hồ sơ nghề nghiệp</h2><p class="hint">Một nơi để biết CV nào đang dùng, hồ sơ còn thiếu gì và bước nghề nghiệp tiếp theo.</p></div><div class="actions"><button class="outline" onclick="openReflectionForm()">Cập nhật định hướng</button><button onclick="openForm('cv')">+ Lưu CV</button></div></div>
+      <div id="cvCommandCenter" class="cv-command-center" aria-live="polite"></div>
+      <div id="cvCareerKpis" class="insight-grid cv-kpis"></div>
+      <details class="compact-section cv-library" data-ui-fold="cv-library" ontoggle="rememberUiFold('cv-library',this)" open><summary><span><b>▣ Thư viện CV</b><small>Các phiên bản theo từng vai trò · mở để xem, sửa hoặc cập nhật</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>CV đang lưu</h3><button class="outline small" onclick="openForm('cv')">+ Phiên bản mới</button></div><div id="cvs" class="cards cv-grid"></div></div></details>
+      <div class="section-head subhead"><div><span class="section-kicker">DAILY CAREER COACH</span><h2>Định hướng & chiêm nghiệm</h2></div><button class="outline" onclick="openReflectionForm()">Cập nhật hồ sơ</button></div>
+      <p class="hint">Lời khuyên nghề nghiệp dựa trên CV và dữ liệu bạn nhập. Góc chiêm nghiệm được tách riêng để hỗ trợ tự suy ngẫm.</p>
       <div id="dailyGuidance" class="daily-guidance"></div>
       <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Điểm mạnh, điểm cần cải thiện, tử vi, bát tự và horoscope</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
         <div id="careerAnalysis" class="cards"></div>
