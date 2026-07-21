@@ -89,6 +89,1043 @@ function assistantTopTask(){
 }
 function renderTodayCoach(open){
   const box=$('todayCoach');if(!box)return;const now=Date.now(),planned=open.reduce((s,t)=>s+Number(t.minutes||15),0),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),stale=open.filter(t=>t.startedAt&&now-new Date(t.lastProgressAt||t.startedAt)>2*3600000);
+  renderTodayLaunchPad(open);
+  const focus=assistantTopTask(),next=focus&&taskSteps(focus.id).find(s=>!truth(s.done)),session=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
+  box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY · CHẾ ĐỘ ${assistantMode==='overwhelmed'?'GIẢI CỨU':assistantMode==='low'?'ÍT NĂNG LƯỢNG':'TẬP TRUNG'}</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu ${session} phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button></div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
+}
+function renderTodayLaunchPad(open){
+  const box=$('todayLaunchPad');if(!box)return;const now=new Date(),start=new Date(now);start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);
+  const overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),today=open.filter(t=>t.dueAt&&new Date(t.dueAt)>=start&&new Date(t.dueAt)<end),quick=open.filter(t=>Number(t.minutes||15)<=15),follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),done=(data.tasks||[]).filter(t=>(truth(t.done)||t.status==='done')&&t.updatedAt&&localDateKey(t.updatedAt)===localDateKey(now));
+  const planned=today.length||Math.min(3,open.length),progress=planned+done.length?Math.round(done.length/(planned+done.length)*100):0;
+  const lane=(icon,label,items,empty,kind)=>`<button class="today-lane ${items.length?'has-items':''}" onclick="focusTodayLane('${kind}')"><span>${icon}</span><div><small>${esc(label)}</small><b>${items.length||0}</b><em>${esc(items[0]?.title||empty)}</em></div><i>→</i></button>`;
+  box.innerHTML=`<article class="today-launch"><div class="today-launch-head"><div><span class="section-kicker">DAILY LAUNCHPAD</span><h2>${overdue.length?'Đóng một vòng lặp đang trễ':'Giữ ngày hôm nay đủ nhỏ để hoàn thành'}</h2><p>${done.length?`Đã khép ${done.length} việc · tiếp tục một bước, không mở thêm năm hướng.`:'Chọn một việc có đầu ra rõ và bắt đầu trong 5–15 phút.'}</p></div><div class="today-score"><b>${progress}%</b><span>nhịp hoàn thành</span></div></div><div class="today-lanes">${lane('!','QUÁ HẠN',overdue,'Không có việc trễ','overdue')}${lane('⚡','LÀM NHANH ≤15P',quick,'Chưa có quick win','quick')}${lane('↻','FOLLOW-UP',follow,'Không có việc phải đuổi','follow')}</div></article>`;
+}
+function focusTodayLane(kind){const now=Date.now(),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done');let rows=kind==='overdue'?open.filter(t=>t.dueAt&&new Date(t.dueAt)<now):kind==='quick'?open.filter(t=>Number(t.minutes||15)<=15):open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now);rows=rows.sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a));if(!rows.length){toast(kind==='quick'?'Chưa có việc nhanh. Hãy giảm một việc xuống bước 10 phút.':'Không có việc trong nhóm này.');return}openOperationTask(rows[0].id)}
+function loadAssistantBrief(force=false){
+  if(assistantBriefLoading)return;assistantBriefLoading=true;renderAssistantBrief();
+  google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief()}).withFailureHandler(e=>{assistantBriefLoading=false;renderAssistantBrief();fail(e)}).getAssistantBrief(force);
+}
+function refreshOperationCenter(){assistantBrief=null;loadAssistantBrief(true);refreshFullData()}
+function setAssistantMode(mode){assistantMode=mode;localStorage.setItem('my-assistant-mode-v1',mode);renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'));renderAssistantBrief()}
+function assistantMoney(value){return appSettings().hideFinancialAmounts==='yes'?'••••':vnd(value)}
+function assistantCheckKey(){return `my-assistant-day-check-v1:${localDateKey(new Date())}`}
+function assistantChecks(){try{return JSON.parse(localStorage.getItem(assistantCheckKey())||'{}')}catch(e){return {}}}
+function toggleAssistantCheck(id,checked){const state=assistantChecks();state[id]=checked;localStorage.setItem(assistantCheckKey(),JSON.stringify(state));renderAssistantBrief()}
+function assistantNowTask(){
+  if(activeTimeLog){const running=data.tasks.find(task=>!truth(task.done)&&task.status!=='done'&&task.title===activeTimeLog.label);if(running)return running}
+  return assistantTopTask();
+}
+function assistantQuickFocus(){const task=assistantNowTask();if(task)focusTask(task.id);else openForm('task')}
+function openAssistantNowTask(id){
+  taskFoldState[id]=false;localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));activatePage('today');
+  setTimeout(()=>{render();$(`task-${id}`)?.scrollIntoView({behavior:'smooth',block:'start'})},80);
+}
+function rescueMe(){
+  assistantMode='overwhelmed';localStorage.setItem('my-assistant-mode-v1','overwhelmed');const task=assistantTopTask();
+  if(!task){activatePage('today');openForm('task');return}
+  taskFoldState[task.id]=false;localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));
+  activatePage('today');render();setTimeout(()=>$(`task-${task.id}`)?.scrollIntoView({behavior:'smooth',block:'center'}),80);toast('Chế độ Cứu tôi: chỉ làm một bước trong 5 phút.');
+}
+function assistantQuickBlocked(id){
+  const task=data.tasks.find(item=>item.id===id);if(!task)return;
+  openForm('taskUpdate',{taskId:id,status:'blocked',note:'Tôi đang kẹt vì: ',nextFollowUpAt:task.followUpAt||''});
+}
+function assistantDayEvents(){
+  const start=new Date();start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);
+  const rows=[];
+  (data.tasks||[]).filter(task=>!truth(task.done)&&task.status!=='done'&&task.dueAt).forEach(task=>{const at=new Date(task.dueAt);if(at>=start&&at<end)rows.push({at,icon:'✓',label:task.title,page:'today'})});
+  (data.appointments||[]).filter(item=>item.startAt).forEach(item=>{const at=new Date(item.startAt);if(at>=start&&at<end)rows.push({at,icon:appointmentIcon(item.type),label:item.title||'Cuộc hẹn',page:'time'})});
+  (data.flights||[]).filter(item=>item.departure).forEach(item=>{const at=new Date(item.departure);if(at>=start&&at<end)rows.push({at,icon:'✈',label:item.code||'Chuyến bay',page:'travel'})});
+  return rows.sort((a,b)=>a.at-b.at).slice(0,5);
+}
+function assistantMomentum(b){
+  const today=localDateKey(new Date()),doneUpdates=(data.taskupdates||[]).filter(item=>item.status==='done'&&item.createdAt&&localDateKey(item.createdAt)===today).length,doneSteps=(data.tasksteps||[]).filter(item=>truth(item.done)&&item.completedAt&&localDateKey(item.completedAt)===today).length,logged=Number(b.time.loggedMinutes||0),health=(data.healthlogs||[]).filter(item=>item.date&&localDateKey(item.date)===today).length,checks=Object.values(assistantChecks()).filter(Boolean).length;
+  const score=Math.min(100,doneUpdates*18+doneSteps*4+Math.min(25,Math.floor(logged/10))+Math.min(12,health*3)+checks*5),stage=score>=80?'🌳':score>=55?'🌿':score>=30?'🌱':'🪴';
+  return {score,stage,label:score>=80?'Ngày đang chạy rất tốt':score>=55?'Đà đang lên':score>=30?'Bạn đã tạo được nhịp':'Chỉ cần bắt đầu một bước'};
+}
+function updateAssistantNowClock(){
+  const clock=$('assistantNowClock'),countdown=$('assistantNowCountdown'),progress=$('assistantNowProgress');if(!clock||!countdown||!progress)return;
+  const now=new Date();clock.textContent=timeOnly(now,true);const task=assistantNowTask();
+  if(!task?.dueAt){countdown.textContent=activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline';progress.style.setProperty?.('--now-progress','0deg');return}
+  const remaining=new Date(task.dueAt)-now,minutes=Math.max(0,Math.ceil(remaining/60000)),duration=Math.max(10,Number(task.minutes||15)),ratio=Math.max(0,Math.min(1,1-minutes/duration));countdown.textContent=remaining<=0?'ĐÃ ĐẾN HẠN':minutes<60?`Còn ${minutes} phút`:`Còn ${Math.floor(minutes/60)}h ${minutes%60}m`;progress.style.setProperty?.('--now-progress',`${Math.round(ratio*360)}deg`);
+}
+function renderAssistantBrief(){
+  const box=$('assistantBrief');if(!box)return;
+  if(!assistantBrief){
+    box.innerHTML=`<article class="card assistant-loading"><b>${assistantBriefLoading?'Trợ lý đang tổng hợp ngày của bạn…':'Bản brief chưa tải'}</b><span>Việc vẫn dùng được ngay; tiền, sức khỏe, chuyến đi và du học đang tải nền.</span>${assistantBriefLoading?'':`<button onclick="loadAssistantBrief(true)">Tải bản brief</button>`}</article>`;return;
+  }
+  const b=assistantBrief,now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),focus=assistantNowTask();
+  const net=Number(b.finance.balance||0)-Number(b.finance.debt||0),flight=b.travel,checkinDue=flight&&new Date(flight.checkinAt)<=now,studyNext=b.study.next,studyDays=studyNext?.dueAt?Math.ceil((new Date(studyNext.dueAt)-now)/86400000):null;
+  const alerts=[];
+  if(overdue.length)alerts.push({tone:'danger',kind:'overdue',title:`${overdue.length} việc đã quá hạn`,detail:'Chọn một việc để xử lý hoặc đặt lại deadline thật.',page:'today'});
+  if(followups.length)alerts.push({tone:'warning',kind:'followup',title:`${followups.length} follow-up đến hạn`,detail:'Đừng chờ im lặng: hỏi, chốt và báo lại.',page:'today'});
+  if(checkinDue)alerts.push({tone:'warning',kind:'travel',title:`Đã đến cửa sổ check-in ${flight.code||''}`,detail:`${flight.fromCode||''} → ${flight.toCode||flight.destination||''} · ${dateTime(flight.departure)}`,page:'travel'});
+  if(Number(b.finance.debt||0)>Number(b.finance.balance||0)&&Number(b.finance.debt||0)>0)alerts.push({tone:'danger',kind:'debt',title:'Nợ đang cao hơn tổng số dư',detail:`Chênh lệch ${assistantMoney(Math.abs(net))}. Mở tab Tiền để ưu tiên khoản cần trả.`,page:'money'});
+  if(new Date().getHours()>=15&&Number(b.health.waterMl||0)<Number(b.health.waterGoalMl||2500)*.5)alerts.push({tone:'info',kind:'health',title:'Nước hôm nay đang thấp',detail:`Đã log ${num(b.health.waterMl||0)}/${num(b.health.waterGoalMl||2500)} ml. Uống một cốc và log ngay.`,page:'food'});
+  if(studyDays!==null&&studyDays<=30)alerts.push({tone:studyDays<7?'danger':'info',kind:'study',title:`Hồ sơ du học: còn ${Math.max(0,studyDays)} ngày`,detail:studyNext.title||'Có bước hồ sơ sắp đến hạn.',page:'study'});
+  const card=(icon,label,value,detail,page)=>`<button class="assistant-domain" onclick="activatePage('${page}')"><span>${icon} ${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></button>`;
+  const checks=assistantChecks(),checkItems=[['top3','Chốt tối đa 3 đầu ra quan trọng'],['follow','Đặt giờ báo lại/follow-up'],['focus','Chặn một phiên tập trung không gián đoạn'],['close','Cuối ngày: cập nhật, dời việc và chuẩn bị ngày mai']];
+  const plannedMinutes=open.reduce((sum,task)=>sum+Number(task.minutes||15),0),blocked=open.filter(task=>task.status==='blocked'),waiting=open.filter(task=>task.status==='waiting'||task.waitingFor),focusStep=focus&&taskSteps(focus.id).find(step=>!truth(step.done)),dayEvents=assistantDayEvents(),momentum=assistantMomentum(b),focusMinutes=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
+  const monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);const monthTx=(data.expenses||[]).filter(item=>item.date&&new Date(item.date)>=monthStart),monthIncome=monthTx.filter(item=>item.direction==='income').reduce((sum,item)=>sum+Number(item.amount||0),0),monthExpense=monthTx.filter(item=>item.direction!=='income').reduce((sum,item)=>sum+Number(item.amount||0),0);
+  const operationAdvice=overdue.length?`Khoanh đúng 1 việc quá hạn, đặt lại deadline thật hoặc hoàn thành bước giao được trong 10 phút.`:blocked.length?`Có ${blocked.length} việc đang kẹt. Gọi người có quyền quyết định và ghi rõ điều kiện để mở khoá.`:waiting.length?`Có ${waiting.length} việc đang chờ. Gửi follow-up có câu hỏi chốt và một mốc phản hồi cụ thể.`:plannedMinutes>360?'Khối lượng dự kiến vượt 6 giờ. Dời ít nhất một việc để lịch hôm nay có thể thực hiện được.':focus?`Bắt đầu “${focus.title}” trong 10 phút, cập nhật file rồi báo lại trước khi mở việc mới.`:'Chốt tối đa 3 đầu ra đo được cho hôm nay.';
+  const financeAdvice=Number(b.finance.debt||0)>Number(b.finance.balance||0)?`Dư nợ cao hơn số dư ${assistantMoney(Math.abs(net))}. Giữ đủ khoản tối thiểu đến hạn, sau đó dồn phần dư vào khoản lãi cao nhất.`:monthExpense>monthIncome&&monthExpense?`Chi tháng này đang vượt thu ${assistantMoney(monthExpense-monthIncome)}. Hoãn một khoản không cấp thiết và cập nhật lại ngân sách tuần.`:b.finance.nextPlan?`Kế hoạch gần nhất là “${b.finance.nextPlan.name||'khoản chi lớn'}”. Tách tiền dành riêng trước khi chi tiêu linh hoạt.`:'Dòng tiền chưa có cảnh báo lớn. Tiếp tục cập nhật số dư và dành tiền cho nợ/mục tiêu trước khi chi linh hoạt.';
+  box.innerHTML=`<article class="card assistant-now">
+    <div class="assistant-now-main"><div class="assistant-now-ring" id="assistantNowProgress"><span id="assistantNowClock">${timeOnly(new Date(),true)}</span><b id="assistantNowCountdown">${focus?.dueAt?'Đang tính thời gian…':activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline'}</b></div><div class="assistant-now-copy"><span class="section-kicker">${activeTimeLog?'ĐANG LÀM':'BÂY GIỜ · MỘT VIỆC DUY NHẤT'}</span><h2>${esc(focus?.title||'Chọn một việc để bắt đầu')}</h2><p>${esc(focusStep?.title||focus?.nextAction||'Đừng lập thêm kế hoạch. Chọn một bước có thể làm trong 5–10 phút.')}</p>${focus?.outcome?`<small>Đầu ra cần giao: ${esc(focus.outcome)}</small>`:''}</div></div>
+    <div class="assistant-now-actions">${focus?`<button class="primary" onclick="focusTask('${focus.id}')">▶ Bắt đầu ${focusMinutes} phút</button><button onclick="openTaskUpdate('${focus.id}')">↻ Cập nhật</button><button onclick="assistantQuickBlocked('${focus.id}')">Tôi đang kẹt</button><button onclick="complete('${focus.id}')">✓ Đóng việc</button>`:`<button class="primary" onclick="openForm('task')">+ Ghi việc đầu tiên</button>`}<button class="rescue" onclick="rescueMe()">🛟 Cứu tôi</button></div>
+    <div class="assistant-day-strip">${dayEvents.length?dayEvents.map(item=>`<button onclick="activatePage('${item.page}')"><span>${timeOnly(item.at)}</span><b>${item.icon}</b><small>${esc(item.label)}</small></button>`).join(''):'<p>Hôm nay chưa có mốc giờ cố định. Hãy chặn một phiên tập trung ngắn.</p>'}</div>
+  </article>
+  <div class="assistant-view-rail"><button onclick="jumpAssistantSection('assistantPriority')"><b>01</b><span>Ưu tiên</span></button><button onclick="jumpAssistantSection('assistantOverview')"><b>02</b><span>Toàn cảnh</span></button><button onclick="jumpAssistantSection('assistantAdvice')"><b>03</b><span>Lời khuyên</span></button><button onclick="jumpAssistantSection('assistantAnalytics')"><b>04</b><span>Biểu đồ</span></button><button onclick="jumpAssistantSection('assistantTools')"><b>05</b><span>Ghi nhanh</span></button></div>
+  <section id="assistantPriority" class="assistant-top-grid"><article class="card assistant-gate-card assistant-gate-top"><div class="operation-chart-head"><div><span class="section-kicker">DISPLAY AT GATE</span><h3>8 chuyến bay gần nhất</h3></div><button onclick="activatePage('travel')">Mở chuyến đi</button></div><div id="assistantGateDisplay"></div></article>
+  <article class="card operation-queue assistant-top-queue"><div class="operation-chart-head"><div><span class="section-kicker">HÀNG ĐỢI ĐIỀU HÀNH</span><h3>5 việc cần mắt bạn nhất</h3></div><button onclick="activatePage('today')">Xem toàn bộ</button></div><div id="opsPriorityQueue"></div></article></section>
+  <article id="assistantOverview" class="card assistant-hq">
+    <div class="assistant-head"><div><span class="pill">TRỢ LÝ TOÀN PHẦN · CẬP NHẬT ${timeOnly(b.generatedAt)}</span><h2>${assistantMode==='overwhelmed'?'Hôm nay chỉ cần thoát khỏi trạng thái đứng hình.':'Bức tranh toàn ngày của bạn'}</h2></div><button class="assistant-refresh" onclick="loadAssistantBrief(true)" ${assistantBriefLoading?'disabled':''}>${assistantBriefLoading?'Đang cập nhật…':'↻ Làm mới'}</button></div>
+    <div class="assistant-modes"><button class="${assistantMode==='focus'?'active':''}" onclick="setAssistantMode('focus')">🎯 Tập trung</button><button class="${assistantMode==='low'?'active':''}" onclick="setAssistantMode('low')">🔋 Ít năng lượng</button><button class="${assistantMode==='overwhelmed'?'active':''}" onclick="setAssistantMode('overwhelmed')">🛟 Quá tải</button></div>
+    <div class="assistant-domains">
+      ${card('✅','Công việc',`${open.length} đang mở`,overdue.length?`${overdue.length} quá hạn`:focus?`Tiếp: ${focus.title}`:'Đã sạch việc','today')}
+      ${card('⏱','Thời gian',`${Math.floor(Number(b.time.loggedMinutes||0)/60)}h ${Number(b.time.loggedMinutes||0)%60}m`,b.time.active?`Đang chạy: ${b.time.active.label}`:`${b.time.entries||0} hoạt động đã log`,'time')}
+      ${card('💰','Tài chính',assistantMoney(net),`Số dư trừ tổng nợ · ${b.finance.walletCount||0} tài khoản`,'money')}
+      ${card('❤️','Sức khỏe',b.health.currentWeightKg?`${b.health.currentWeightKg} kg`:'Chưa cân',`${num(b.health.waterMl||0)} ml nước · đi bộ ${num(b.health.walkMinutes||0)} phút`,'food')}
+      ${card('✈️','Chuyến đi',flight?(flight.code||`${flight.fromCode||''}→${flight.toCode||''}`):'Chưa có',flight?dateTime(flight.departure):'Không có chuyến tương lai','travel')}
+      ${card('🎓','Du học',`${b.study.pending||0} bước`,studyNext?`${studyNext.title} · ${dateShort(studyNext.dueAt)}`:'Chưa có deadline gần','study')}
+    </div>
+    ${alerts.length?`<div class="assistant-alert-list">${alerts.slice(0,4).map(a=>`<button class="assistant-alert ${a.tone}" onclick="openAssistantAction('${a.page}','${a.kind}')"><b>${esc(a.title)}</b><span>${esc(a.detail)}</span><i>Mở xử lý →</i></button>`).join('')}</div>`:'<div class="assistant-clear">Không có cảnh báo chéo nào cần xử lý ngay.</div>'}
+    <details class="assistant-day-loop"><summary>Mở ngày / đóng ngày <span>${Object.values(checks).filter(Boolean).length}/4</span></summary><div>${checkItems.map(item=>`<label><input type="checkbox" ${checks[item[0]]?'checked':''} onchange="toggleAssistantCheck('${item[0]}',this.checked)"> ${item[1]}</label>`).join('')}</div></details>
+  </article>
+  <article class="card daily-capsule"><div class="capsule-symbol"><b>${momentum.stage}</b><span>${momentum.score}/100</span></div><div><span class="section-kicker">DAILY CAPSULE · MOMENTUM</span><h3>${esc(momentum.label)}</h3><p>${esc(b.dailyGuidance?.headline||operationAdvice)}</p></div><div class="capsule-chips"><span>✅ ${open.length} việc mở</span><span>⏱ ${minutesText(Number(b.time.loggedMinutes||0))} đã log</span><span>💧 ${num(b.health.waterMl||0)} ml</span><span>🎓 ${b.study.pending||0} bước hồ sơ</span></div></article>
+  <section id="assistantAdvice" class="operation-advice-grid">
+    <article class="card operation-advice"><span class="section-kicker">LỜI KHUYÊN VẬN HÀNH</span><h3>${overdue.length?'Đóng vòng việc cũ trước khi nhận thêm':'Giữ một luồng công việc có thể chốt'}</h3><p>${esc(operationAdvice)}</p><button onclick="openAssistantAction('today','${overdue.length?'overdue':'followup'}')">Mở vùng xử lý →</button></article>
+    <article class="card operation-advice finance"><span class="section-kicker">LỜI KHUYÊN TÀI CHÍNH</span><h3>${Number(b.finance.debt||0)>Number(b.finance.balance||0)?'Ưu tiên giảm áp lực dư nợ':'Bảo vệ dòng tiền trước'}</h3><p>${esc(financeAdvice)}</p><button onclick="openAssistantAction('money','debt')">Mở kế hoạch tiền →</button></article>
+  </section>
+  <div id="operationKpis" class="operation-kpis"></div>
+  <section id="assistantAnalytics" class="operation-chart-grid">
+    <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">CÔNG VIỆC</span><h3>Trạng thái đầu việc</h3></div><button onclick="activatePage('today')">Mở Kanban</button></div><div id="opsTaskChart"></div></article>
+    <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">DÒNG TIỀN</span><h3>Thu – chi 6 tháng</h3></div><button onclick="activatePage('money')">Mở Tiền</button></div><div id="opsMoneyChart"></div></article>
+    <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">THỜI GIAN</span><h3>Phân bố 7 ngày</h3></div><button onclick="activatePage('time')">Mở nhật ký</button></div><div id="opsTimeChart"></div></article>
+    <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">SỨC KHỎE & MỤC TIÊU</span><h3>Nhịp hệ thống cá nhân</h3></div><button onclick="activatePage('food')">Mở sức khỏe</button></div><div id="opsLifeChart"></div></article>
+  </section>
+  <section id="assistantTools" class="assistant-utility-grid"><article class="card mini-calendar-card"><div class="operation-chart-head"><div><span class="section-kicker">LỊCH NHỊP SỐNG</span><h3 id="miniCalendarTitle">Lịch tháng</h3></div><div class="mini-calendar-nav"><button onclick="moveMiniCalendar(-1)" aria-label="Tháng trước">‹</button><button onclick="resetMiniCalendar()">Hôm nay</button><button onclick="moveMiniCalendar(1)" aria-label="Tháng sau">›</button></div></div><div id="miniCalendar" class="mini-calendar"></div><div class="mini-calendar-legend"><span>✈️ Bay</span><span>☕ Hẹn</span><span>🛏️ Ở</span><span>🎓 Du học</span><span><b>2</b> deadline</span></div></article>
+  <article class="card assistant-quick-console"><div><span class="section-kicker">THAO TÁC 30 GIÂY</span><h3>Ghi ngay, đừng giữ trong đầu</h3><p>Mỗi nút mở đúng biểu mẫu hoặc bắt đầu hành động ngay.</p></div><div class="assistant-quick-grid"><button onclick="openForm('task')"><b>＋</b><span>Ghi việc</span></button><button class="primary" onclick="assistantQuickFocus()"><b>▶</b><span>Focus việc đầu</span></button><button onclick="quickHealthLog('water')"><b>💧</b><span>+ 250 ml</span></button><button onclick="openForm('expense')"><b>₫</b><span>Giao dịch</span></button><button onclick="openManualTimeLog()"><b>◷</b><span>Log thời gian</span></button><button onclick="openForm('appointment')"><b>☕</b><span>Cuộc hẹn</span></button></div><small>Mẹo: nếu đứng hình, bấm “Focus việc đầu” và chỉ làm trong 5–10 phút.</small></article></section>`;
+  renderOperationCenter(b);
+  updateAssistantNowClock();
+}
+function jumpAssistantSection(id){$(id)?.scrollIntoView({behavior:'smooth',block:'start'})}
+
+function renderOperationCenter(b){
+  const kpis=$('operationKpis'),taskChart=$('opsTaskChart'),moneyChart=$('opsMoneyChart'),timeChart=$('opsTimeChart'),lifeChart=$('opsLifeChart'),queue=$('opsPriorityQueue');if(!kpis||!taskChart||!moneyChart||!timeChart||!lifeChart||!queue)return;
+  const now=Date.now(),tasks=data.tasks||[],open=tasks.filter(t=>!truth(t.done)&&t.status!=='done'),done=tasks.filter(t=>truth(t.done)||t.status==='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),totalBalance=Number(b.finance.balance||0),totalDebt=Number(b.finance.debt||0),logged=Number(b.time.loggedMinutes||0);
+  kpis.innerHTML=[['Việc đang mở',open.length,`${overdue.length} quá hạn · ${follow.length} follow-up`,'today'],['Đã log hôm nay',minutesText(logged),b.time.active?`Đang chạy: ${b.time.active.label}`:`${b.time.entries||0} hoạt động`,'time'],['Tài sản ròng',assistantMoney(totalBalance-totalDebt),`${b.finance.walletCount||0} tài khoản · nợ ${assistantMoney(totalDebt)}`,'money'],['Sức khỏe',b.health.currentWeightKg?`${b.health.currentWeightKg} kg`:'Chưa cân',`${num(b.health.waterMl||0)}/${num(b.health.waterGoalMl||2500)} ml nước`,'food'],['Chuyến kế tiếp',b.travel?(b.travel.code||`${b.travel.fromCode||''}→${b.travel.toCode||''}`):'Chưa có',b.travel?dateTime(b.travel.departure):'Không có chuyến tương lai','travel'],['Hồ sơ du học',`${b.study.pending||0} bước`,b.study.next?`${b.study.next.title} · ${dateShort(b.study.next.dueAt)}`:'Chưa có deadline gần','study']].map(item=>`<button onclick="activatePage('${item[3]}')"><small>${esc(item[0])}</small><b>${esc(String(item[1]))}</b><span>${esc(item[2])}</span></button>`).join('');
+  const taskGroups=[['Đang làm',open.filter(t=>t.status==='doing').length,'#5478a6'],['Cần làm',open.filter(t=>!['doing','waiting','blocked'].includes(t.status)).length,'#4f806d'],['Chờ',open.filter(t=>t.status==='waiting'||t.waitingFor).length,'#d79b36'],['Kẹt / quá hạn',new Set([...open.filter(t=>t.status==='blocked'),...overdue]).size,'#d95068'],['Đã xong gần đây',done.length,'#8eb5a6']],taskTotal=Math.max(1,taskGroups.reduce((sum,row)=>sum+row[1],0));let cursor=0;const taskSegments=taskGroups.map(row=>{const start=cursor,end=cursor+row[1]/taskTotal*100;cursor=end;return `${row[2]} ${start}% ${end}%`});taskChart.innerHTML=`<div class="chart-wrap"><div class="donut ops-donut" style="background:conic-gradient(${taskSegments.join(',')})"><div><b>${open.length}</b><span>đang mở</span></div></div><div class="legend">${taskGroups.map(row=>`<div><i style="background:${row[2]}"></i><span>${row[0]}</span><b>${row[1]}</b></div>`).join('')}</div></div>`;
+  const months=[];for(let offset=5;offset>=0;offset--){const from=new Date();from.setDate(1);from.setHours(0,0,0,0);from.setMonth(from.getMonth()-offset);const to=new Date(from);to.setMonth(to.getMonth()+1);const rows=(data.expenses||[]).filter(x=>x.date&&new Date(x.date)>=from&&new Date(x.date)<to);months.push({label:`T${from.getMonth()+1}`,income:rows.filter(x=>x.direction==='income').reduce((s,x)=>s+Number(x.amount||0),0),expense:rows.filter(x=>x.direction!=='income').reduce((s,x)=>s+Number(x.amount||0),0)})}const moneyMax=Math.max(1,...months.flatMap(m=>[m.income,m.expense]));moneyChart.innerHTML=fullDataLoaded?`<div class="flow-bars ops-flow">${months.map(m=>`<div class="flow-bucket"><div class="flow-values"><i class="income" style="height:${m.income?Math.max(4,m.income/moneyMax*100):0}%"></i><i class="expense" style="height:${m.expense?Math.max(4,m.expense/moneyMax*100):0}%"></i></div><span>${m.label}</span></div>`).join('')}</div><div class="chart-legend"><span><i class="income"></i>Tiền vào</span><span><i class="expense"></i>Tiền ra</span></div>`:'<div class="empty-chart">Đang tải lịch sử tài chính…</div>';
+  const days=[];for(let offset=6;offset>=0;offset--){const date=new Date();date.setHours(12,0,0,0);date.setDate(date.getDate()-offset);const logs=(data.timelogs||[]).filter(log=>log.startAt&&localDateKey(log.startAt)===localDateKey(date));days.push({date,total:logs.reduce((s,x)=>s+Number(x.durationMinutes||0),0),work:logs.filter(x=>x.kind==='work').reduce((s,x)=>s+Number(x.durationMinutes||0),0),life:logs.filter(x=>x.kind!=='work').reduce((s,x)=>s+Number(x.durationMinutes||0),0)})}const timeMax=Math.max(1,...days.map(d=>d.total));timeChart.innerHTML=fullDataLoaded?`<div class="weekly-bars ops-weekly">${days.map(d=>`<div class="time-day"><b>${d.total?minutesText(d.total):'—'}</b><div class="time-day-column" style="height:${d.total?Math.max(7,d.total/timeMax*100):2}%"><i style="height:${d.total?d.work/d.total*100:0}%;background:#5478a6"></i><i style="height:${d.total?d.life/d.total*100:0}%;background:#4f806d"></i></div><span>${d.date.toLocaleDateString('vi-VN',{weekday:'short'})}</span></div>`).join('')}</div><div class="chart-legend"><span><i style="background:#5478a6"></i>Công việc</span><span><i style="background:#4f806d"></i>Đời sống</span></div>`:'<div class="empty-chart">Đang tải nhật ký thời gian…</div>';
+  const waterGoal=Number(b.health.waterGoalMl||2500),walkGoal=Number(b.health.walkGoalMinutes||20),weight=Number(b.health.currentWeightKg||0),goal=Number(b.health.goalKg||0),healthProfile=(data.healthprofile||[])[0]||{},startWeight=Number(healthProfile.startWeightKg||weight),weightProgress=startWeight&&goal&&startWeight!==goal?Math.max(0,Math.min(100,(startWeight-weight)/(startWeight-goal)*100)):0,studyPending=Number(b.study.pending||0),studyRows=data.studyabroadchecklist||[],studyDone=studyRows.filter(row=>row.status==='done').length,studyTotal=studyRows.length||Math.max(8,studyPending);lifeChart.innerHTML=`<div class="ops-progress-list">${operationProgress('Nước hôm nay',Number(b.health.waterMl||0),waterGoal,`${num(b.health.waterMl||0)}/${num(waterGoal)} ml`)}${operationProgress('Đi bộ hôm nay',Number(b.health.walkMinutes||0),walkGoal,`${num(b.health.walkMinutes||0)}/${num(walkGoal)} phút`)}${operationProgress('Mục tiêu cân nặng',weightProgress,100,weight&&goal?`${weight} → ${goal} kg`:'Chưa đủ dữ liệu')}${operationProgress('Hồ sơ du học',studyRows.length?studyDone:Math.max(0,studyTotal-studyPending),studyTotal,`${studyPending} bước đang mở`)}</div>`;
+  const priority=open.slice().sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a)).slice(0,5);queue.innerHTML=priority.map((task,index)=>`<button onclick="openOperationTask('${escAttr(task.id)}')"><b>${index+1}</b><span><strong>${esc(task.title)}</strong><small>${dateTime(task.dueAt)} · ${esc(taskStatusLabel(task))}</small></span><i>→</i></button>`).join('')||'<div class="empty">Không còn việc mở. Hãy dùng thời gian này để chuẩn bị ngày mai.</div>';
+  renderMiniCalendar();renderAssistantGateDisplay();
+}
+function operationProgress(label,value,target,detail){const percent=Math.max(0,Math.min(100,Number(target)?Number(value)/Number(target)*100:0));return `<div><p><span>${esc(label)}</span><b>${esc(detail)}</b></p><i><em style="width:${percent}%"></em></i></div>`}
+function openOperationTask(id){activatePage('today');setTimeout(()=>$(`task-${id}`)?.scrollIntoView({behavior:'smooth',block:'start'}),120)}
+function moveMiniCalendar(months){miniCalendarCursor=new Date(miniCalendarCursor.getFullYear(),miniCalendarCursor.getMonth()+months,1);renderMiniCalendar()}
+function resetMiniCalendar(){miniCalendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);renderMiniCalendar()}
+function appointmentIcon(type){return {coffee:'☕',friend:'🎉',meeting:'🤝',hometown:'🏡',personal:'📌'}[type]||'📌'}
+function renderMiniCalendar(){
+  const box=$('miniCalendar'),title=$('miniCalendarTitle');if(!box||!title)return;const year=miniCalendarCursor.getFullYear(),month=miniCalendarCursor.getMonth(),first=new Date(year,month,1),start=new Date(year,month,1-first.getDay()),today=localDateKey(new Date()),events={};
+  const add=(value,icon,label,kind)=>{if(!value)return;const key=localDateKey(value);if(!key)return;(events[key]||(events[key]=[])).push({icon,label,kind})};
+  (data.tasks||[]).filter(task=>!truth(task.done)&&task.status!=='done').forEach(task=>add(task.dueAt,'✓',task.title,'deadline'));
+  (data.flights||[]).filter(f=>f.status!=='cancelled').forEach(f=>add(f.departure,'✈️',`${f.code||'Bay'} ${f.fromCode||''}→${f.toCode||f.destination||''}`,'flight'));
+  (data.hotels||[]).forEach(h=>add(h.checkIn,'🛏️',h.name||'Khách sạn','hotel'));
+  (data.appointments||[]).forEach(a=>add(a.startAt,appointmentIcon(a.type),a.title||'Cuộc hẹn','appointment'));
+  (data.studyabroadchecklist||[]).filter(s=>s.status!=='done').forEach(s=>add(s.dueAt,'🎓',s.title,'study'));
+  title.textContent=`Tháng ${month+1}, ${year}`;const weekdays=['CN','T2','T3','T4','T5','T6','T7'];let html=weekdays.map(day=>`<b class="mini-weekday">${day}</b>`).join('');
+  for(let index=0;index<42;index++){const date=new Date(start);date.setDate(start.getDate()+index);const key=localDateKey(date),rows=events[key]||[],deadlines=rows.filter(row=>row.kind==='deadline').length,icons=[...new Set(rows.filter(row=>row.kind!=='deadline').map(row=>row.icon))].slice(0,3),tooltip=rows.map(row=>row.label).join(' · ');html+=`<div class="mini-day ${date.getMonth()!==month?'outside':''} ${key===today?'today':''}" title="${escAttr(tooltip)}"><span>${date.getDate()}</span><div>${icons.map(icon=>`<i>${icon}</i>`).join('')}${deadlines?`<b>${deadlines}</b>`:''}</div></div>`}
+  box.innerHTML=html;
+}
+function openAssistantAction(page,kind){
+  activatePage(page);
+  setTimeout(()=>{
+    if(kind==='overdue'){kanbanCollapsed.overdue=false;renderKanban();$('kanban')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+    if(kind==='followup'){$('tasks')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+    if(kind==='debt'){$('debts')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+    if(kind==='health'){$('healthHabits')?.scrollIntoView({behavior:'smooth',block:'center'});return}
+    if(kind==='travel'){$('upcomingFlightPlan')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+    if(kind==='study'){$('studyRoadmap')?.scrollIntoView({behavior:'smooth',block:'start'})}
+  },120);
+}
+function renderTimeAnchor(){
+  const now=new Date(); const clock=$('currentClock'); if(clock)clock.textContent=timeOnly(now,true);
+  const next=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'&&t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0];
+  const countdown=$('nextTaskClock'), title=$('nextTaskTitle'); if(!countdown||!title)return;
+  if(!next){countdown.textContent='Chưa có deadline';title.textContent='';return}
+  const ms=new Date(next.dueAt)-now; const past=ms<0; const total=Math.abs(ms); const hours=Math.floor(total/3600000); const mins=Math.floor(total%3600000/60000); const secs=Math.floor(total%60000/1000);
+  countdown.textContent=past?`Quá ${hours}h ${mins}m ${secs}s`:`Còn ${hours}h ${mins}m ${secs}s`; title.textContent=next.title;
+}
+setInterval(()=>{renderTimeAnchor();renderActiveTime();renderFlightBoardClock();updateAssistantNowClock()},1000);
+setInterval(()=>cycleFlightBoard(),20000);
+setInterval(()=>{rotateAssistantGate();renderLiveFlightStatuses()},30000);
+// Keep the local counter smooth without continuously competing with save calls
+// for an Apps Script execution slot. Cross-device state still refreshes when
+// the app becomes visible and once per minute in the background.
+setInterval(syncActiveTimeLog,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncActiveTimeLog()});
+
+function syncActiveTimeLog(){
+  google.script.run.withSuccessHandler(server=>{
+    const before=activeTimeLog&&String(activeTimeLog.startAt),after=server&&String(server.startAt);
+    if(before===after)return;
+    activeTimeLog=server?{kind:server.kind,label:server.label,startAt:server.startAt}:null;
+    if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1');
+    if(before&&!after){load();return}renderActiveTime();
+  }).withFailureHandler(()=>{}).getActiveTimeLog();
+}
+
+function startTimeLog(kind,label){
+  if(activeTimeLog){toast('Hãy dừng mục đang chạy trước.');return}
+  google.script.run.withSuccessHandler(active=>{activeTimeLog=active;localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(active));renderTime();toast('Đã bắt đầu · tập trung vào đúng việc này')}).withFailureHandler(fail).beginTimeLog(kind,label);
+}
+function startCustomTimeLog(){const input=$('customTimeLabel'),label=input.value.trim();if(!label){toast('Nhập tên hoạt động trước.');return}startTimeLog('custom',label);input.value=''}
+function openManualTimeLog(){
+  const end=new Date(),start=new Date(end.getTime()-30*60000);
+  openForm('timeLog',{kind:'work',label:'Công việc',startAt:start.toISOString(),endAt:end.toISOString(),note:''});
+}
+function stopTimeLog(){
+  if(!activeTimeLog)return;
+  google.script.run.withSuccessHandler(result=>{
+    activeTimeLog=null;localStorage.removeItem('my-assistant-active-time-v1');
+    if(result.log&&!(data.timelogs||[]).some(log=>log.id===result.log.id))data.timelogs.push(result.log);
+    const picker=$('timeDate');if(picker&&result.log)picker.value=localDateKey(result.log.startAt);
+    renderTime();toast(`Đã lưu và xác nhận ${result.durationMinutes} phút trên Google Sheet`);load();
+  }).withFailureHandler(fail).finishTimeLog();
+}
+function renderActiveTime(){
+  const label=$('activeTimeLabel'),clock=$('activeTimeClock'),button=$('stopTimeButton');if(!label||!clock||!button)return;
+  if(!activeTimeLog){label.textContent='Chưa bắt đầu';clock.textContent='00:00:00';button.disabled=true;return}
+  const seconds=Math.max(0,Math.floor((Date.now()-new Date(activeTimeLog.startAt))/1000)),h=String(Math.floor(seconds/3600)).padStart(2,'0'),m=String(Math.floor(seconds%3600/60)).padStart(2,'0'),s=String(seconds%60).padStart(2,'0');label.textContent=activeTimeLog.label;clock.textContent=`${h}:${m}:${s}`;button.disabled=false;
+}
+function renderTime(){
+  const picker=$('timeDate');if(!picker)return;if(!picker.value)picker.value=localDateKey(new Date());renderActiveTime();
+  const selected=picker.value,logs=(data.timelogs||[]).filter(log=>log.startAt&&localDateKey(log.startAt)===selected).sort((a,b)=>new Date(b.startAt)-new Date(a.startAt));
+  const total=logs.reduce((sum,log)=>sum+Number(log.durationMinutes||0),0),groups={};logs.forEach(log=>{const key=log.label||log.kind||'Khác';groups[key]=(groups[key]||0)+Number(log.durationMinutes||0)});
+  renderTimeDayCommand(selected,logs,total,groups);
+  renderTimeCharts(selected,logs);
+  const top=Object.entries(groups).sort((a,b)=>b[1]-a[1]);$('timeStats').innerHTML=[metricCard('Đã log',`${Math.floor(total/60)}h ${total%60}m`,`${logs.length} hoạt động`),...top.slice(0,3).map(([name,minutes])=>metricCard(name,`${Math.floor(minutes/60)}h ${minutes%60}m`,total?`${Math.round(minutes/total*100)}% trong ngày`:'0%'))].join('');
+  $('timeEntries').innerHTML=logs.map(log=>`<article class="card"><div class="card-top"><div><span class="pill">${esc(timeKindName(log.kind,log.label))}</span><h3>${esc(log.label||log.kind||'Hoạt động')}</h3><p class="meta">${timeOnly(log.startAt)} → ${timeOnly(log.endAt)} · ${log.durationMinutes||0} phút</p>${log.note?`<p class="hint">${esc(log.note)}</p>`:''}</div><div class="card-actions"><button class="outline small" onclick="editItem('timeLog','${log.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('TimeLogs','${log.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa log thời gian trong ngày này.</div>';
+  renderAppointments();
+  renderRoutine();
+}
+
+function renderTimeDayCommand(selected,logs,total,groups){
+  const box=$('timeDayCommand');if(!box)return;const today=localDateKey(new Date()),selectedDate=new Date(`${selected}T12:00:00`),now=new Date();
+  const elapsed=selected===today?now.getHours()*60+now.getMinutes():(selectedDate<new Date(`${today}T00:00:00`)?1440:0),running=selected===today&&activeTimeLog?Math.max(0,Math.round((Date.now()-new Date(activeTimeLog.startAt))/60000)):0,accounted=Math.min(1440,total+running),gap=Math.max(0,elapsed-accounted),score=elapsed?Math.min(100,Math.round(accounted/elapsed*100)):0;
+  const byKind={};logs.forEach(log=>{const key=log.kind||'custom';byKind[key]=(byKind[key]||0)+Number(log.durationMinutes||0)});if(running&&activeTimeLog)byKind[activeTimeLog.kind]=(byKind[activeTimeLog.kind]||0)+running;
+  const next=activeTimeLog?['Đang chạy',`${activeTimeLog.label} · ${minutesText(running)}`,'stopTimeLog()', 'Dừng & lưu']:gap>=90?['Có khoảng trống',`${minutesText(gap)} chưa được ghi nhận`,'openManualTimeLog()', 'Log bù ngay']:['Bắt đầu một nhịp',`Chọn đúng việc và tập trung 10 phút`,`startTimeLog('work','Công việc tập trung')`,'Bắt đầu'];
+  const recent=logs.slice(0,4).reverse();
+  box.innerHTML=`<article class="time-command"><div class="time-command-head"><div><span class="section-kicker">TIME CONTROL · ${selected===today?'HÔM NAY':dateShort(selected)}</span><h2>${score}% thời gian đã trôi được ghi nhận</h2><p>${next[0]} · ${esc(next[1])}</p></div><button class="primary" onclick="${next[2]}">${next[3]} →</button></div><div class="time-command-metrics"><span><small>ĐÃ GHI</small><b>${minutesText(accounted)}</b></span><span class="${gap>=90?'attention':''}"><small>KHOẢNG TRỐNG</small><b>${minutesText(gap)}</b></span><span><small>CÔNG VIỆC</small><b>${minutesText(byKind.work||0)}</b></span><span><small>NGỦ</small><b>${minutesText(byKind.sleep||0)}</b></span></div><div class="time-command-track"><i style="width:${score}%"></i></div>${recent.length?`<div class="time-command-timeline">${recent.map(log=>`<span><i></i><small>${timeOnly(log.startAt)}</small><b>${esc(log.label||timeKindName(log.kind))}</b></span>`).join('')}</div>`:''}<div class="time-command-actions"><button onclick="startTimeLog('work','Công việc tập trung')">💼 Công việc</button><button onclick="startTimeLog('dead','Thời gian chết')">⌛ Thời gian chết</button><button onclick="startTimeLog('sleep','Ngủ')">🌙 Ngủ</button><button onclick="openManualTimeLog()">＋ Log thủ công</button></div></article>`;
+}
+
+function renderAppointments(){
+  const box=$('appointments');if(!box)return;
+  const appointments=(data.appointments||[]).slice().sort((a,b)=>new Date(a.startAt)-new Date(b.startAt));
+  box.innerHTML=appointments.map(a=>`<article class="card appointment-card"><div class="appointment-icon">${appointmentIcon(a.type)}</div><div><span class="pill">${esc(labelForOption(a.type))}</span><h3>${esc(a.title||'Cuộc hẹn')}</h3><p class="meta">${dateTime(a.startAt)}${a.endAt?' → '+timeOnly(a.endAt):''} · ${esc(a.location||'Chưa nhập địa điểm')}${a.withWhom?' · với '+esc(a.withWhom):''}</p>${a.transport||a.notes?`<p class="hint">${a.transport?'Di chuyển: '+esc(a.transport):''}${a.transport&&a.notes?' · ':''}${esc(a.notes||'')}</p>`:''}</div><div class="card-actions"><button class="outline small" onclick="editItem('appointment','${a.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Appointments','${a.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa có cuộc hẹn. Thêm lịch cà phê, gặp bạn hoặc về quê để app nhắc và đưa vào lịch mini.</div>';
+}
+
+function timeKindName(kind,label){return {work:'Công việc',dead:'Thời gian chết',travel:'Di chuyển',sleep:'Ngủ',play:'Đi chơi',personal:'Cá nhân',walk:'Đi bộ',exercise:'Thể dục',meal:'Ăn uống',custom:'Mục riêng'}[kind]||label||kind||'Khác'}
+function minutesText(minutes){const value=Math.round(Number(minutes||0));return value>=60?`${Math.floor(value/60)}h ${value%60}m`:`${value}m`}
+function renderTimeCharts(selected,selectedLogs){
+  const distribution=$('timeDistributionChart'),weekly=$('timeWeeklyChart');if(!distribution||!weekly)return;
+  const grouped={};selectedLogs.forEach(log=>{const key=timeKindName(log.kind,log.label);grouped[key]=(grouped[key]||0)+Number(log.durationMinutes||0)});const entries=Object.entries(grouped).sort((a,b)=>b[1]-a[1]),total=entries.reduce((s,x)=>s+x[1],0);
+  if(!entries.length)distribution.innerHTML='<div class="empty-chart">Chưa có dữ liệu trong ngày này.</div>';else{let cursor=0;const segments=entries.map(([,value],i)=>{const start=cursor,end=cursor+value/total*100;cursor=end;return `${colors[i%colors.length]} ${start}% ${end}%`});distribution.innerHTML=`<div class="chart-wrap"><div class="donut time-donut" style="background:conic-gradient(${segments.join(',')})"><div><b>${minutesText(total)}</b><span>đã log</span></div></div><div class="legend">${entries.map(([name,value],i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${esc(name)}</span><b>${Math.round(value/total*100)}%</b></div>`).join('')}</div></div>`}
+  const endDay=new Date(`${selected}T12:00:00`),days=[];for(let offset=6;offset>=0;offset--){const day=new Date(endDay);day.setDate(endDay.getDate()-offset);const key=localDateKey(day),logs=(data.timelogs||[]).filter(log=>log.startAt&&localDateKey(log.startAt)===key),byKind={};logs.forEach(log=>{const kind=timeKindName(log.kind,log.label);byKind[kind]=(byKind[kind]||0)+Number(log.durationMinutes||0)});days.push({date:day,key,total:Object.values(byKind).reduce((s,n)=>s+n,0),byKind})}
+  const max=Math.max(1,...days.map(d=>d.total)),kinds=[...new Set(days.flatMap(d=>Object.keys(d.byKind)))];if(!kinds.length){weekly.innerHTML='<div class="empty-chart">Log thời gian để thấy nhịp 7 ngày.</div>';return}
+  weekly.innerHTML=`<div class="weekly-bars">${days.map(day=>`<div class="time-day"><b>${day.total?minutesText(day.total):'—'}</b><div class="time-day-column" style="height:${day.total?Math.max(7,day.total/max*100):2}%">${kinds.map((kind,i)=>day.byKind[kind]?`<i title="${escAttr(kind)}: ${minutesText(day.byKind[kind])}" style="height:${day.byKind[kind]/day.total*100}%;background:${colors[i%colors.length]}"></i>`:'').join('')}</div><span>${day.date.toLocaleDateString('vi-VN',{weekday:'short'})}</span></div>`).join('')}</div><div class="chart-legend">${kinds.slice(0,6).map((kind,i)=>`<span><i style="background:${colors[i%colors.length]}"></i>${esc(kind)}</span>`).join('')}</div>`;
+}
+
+function renderRoutine(){
+  const r=(data.routinesettings||[])[0]||{};const el=$('routineSummary');if(!el)return;
+  el.innerHTML=`<span>🍳 Ăn sáng <b>${esc(clockValue(r.breakfastTime,'08:00:00'))}</b></span><span>🍱 Ăn trưa <b>${esc(clockValue(r.lunchTime,'12:30:00'))}</b></span><span>🍲 Ăn tối <b>${esc(clockValue(r.dinnerTime,'19:00:00'))}</b></span><span>🌙 Đi ngủ <b>${esc(clockValue(r.bedtime,'23:30:00'))}</b></span><span>☀️ Thức dậy <b>${esc(clockValue(r.wakeTime,'07:30:00'))}</b></span><span>⏱ Hỏi log mỗi <b>${esc(r.logIntervalMinutes||60)} phút</b></span><span>💧 Nhắc nước <b>${r.waterReminderEnabled==='no'?'Tắt':`mỗi ${r.waterIntervalMinutes||120} phút`}</b></span><span>🍽 Log bữa ăn <b>${r.mealLogReminderEnabled==='no'?'Tắt':esc(clockValue(r.mealLogReminderTime,'20:30:00'))}</b></span><span>🚶 Đi bộ <b>${r.walkReminderEnabled==='no'?'Tắt':esc(clockValue(r.walkReminderTime,'18:30:00'))}</b></span>`;
+  if($('sleepLatency'))$('sleepLatency').value=r.sleepLatencyMinutes||15;
+}
+function clockValue(value,fallback){
+  const raw=String(value||'');if(/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)){const p=raw.split(':');return `${p[0].padStart(2,'0')}:${p[1]}:${p[2]||'00'}`}
+  const date=new Date(raw);return isNaN(date)?fallback:date.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}
+function openRoutineForm(){openForm('routine',(data.routinesettings||[])[0]||{})}
+function installRoutineCalendarUi(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installRoutineCalendar()}
+function calculateSleepWindow(){
+  const value=$('sleepStart').value||'23:30',latency=Number($('sleepLatency').value||15),parts=value.split(':').map(Number),start=new Date();start.setHours(parts[0],parts[1],0,0);if(start<Date.now()-3600000)start.setDate(start.getDate()+1);
+  const wake=cycles=>new Date(start.getTime()+(latency+cycles*90)*60000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+  const routine=(data.routinesettings||[])[0]||{},target=routine.wakeTime||'07:30';
+  $('sleepSuggestions').innerHTML=`<div><b>${wake(5)}</b><span>5 chu kỳ · khoảng 7 giờ 30 phút</span></div><div class="best"><b>${wake(6)}</b><span>6 chu kỳ · khoảng 9 giờ</span></div><p class="hint">Nếu phải dậy lúc ${esc(target)}, hãy ưu tiên đủ ít nhất 7 giờ ngủ. Đây là ước tính, không phải chẩn đoán y khoa.</p>`;
+}
+function renderKanban(){
+  document.querySelectorAll('.kanban-list[data-kanban-key]').forEach(list=>kanbanScrollPositions[list.dataset.kanbanKey]=list.scrollTop);
+  const now=new Date();
+  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  const overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now);
+  const upcoming=open.filter(t=>!t.dueAt||new Date(t.dueAt)>now);
+  const done=data.tasks.filter(t=>truth(t.done)||t.status==='done').slice(-12).reverse();
+  const card=t=>`<article class="kanban-card"><b>${esc(t.title)}</b><span>${dateTime(t.dueAt)}</span><div><button onclick="editItem('task','${t.id}')">Sửa</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button>${truth(t.done)?'':`<button onclick="complete('${t.id}')">Xong</button>`}</div></article>`;
+  const col=(key,title,items,empty)=>{
+    const folded=!!kanbanCollapsed[key],hidden=Math.max(0,items.length-2);
+    const nearest=items.length?(key==='done'?`${items.length} việc hoàn thành gần đây`:(items[0].dueAt?`Gần nhất: ${dateTime(items[0].dueAt)}`:'Có việc chưa đặt hạn')):empty;
+    return `<section class="kanban-col ${folded?'collapsed':''}">
+      <div class="kanban-col-head"><div><h3>${title}<span class="kanban-count">${items.length}</span></h3><small>${esc(nearest)}</small></div><button class="kanban-toggle" onclick="toggleKanbanColumn('${key}')" aria-expanded="${!folded}">${folded?'Mở':'Thu gọn'} <span aria-hidden="true">${folded?'⌄':'⌃'}</span></button></div>
+      ${items.length?`<div class="kanban-list" data-kanban-key="${key}" onscroll="rememberKanbanScroll('${key}',this.scrollTop)">${items.map(card).join('')}</div>${folded&&hidden?`<button class="kanban-more" onclick="toggleKanbanColumn('${key}')">+ ${hidden} việc khác · mở để xem</button>`:''}`:`<p class="meta kanban-empty">${empty}</p>`}
+    </section>`;
+  };
+  $('kanban').innerHTML=col('overdue','Đang cháy / hôm nay',overdue,'Không có việc quá hạn.')+col('upcoming','Sắp tới',upcoming,'Chưa có việc sắp tới.')+col('done','Đã xong',done,'Chưa tick xong việc nào.');
+  requestAnimationFrame(()=>document.querySelectorAll('.kanban-list[data-kanban-key]').forEach(list=>list.scrollTop=kanbanScrollPositions[list.dataset.kanbanKey]||0));
+}
+function rememberKanbanScroll(key,value){kanbanScrollPositions[key]=value}
+function toggleKanbanColumn(key){kanbanCollapsed[key]=!kanbanCollapsed[key];localStorage.setItem('my-assistant-kanban-fold-v1',JSON.stringify(kanbanCollapsed));renderKanban()}
+
+function renderNotifications(){
+  const box=$('notificationCenter');if(!box)return;
+  const unread=(data.notifications||[]).filter(n=>{
+    if(n.readAt)return false;
+    if(n.targetType==='task'){const task=data.tasks.find(t=>t.id===n.targetId);return task&&!truth(task.done)&&task.status!=='done'}
+    if(n.targetType==='flight'){if(!fullDataLoaded)return true;const flight=data.flights.find(f=>f.id===n.targetId);return flight&&flight.status!=='cancelled'&&new Date(flight.departure)>new Date()}
+    return true;
+  }).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const seen=new Set();
+  const visible=unread.filter(n=>{const key=`${n.type}:${n.targetId}`;if(seen.has(key))return false;seen.add(key);return true}).slice(0,5);
+  if(!visible.length){box.innerHTML='';box.hidden=true;return}
+  box.hidden=false;
+  box.innerHTML=`<div class="notification-head"><div><span class="pill">TRỢ LÝ ĐANG BÁM VIỆC</span><h2>${visible.length} mục cần chú ý</h2></div></div><div class="notification-list">${visible.map(n=>`<article class="notice ${escAttr(n.priority||'normal')}"><button class="notice-main" onclick="openNotificationTarget('${escAttr(n.targetType)}','${escAttr(n.targetId)}')"><b>${esc(n.title)}</b><span>${esc(n.message)}</span><small>${dateTime(n.createdAt)}</small></button><button class="notice-done" onclick="readNotification('${escAttr(n.id)}')" aria-label="Đánh dấu đã đọc">✓</button></article>`).join('')}</div>`;
+}
+function readNotification(id){
+  const key=`notification:${id}`;if(!beginAction(key))return;
+  const notice=data.notifications.find(n=>n.id===id);if(notice)notice.readAt=new Date().toISOString();renderNotifications();
+  google.script.run.withSuccessHandler(()=>endAction(key)).withFailureHandler(e=>{endAction(key);if(notice)notice.readAt='';renderNotifications();fail(e)}).markNotificationRead(id);
+}
+function openNotificationTarget(type,id){
+  if(type==='flight'){activatePage('travel');setTimeout(()=>$('upcomingFlightPlan')?.scrollIntoView({behavior:'smooth'}),50);return}
+  if(type==='health'){activatePage('food');setTimeout(()=>$('workoutSuggestions')?.scrollIntoView({behavior:'smooth'}),50);return}
+  if(type==='career'){activatePage('cv');setTimeout(()=>$('dailyGuidance')?.scrollIntoView({behavior:'smooth'}),50);return}
+  if(type==='money'){activatePage('money');return}
+  if(type==='study'){activatePage('study');return}
+  if(type==='time'){activatePage('time');return}
+  activatePage('today');
+  setTimeout(()=>document.querySelector(`[onclick="editItem('task','${id}')"]`)?.closest('.card')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
+}
+
+function renderProfile(){
+  const p=data.profile[0]||{};
+  const important=['fullName','dateOfBirth','phone','emergencyContact','bloodType','allergies','passportExpiry','documentFolderUrl'],complete=important.filter(k=>String(p[k]||'').trim()).length,percent=Math.round(complete/important.length*100);
+  const passportDays=p.passportExpiry?Math.ceil((new Date(p.passportExpiry)-Date.now())/86400000):null;
+  $('profileInsights').innerHTML=[metricCard('Hồ sơ hoàn thiện',percent+'%',`${complete}/${important.length} mục quan trọng`),metricCard('Liên hệ khẩn cấp',p.emergencyContact?'Đã lưu':'Còn thiếu',p.emergencyContactRelation||'Tên + quan hệ + số điện thoại'),metricCard('Hộ chiếu',p.passportNumber?'Đã lưu':'Chưa lưu',passportDays===null?'Thêm ngày hết hạn':passportDays<0?'Đã hết hạn':`Còn ${passportDays} ngày`),metricCard('Hồ sơ giấy tờ',p.documentFolderUrl?'Có liên kết':'Chưa liên kết','Drive riêng chứa giấy tờ/CV')].join('');
+  const section=(title,rows)=>`<section class="profile-section"><h3>${title}</h3><div class="detail-grid">${rows.filter(r=>r[1]).map(r=>`<span>${esc(r[0])}</span><b>${r[2]?r[2](r[1]):esc(r[1])}</b>`).join('')||'<p class="meta">Chưa có thông tin.</p>'}</div></section>`;
+  $('profileCard').innerHTML=`<article class="card profile-card"><div class="section-head compact"><div><span class="pill">HỒ SƠ CẤP NHANH</span><h2>${esc(p.preferredName||p.fullName||'Hồ sơ của bạn')}</h2></div><button class="outline" onclick="openProfileForm()">Sửa hồ sơ</button></div><div class="profile-sections">${section('Danh tính & liên hệ', [['Họ tên',p.fullName],['Ngày sinh',p.dateOfBirth,v=>dateShort(v)],['Điện thoại',p.phone],['Email',p.email],['Địa chỉ',p.address],['Quốc tịch',p.nationality]])}${section('Khẩn cấp & sức khỏe', [['Nhóm máu',p.bloodType],['Liên hệ khẩn cấp',p.emergencyContact],['Quan hệ',p.emergencyContactRelation],['Dị ứng',p.allergies],['Thuốc đang dùng',p.medications],['Bệnh/lưu ý',p.medicalConditions],['Ghi chú',p.medicalNotes]])}${section('Giấy tờ & bảo hiểm', [['Hộ chiếu',p.passportNumber],['Hết hạn hộ chiếu',p.passportExpiry,v=>dateShort(v)],['Bảo hiểm',p.insuranceProvider],['Mã bảo hiểm',p.insuranceNumber],['Thư mục giấy tờ',p.documentFolderUrl,v=>safeUrl(v)?`<a href="${escAttr(v)}" target="_blank" rel="noopener">Mở Google Drive ↗</a>`:esc(v)]])}${section('Mục tiêu & ghi chú riêng', [['Mục tiêu cá nhân',p.personalGoals],['Ghi chú riêng',p.privateNotes]])}</div><p class="hint privacy-note">Dữ liệu nhạy cảm nằm trong Google Sheet riêng của tài khoản đang chạy Apps Script. Không đưa các giá trị này vào mã nguồn GitHub.</p></article>`;
+  $('walletsProfile').innerHTML=walletCards()||'<div class="empty">Thêm ví tiền mặt, tài khoản hoặc thẻ để theo dõi số dư.</div>';
+}
+
+function renderMoney(){
+  const totalDebt=data.debts.reduce((s,d)=>s+Number(d.balance||0),0);
+  const totalBalance=data.wallets.reduce((s,w)=>s+Number(w.balance||0),0);
+  const tx=expensesInPeriod();
+  const income=tx.filter(e=>e.direction==='income').reduce((s,e)=>s+Number(e.amount||0),0);
+  const expense=tx.filter(e=>e.direction!=='income').reduce((s,e)=>s+Number(e.amount||0),0);
+  renderMoneyControlCenter(totalBalance,totalDebt,income,expense,tx);
+  $('moneySummary').innerHTML=`<small>TỔNG SỐ DƯ VÍ / TÀI KHOẢN</small><b>${vnd(totalBalance)}</b><span>${periodLabels[moneyPeriod]}: vào ${vnd(income)} · ra ${vnd(expense)} · ròng ${vnd(income-expense)}. Dư nợ: ${vnd(totalDebt)}.</span>`;
+  $('financeInsights').innerHTML=[
+    metricCard('Tiền vào',vnd(income),'Ghi có, refund, received'),
+    metricCard('Tiền ra',vnd(expense),'Chi tiêu trong '+periodLabels[moneyPeriod]),
+    metricCard('Dòng tiền ròng',vnd(income-expense),(income-expense)>=0?'Đang dương':'Đang âm'),
+    metricCard('Giao dịch',tx.length+' mục','Gom từ nhập tay + Gmail')
+  ].join('');
+  renderFinanceWarnings(totalBalance,totalDebt,income,expense,tx);
+  $('walletsMoney').innerHTML=walletCards()||'<p class="meta">Chưa có ví hoặc tài khoản.</p>';
+  $('gmailWallet').innerHTML='<option value="">Không cập nhật số dư ví</option>'+data.wallets.map(w=>`<option value="${escAttr(w.id)}">${esc(w.name)} · ${vnd(w.balance)}</option>`).join('');
+  renderAllocation(tx);
+  renderMoneyCharts(tx,totalBalance,totalDebt);
+  renderDebtPayoffPlan(totalDebt);
+  $('debts').innerHTML=data.debts.map(debtCard).join('')||'<div class="empty">Chưa có khoản nợ.</div>';
+  const recent=data.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,12);
+  $('expenses').innerHTML=recent.map(e=>`<article class="card"><div class="card-top"><div><h3>${esc(e.merchant)} <span class="amount ${e.direction==='income'?'positive':''}">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')}${e.debtId?' · đã trừ vào khoản nợ':''} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('expense','${e.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Expenses','${e.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
+  renderPlans(totalBalance,totalDebt);
+}
+
+function renderMoneyControlCenter(totalBalance,totalDebt,income,expense,tx){
+  const box=$('moneyControlCenter');if(!box)return;
+  const net=income-expense,available=totalBalance-totalDebt,minimum=(data.debts||[]).reduce((s,d)=>s+Number(d.minimumPayment||0),0);
+  const topDebt=(data.debts||[]).filter(d=>Number(d.balance||0)>0).slice().sort((a,b)=>Number(b.annualRate||0)-Number(a.annualRate||0))[0];
+  const topExpense=tx.filter(e=>e.direction!=='income').slice().sort((a,b)=>Number(b.amount||0)-Number(a.amount||0))[0];
+  const nextPlan=(data.plans||[]).filter(p=>p.targetDate&&new Date(p.targetDate)>=new Date()).slice().sort((a,b)=>new Date(a.targetDate)-new Date(b.targetDate))[0];
+  const pressure=totalDebt>totalBalance?'high':net<0?'watch':'steady';
+  const signal=pressure==='high'?['CẦN ƯU TIÊN','Dư nợ đang cao hơn số dư','pressure']:pressure==='watch'?['CẦN ĐIỀU CHỈNH','Tiền ra đang vượt tiền vào','watch']:['ĐANG ỔN ĐỊNH','Dòng tiền kỳ này chưa có cảnh báo lớn','steady'];
+  const priority=topDebt?`Ưu tiên ${topDebt.name}: lãi ${Number(topDebt.annualRate||0)}%/năm, tối thiểu ${vnd(topDebt.minimumPayment)}.`:nextPlan?`Tách tiền trước cho “${nextPlan.name}” vào ${dateShort(nextPlan.targetDate)}.`:topExpense?`Kiểm tra khoản chi lớn nhất: ${topExpense.merchant||topExpense.category||'Giao dịch'} · ${vnd(topExpense.amount)}.`:'Ghi giao dịch đầu tiên để trợ lý bắt đầu phân tích dòng tiền.';
+  box.innerHTML=`<article class="money-command ${escAttr(signal[2])}"><div class="money-command-hero"><div><span class="section-kicker">MONEY CONTROL CENTER · ${esc(periodLabels[moneyPeriod].toUpperCase())}</span><h2>${vnd(totalBalance)}</h2><p>Tổng số dư hiện có</p></div><div class="money-health"><small>${esc(signal[0])}</small><b>${esc(signal[1])}</b><span>Khả dụng sau dư nợ: <strong>${vnd(available)}</strong></span></div></div><div class="money-flow-board"><span class="income"><small>TIỀN VÀO</small><b>＋${vnd(income)}</b></span><span class="expense"><small>TIỀN RA</small><b>−${vnd(expense)}</b></span><span class="net"><small>DÒNG TIỀN RÒNG</small><b>${net>=0?'＋':'−'}${vnd(Math.abs(net))}</b></span><span class="debt"><small>DƯ NỢ / TỐI THIỂU</small><b>${vnd(totalDebt)}</b><em>${minimum?vnd(minimum)+'/tháng':'Chưa có khoản tối thiểu'}</em></span></div><div class="money-priority"><div><span>VIỆC TIỀN QUAN TRỌNG NHẤT</span><b>${esc(priority)}</b></div><button onclick="openMoneyPriority()">Mở xử lý →</button></div><div class="money-fast-actions"><button onclick="openMoneyTransaction('income')"><b>＋</b><span>Ghi tiền vào</span></button><button onclick="openMoneyTransaction('expense')"><b>−</b><span>Ghi chi tiêu</span></button><button onclick="openForm('balance')"><b>◎</b><span>Cập nhật số dư</span></button><button onclick="openMoneyDebtAction()"><b>↘</b><span>Trả / sửa nợ</span></button></div></article>`;
+}
+function openMoneyTransaction(direction){openForm('expense',{date:localDateKey(new Date()),direction,merchant:direction==='income'?'Tiền vào':'Chi tiêu'})}
+function openMoneyDebtAction(){const debt=(data.debts||[]).filter(d=>Number(d.balance||0)>0).slice().sort((a,b)=>Number(b.annualRate||0)-Number(a.annualRate||0))[0];debt?openDebtAdjustment(debt.id,'decrease'):openForm('debt')}
+function openMoneyPriority(){const debts=document.querySelector('[data-ui-fold="money-debts"]'),plans=document.querySelector('[data-ui-fold="money-plans"]');if((data.debts||[]).some(d=>Number(d.balance||0)>0)){debts?.setAttribute('open','');debts?.scrollIntoView({behavior:'smooth',block:'start'});return}if((data.plans||[]).length){plans?.setAttribute('open','');plans?.scrollIntoView({behavior:'smooth',block:'start'});return}openMoneyTransaction('expense')}
+
+function debtCard(d){
+  return `<article class="card debt-card"><div class="debt-card-head"><div><span class="section-kicker">KHOẢN NỢ</span><h3>${esc(d.name)}</h3><p class="meta">Lãi ${d.annualRate||0}%/năm · tối thiểu ${vnd(d.minimumPayment)} · hạn ngày ${d.dueDay||'—'}</p></div><div class="debt-balance"><small>SỐ NỢ HIỆN TẠI</small><b>${vnd(d.balance)}</b></div></div><div class="debt-actions"><button class="debt-paid" onclick="openDebtAdjustment('${d.id}','decrease')">✓ Đã trả bớt</button><button class="outline" onclick="openDebtAdjustment('${d.id}','increase')">+ Tăng số nợ</button><button class="outline" onclick="openDebtAdjustment('${d.id}','set')">✎ Đặt số nợ mới</button><button class="outline" onclick="editItem('debt','${d.id}')">Sửa lãi / hạn</button><button class="outline danger" onclick="removeItem('Debts','${d.id}')">Xoá khoản nợ</button></div></article>`;
+}
+function openDebtAdjustment(id,direction){
+  const debt=(data.debts||[]).find(d=>d.id===id);if(!debt){toast('Không tìm thấy khoản nợ.');return}
+  openForm('debtAdjust',{debtId:id,direction});
+  $('formFields').innerHTML=`<div class="debt-adjust-summary"><small>${direction==='decrease'?'GHI NHẬN ĐÃ TRẢ':direction==='increase'?'GHI NHẬN NỢ TĂNG':'ĐẶT LẠI SỐ DƯ NỢ'}</small><b>${esc(debt.name)}</b><span>Hiện tại: ${vnd(debt.balance)}</span></div>`+$('formFields').innerHTML;
+}
+function debtAdjustmentPreview(item){
+  const debt=(data.debts||[]).find(d=>d.id===item.debtId),current=Number(debt?.balance||0),amount=Math.abs(Number(item.amount||0));
+  const next=item.direction==='increase'?current+amount:item.direction==='decrease'?Math.max(0,current-amount):amount;
+  return {debt,current,amount,next};
+}
+
+function renderDebtPayoffPlan(totalDebt){
+  const box=$('debtPayoffPlan');if(!box)return;
+  const debts=(data.debts||[]).filter(d=>Number(d.balance||0)>0).slice().sort((a,b)=>Number(b.annualRate||0)-Number(a.annualRate||0));
+  if(!debts.length){box.innerHTML='<article class="card debt-coach debt-free"><b>Không có dư nợ đang mở</b><span>Giữ nhịp log giao dịch để số liệu luôn đúng.</span></article>';return}
+  const minimum=debts.reduce((s,d)=>s+Number(d.minimumPayment||0),0),months=minimum>0?Math.ceil(totalDebt/minimum):null,first=debts[0];
+  box.innerHTML=`<article class="card debt-coach"><div><span class="section-kicker">KẾ HOẠCH TRẢ NỢ</span><h3>Ưu tiên ${esc(first.name)}</h3><p class="meta">Lãi suất cao nhất ${Number(first.annualRate||0)}%/năm · trả tối thiểu toàn bộ khoản nợ là ${vnd(minimum)}/tháng.</p></div><div class="debt-coach-metrics"><span><small>TỔNG DƯ NỢ</small><b>${vnd(totalDebt)}</b></span><span><small>ƯỚC TÍNH THÔ</small><b>${months?months+' tháng':'Chưa đủ dữ liệu'}</b></span></div><p class="hint">Ước tính chưa tính lãi phát sinh. Trả tối thiểu đúng hạn cho mọi khoản, rồi dồn phần dư vào khoản lãi cao nhất; khi thanh toán hãy chọn “+ / − số nợ” để số dư cập nhật ngay.</p></article>`;
+}
+
+function renderFinanceWarnings(totalBalance,totalDebt,income,expense,tx){
+  const warnings=[],minimum=data.debts.reduce((s,d)=>s+Number(d.minimumPayment||0),0),outflows=tx.filter(e=>e.direction!=='income'),categories={};
+  outflows.forEach(e=>{const key=e.category||'Khác';categories[key]=(categories[key]||0)+Number(e.amount||0)});
+  const top=Object.entries(categories).sort((a,b)=>b[1]-a[1])[0],months=expense>0?totalBalance/expense:null;
+  if(expense>income&&expense>0)warnings.push(['danger','Dòng tiền đang âm',`Chi vượt thu ${vnd(expense-income)} trong ${periodLabels[moneyPeriod]}.`, 'Xem 3 khoản chi lớn nhất và hoãn một khoản không cấp thiết.']);
+  if(totalDebt>totalBalance)warnings.push(['danger','Dư nợ cao hơn số dư',`Chênh lệch ${vnd(totalDebt-totalBalance)}.`, 'Ưu tiên đúng hạn các khoản tối thiểu và không tạo thêm nợ nếu chưa có nguồn trả.']);
+  if(income>0&&minimum/income>.3)warnings.push(['warning','Áp lực trả nợ đáng chú ý',`Khoản tối thiểu bằng ${Math.round(minimum/income*100)}% tiền vào kỳ này.`, 'Kiểm tra lãi suất, ngày đến hạn và phương án tái cơ cấu với đơn vị cho vay nếu khó trả.']);
+  if(months!==null&&months<1)warnings.push(['danger','Khoảng đệm dưới 1 kỳ chi',`Số dư hiện tại tương đương khoảng ${months.toFixed(1)} lần chi của ${periodLabels[moneyPeriod]}.`, 'Tạm giảm cam kết chi lớn và đặt một mức quỹ dự phòng riêng.']);
+  else if(months!==null&&months<3)warnings.push(['warning','Khoảng đệm còn mỏng',`Số dư tương đương khoảng ${months.toFixed(1)} lần chi của kỳ đang xem.`, 'Tự đặt mục tiêu quỹ dự phòng phù hợp với tiền thuê nhà, công việc và người phụ thuộc.']);
+  if(top&&expense&&top[1]/expense>.4)warnings.push(['info','Chi tập trung ở '+top[0],`${Math.round(top[1]/expense*100)}% tiền ra · ${vnd(top[1])}.`, 'Mở các giao dịch nhóm này và kiểm tra khoản nào có thể cắt hoặc đặt trần.']);
+  const stale=data.wallets.filter(w=>w.lastUpdatedAt&&Date.now()-new Date(w.lastUpdatedAt)>30*86400000);
+  if(stale.length)warnings.push(['info','Số dư có thể đã cũ',`${stale.length} ví/tài khoản chưa cập nhật hơn 30 ngày.`, 'Cập nhật số dư trước khi dùng insight để quyết định.']);
+  if(!warnings.length)warnings.push(['ok','Chưa phát hiện cảnh báo lớn','Dữ liệu kỳ đang xem chưa cho thấy dòng tiền âm hoặc áp lực rõ rệt.','Tiếp tục log giao dịch và cập nhật số dư để insight chính xác hơn.']);
+  const personalLine=`Dựa trên ${data.wallets.length} tài khoản, ${data.debts.length} khoản nợ và ${tx.length} giao dịch trong ${periodLabels[moneyPeriod]}.`;
+  $('financeWarnings').innerHTML=`<div class="section-head compact"><div><h3>Trợ lý tư vấn tài chính cá nhân</h3><span class="hint">${esc(personalLine)} Khuyến nghị bên dưới được tính riêng từ dòng tiền, số dư, dư nợ và kế hoạch của bạn.</span></div></div>${warnings.map(w=>`<article class="finance-alert ${w[0]}"><div><b>${esc(w[1])}</b><span>${esc(w[2])}</span></div><p><b>Việc nên làm:</b> ${esc(w[3])}</p></article>`).join('')}`;
+}
+
+function renderPlans(totalBalance,totalDebt){
+  const plans=data.plans||[],cutoff=new Date(Date.now()-90*86400000),recent=data.expenses.filter(e=>e.date&&new Date(e.date)>=cutoff),income=recent.filter(e=>e.direction==='income').reduce((s,e)=>s+Number(e.amount||0),0),out=recent.filter(e=>e.direction!=='income').reduce((s,e)=>s+Number(e.amount||0),0),monthlyNet=(income-out)/3;
+  const coach=$('moneyCoach'),list=$('plans');if(!coach||!list)return;
+  const available=Math.max(0,totalBalance-totalDebt);
+  coach.innerHTML=`<article class="card"><h3>Gợi ý ưu tiên tiền lúc này</h3><p class="meta">Sau khi trừ dư nợ khỏi số dư hiện có: <b>${vnd(available)}</b>. Dòng tiền ròng bình quân 90 ngày: <b>${vnd(monthlyNet)}/tháng</b>.</p><p class="hint">Giữ một khoản dự phòng phù hợp với rủi ro thực tế của bạn trước khi cam kết khoản chi lớn; số tiền phù hợp phụ thuộc hoàn cảnh.</p></article>`;
+  list.innerHTML=plans.map(p=>{const remain=Math.max(0,Number(p.estimatedCost||0)-Number(p.savedAmount||0)),days=Math.max(1,Math.ceil((new Date(p.targetDate)-Date.now())/86400000)),months=Math.max(1,days/30.4),need=remain/months,ratio=monthlyNet>0?Math.round(need/monthlyNet*100):null,warning=remain===0?'Đã đủ tiền dành sẵn.':monthlyNet<=0?'Dòng tiền 90 ngày đang không dương: nên giảm chi phí, dời ngày hoặc tăng tiền dành sẵn.':need>monthlyNet?'Mức cần dành vượt dòng tiền ròng gần đây: nên dời ngày hoặc giảm ngân sách.':`Cần dành khoảng ${vnd(need)}/tháng${ratio!==null?` · ${ratio}% dòng tiền ròng`:''}.`;return `<article class="card"><div class="card-top"><div><h3>${esc(p.name)}</h3><p class="meta">${labelForOption(p.type)} · cần ${vnd(p.estimatedCost)} · đã có ${vnd(p.savedAmount)} · hạn ${dateShort(p.targetDate)}</p><p class="hint">${warning}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('plan','${p.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Plans','${p.id}')">Xoá</button></div></div></article>`}).join('')||'<div class="empty">Thêm chuyến đi hoặc khoản mua lớn để app tính số tiền cần dành mỗi tháng.</div>';
+}
+
+function expensesInPeriod(){
+  const start=periodStart(moneyPeriod);
+  return data.expenses.filter(e=>e.date&&new Date(e.date)>=start);
+}
+function periodStart(p){
+  const now=new Date(), d=new Date(now);
+  if(p==='week'){d.setDate(now.getDate()-((now.getDay()+6)%7));d.setHours(0,0,0,0);return d}
+  if(p==='year'){return new Date(now.getFullYear(),0,1)}
+  if(p==='twoYears'){return new Date(now.getFullYear()-2,now.getMonth(),now.getDate())}
+  return new Date(now.getFullYear(),now.getMonth(),1);
+}
+function setMoneyPeriod(p){
+  moneyPeriod=p;
+  document.querySelectorAll('[data-money-period]').forEach(b=>b.classList.toggle('active',b.dataset.moneyPeriod===p));
+  renderMoney();
+}
+function walletCards(){return data.wallets.map(w=>`<article class="wallet-row"><div><b>${esc(w.name)}</b><span>${esc(w.type||'Ví')} ${w.lastUpdatedAt?'· cập nhật '+dateShort(w.lastUpdatedAt):''}</span></div><strong>${vnd(w.balance)}</strong><div class="wallet-actions"><button class="outline small" onclick="editItem('wallet','${w.id}')">Sửa</button><button class="outline small" onclick="openForm('walletAdjust',{walletId:'${w.id}',direction:'income'})">+ / − tiền</button><button class="outline small danger" onclick="removeWallet('${w.id}')">Xoá ví</button></div></article>`).join('')}
+function metricCard(label,value,hint){return `<article class="card mini"><small>${esc(label)}</small><b>${esc(value)}</b><span>${esc(hint)}</span></article>`}
+
+function renderAllocation(periodTx){
+  const spending=(periodTx||expensesInPeriod()).filter(e=>e.direction!=='income');
+  const grouped={}; spending.forEach(e=>grouped[e.category||'Khác']=(grouped[e.category||'Khác']||0)+Number(e.amount||0));
+  let entries=Object.entries(grouped); let label='Chi tiêu thực tế '+periodLabels[moneyPeriod];
+  if(!entries.length){entries=data.allocations.length?data.allocations.map(a=>[a.name,Number(a.percent)]):[['Thiết yếu',50],['Tiết kiệm / mục tiêu',20],['Nợ',20],['Linh hoạt',10]];label='Tỷ lệ bạn đặt (chưa có giao dịch trong kỳ)'}
+  const total=entries.reduce((s,[,n])=>s+n,0)||1;
+  let cursor=0; const segments=entries.map(([name,value],i)=>{const start=cursor;const end=cursor+value/total*100;cursor=end;return `${colors[i%colors.length]} ${start}% ${end}%`});
+  $('allocationChart').innerHTML=`<div class="chart-wrap"><div class="donut" style="background:conic-gradient(${segments.join(',')})"><div><b>${spending.length?vnd(total):Math.round(total)+'%'}</b><span>${spending.length?'đã chi':'mục tiêu'}</span></div></div><div class="legend"><p class="meta">${label}</p>${entries.map(([name,value],i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${esc(name)}</span><b>${spending.length?vnd(value):Math.round(value/total*100)+'%'}</b></div>`).join('')}</div></div>`;
+}
+
+function moneyBucketsForPeriod(){
+  const now=new Date(),buckets=[];
+  if(moneyPeriod==='week'){const start=periodStart('week');for(let i=0;i<7;i++){const from=new Date(start);from.setDate(start.getDate()+i);const to=new Date(from);to.setDate(from.getDate()+1);buckets.push({label:from.toLocaleDateString('vi-VN',{weekday:'short'}),from,to})}}
+  else if(moneyPeriod==='month'){const last=new Date(now.getFullYear(),now.getMonth()+1,1),daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();for(let day=1;day<=daysInMonth;day+=7){const from=new Date(now.getFullYear(),now.getMonth(),day),to=new Date(Math.min(last.getTime(),new Date(now.getFullYear(),now.getMonth(),day+7).getTime()));buckets.push({label:`${day}–${Math.min(day+6,daysInMonth)}`,from,to})}}
+  else if(moneyPeriod==='year'){for(let month=0;month<12;month++)buckets.push({label:`T${month+1}`,from:new Date(now.getFullYear(),month,1),to:new Date(now.getFullYear(),month+1,1)})}
+  else{const quarter=Math.floor(now.getMonth()/3),first=new Date(now.getFullYear(),quarter*3-21,1);for(let i=0;i<8;i++){const from=new Date(first.getFullYear(),first.getMonth()+i*3,1),to=new Date(first.getFullYear(),first.getMonth()+i*3+3,1);buckets.push({label:`Q${Math.floor(from.getMonth()/3)+1}/${String(from.getFullYear()).slice(-2)}`,from,to})}}
+  return buckets;
+}
+function renderMoneyCharts(tx,totalBalance,totalDebt){
+  const flow=$('moneyFlowChart'),balance=$('balanceDebtChart');if(!flow||!balance)return;const buckets=moneyBucketsForPeriod();buckets.forEach(bucket=>{const rows=tx.filter(item=>{const date=new Date(item.date);return date>=bucket.from&&date<bucket.to});bucket.income=rows.filter(item=>item.direction==='income').reduce((s,item)=>s+Number(item.amount||0),0);bucket.expense=rows.filter(item=>item.direction!=='income').reduce((s,item)=>s+Number(item.amount||0),0)});const max=Math.max(1,...buckets.flatMap(b=>[b.income,b.expense]));
+  if(!tx.length)flow.innerHTML='<div class="empty-chart">Chưa có giao dịch trong kỳ này.</div>';else flow.innerHTML=`<div class="flow-bars">${buckets.map(bucket=>`<div class="flow-bucket"><div class="flow-values"><i class="income" title="Tiền vào ${vnd(bucket.income)}" style="height:${Math.max(bucket.income?4:0,bucket.income/max*100)}%"></i><i class="expense" title="Tiền ra ${vnd(bucket.expense)}" style="height:${Math.max(bucket.expense?4:0,bucket.expense/max*100)}%"></i></div><span>${esc(bucket.label)}</span></div>`).join('')}</div><div class="chart-legend"><span><i class="income"></i>Tiền vào</span><span><i class="expense"></i>Tiền ra</span></div>`;
+  const rows=[...(data.wallets||[]).map(w=>({name:w.name,value:Math.max(0,Number(w.balance||0)),type:'asset'})),...(data.debts||[]).map(d=>({name:d.name,value:Math.max(0,Number(d.balance||0)),type:'debt'}))].sort((a,b)=>b.value-a.value).slice(0,10),rowMax=Math.max(1,...rows.map(row=>row.value));
+  balance.innerHTML=rows.length?`<div class="balance-total"><span><small>TỔNG SỐ DƯ</small><b>${vnd(totalBalance)}</b></span><span><small>TỔNG DƯ NỢ</small><b>${vnd(totalDebt)}</b></span></div><div class="balance-rows">${rows.map(row=>`<div class="balance-row"><span>${esc(row.name)}</span><div><i class="${row.type}" style="width:${row.value/rowMax*100}%"></i></div><b>${vnd(row.value)}</b></div>`).join('')}</div>`:'<div class="empty-chart">Thêm tài khoản hoặc khoản nợ để xem biểu đồ.</div>';
+}
+
+function renderCvs(){
+  $('cvs').innerHTML=data.cvs.map(cv=>`<article class="card cv-card"><div class="card-top"><div><h3>${esc(cv.title)}</h3><p class="meta">${esc(cv.targetRole||'Chưa chọn vai trò')} · ${esc(cv.fileName||'Bản text')} · cập nhật ${dateShort(cv.updatedAt)}</p></div><div class="card-actions"><button class="outline small" onclick="viewCv('${cv.id}')">Xem toàn bộ</button><button class="outline small" onclick="editCv('${cv.id}')">Chỉnh sửa</button></div></div>${cv.content?`<p class="cv-preview">${esc(cv.content).slice(0,260)}${cv.content.length>260?'...':''}</p>`:'<p class="meta">CV này đang lưu dưới dạng file/link. Bấm Xem toàn bộ để mở.</p>'}${cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="doc-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở file CV trên Google Drive ↗</a>`:''}</article>`).join('')||'<div class="empty">Lưu một CV theo từng vai trò để cập nhật nhanh khi cần.</div>';
+  const p=(data.reflectionprofile||[])[0]||{},g=data.dailyguidance||{},pathLabel=lifePathLabel(p);
+  $('dailyGuidance').innerHTML=`<article class="card guidance-card"><span class="pill">THÔNG ĐIỆP THỰC TẾ HÔM NAY</span><h2>${esc(g.headline||'Chốt một đầu ra trước khi mở việc mới')}</h2><div class="guidance-focus"><small>VIỆC ƯU TIÊN</small><b>${esc(g.focusTask||'Chọn một việc quan trọng')}</b><span>${esc(g.focusReason||'')}</span></div><ol>${(g.steps||[]).map(step=>`<li>${esc(step)}</li>`).join('')}</ol><div class="adhd-nudge"><b>Gợi ý ADHD</b><span>${esc(g.adhdPrompt||'Đặt hẹn giờ 10 phút và chỉ làm bước đầu tiên.')}</span></div>${g.focusTaskId?`<button onclick="activatePage('today')">Mở danh sách việc</button>`:''}</article>`;
+  $('careerAnalysis').innerHTML=`<article class="card"><span class="section-kicker">PHÂN TÍCH NGHỀ NGHIỆP THEO DỮ LIỆU</span><h3>Nhóm vai trò nên kiểm chứng</h3><p class="meta">Dựa trên CV, sở thích và thế mạnh bạn nhập — không dựa trên tử vi.</p><div class="career-fits">${(g.careerFits||[]).map(f=>`<div><b>${esc(f.role)}</b><span>${esc(f.reason)}</span></div>`).join('')||'<p class="meta">Cập nhật hồ sơ để nhận gợi ý.</p>'}</div></article>`;
+  const noteStatus=value=>value?'<span class="status-badge ok">ĐÃ CÓ DỮ LIỆU</span>':'<span class="status-badge warning">CHỜ BẠN DÁN</span>';
+  $('reflectionProfile').innerHTML=`<article class="card reflection-card"><span class="section-kicker">GÓC CHIÊM NGHIỆM</span><h3>${esc(p.fullName||'Phạm Nguyễn Gia Đạt')}</h3><p class="meta">${p.dateOfBirth?dateShort(p.dateOfBirth):'12/05/2003'} · ${esc(String(p.birthTime||'10:25').slice(0,5))}${p.birthPlace?' · '+esc(p.birthPlace):' · chưa nhập nơi sinh'}</p><div class="reflection-numbers"><span><small>HOROSCOPE</small><b>${esc(g.zodiacSign||p.zodiacSign||'Kim Ngưu')}</b></span><span><small>THẦN SỐ HỌC</small><b>Đường đời ${esc(pathLabel)}</b></span></div><div class="reflection-status"><p>Tử vi ${noteStatus(p.tuViNotes)}</p><p>Bát tự ${noteStatus(p.batTuNotes)}</p><p>Thần số học ${noteStatus(p.numerologyNotes)}</p><p>Horoscope ${noteStatus(p.horoscopeNotes)}</p></div><div class="reflection-source-grid">${reflectionSummaryCard('TỬ VI',p.tuViSummary)}${reflectionSummaryCard('BÁT TỰ',p.batTuSummary)}${reflectionSummaryCard('HOROSCOPE',p.horoscopeSummary)}${reflectionSummaryCard('THẦN SỐ HỌC',p.numerologySummary)}</div><div class="reflection-traits">${reflectionTrait('Tóm tắt tính cách',p.personalitySummary,'personality')}${reflectionTrait('Điểm mạnh',p.strengthsSummary||p.strengths,'strength')}${reflectionTrait('Điểm yếu / rủi ro',p.weaknessesSummary,'weakness')}${reflectionTrait('Điểm cần cải thiện',p.improvementSummary,'improve')}</div>${buildReflectionMomentum()}${buildForecastDeepDive()}${buildManifestCorner(p)}<h3 class="reflection-topic-title">Chiêm nghiệm theo chủ đề</h3><div class="reflection-topic-grid">${reflectionTrait('Tiền bạc',p.spiritualMoney,'money')}${reflectionTrait('Công việc',p.spiritualCareer,'career')}${reflectionTrait('Xuất ngoại',p.spiritualTravel,'travel')}${reflectionTrait('Du học',p.spiritualStudy,'study')}</div><div class="reflection-documents">${reflectionDetail('Lá số Tử Vi & hạn 2026',p.tuViNotes)}${reflectionDetail('Bát Tự nguyên cục & đại vận',p.batTuNotes)}${reflectionDetail('Horoscope · Tropical / Placidus',p.horoscopeNotes)}${reflectionDetail('Các chỉ số Thần số học',p.numerologyNotes)}</div><blockquote>${esc(g.reflection||'Hôm nay điều gì cần sự ổn định thay vì thêm ý tưởng mới?')}</blockquote><p class="reflection-disclaimer">${esc(g.reflectionDisclaimer||'Nội dung này chỉ để tự suy ngẫm.')}</p></article>`;
+}
+function reflectionDetail(title,value){return value?`<details><summary>${esc(title)}</summary><pre>${esc(value)}</pre></details>`:''}
+function reflectionSummaryCard(title,value){return value?`<section><small>${esc(title)}</small><p>${esc(value)}</p></section>`:''}
+function reflectionTrait(title,value,tone){return value?`<section class="${tone}"><h4>${esc(title)}</h4><p>${esc(value)}</p></section>`:''}
+function buildReflectionMomentum(){
+  const open=(data.tasks||[]).filter(t=>t.status!=='done'),debt=(data.debts||[]).reduce((s,d)=>s+Number(d.balance||0),0),study=(data.studyabroadchecklist||[]).filter(s=>s.status!=='done');
+  const work=open[0]?`Khép một vòng: làm bước nhỏ nhất của “${open[0].title}”, cập nhật file rồi báo lại.`:'Chọn một đầu ra đo được và hoàn thành trước khi mở việc mới.';
+  const money=debt?`Dư nợ đang ghi nhận ${vnd(debt)}. Hôm nay tránh một khoản chi bốc đồng và cập nhật đúng số nợ sau thanh toán.`:'Giữ thói quen log tiền và dành trước một phần cho mục tiêu dài hạn.';
+  const abroad=study[0]?`Bước hồ sơ kế tiếp: ${study[0].title}. Chỉ cần làm 15 phút để duy trì đà.`:'Tạo một mốc học bổng có deadline: ngoại ngữ, shortlist, SOP hoặc thư giới thiệu.';
+  return `<section class="reflection-momentum"><span class="section-kicker">BIẾN CHIÊM NGHIỆM THÀNH HÀNH ĐỘNG</span><h3>Đi chậm nhưng phải khép vòng</h3><div class="momentum-grid"><section><small>CÔNG VIỆC</small><b>Kỷ luật đầu ra</b><p>${esc(work)}</p></section><section><small>TIỀN BẠC</small><b>Xây nền an toàn</b><p>${esc(money)}</p></section><section><small>DU HỌC</small><b>Tích luỹ hồ sơ</b><p>${esc(abroad)}</p></section></div><p class="momentum-mantra">Vũ Khúc–Thiên Phủ, Ất Mộc và năng lượng số 4/22 có thể được dùng như biểu tượng nhắc bạn: bền bỉ, có hệ thống, xây từng viên gạch. Đây là gợi ý tự chiêm nghiệm, không phải dự đoán.</p></section>`;
+}
+function lifePathLabel(p){
+  const birth=String(p.dateOfBirth||'').slice(0,10);if(birth==='2003-05-12')return '4 (13)';
+  const value=String(p.lifePathNumber||4);return value==='4'?'4 (13)':value;
+}
+function buildForecastDeepDive(){
+  const rows=[
+    ['2025–2034 · Đại vận Giáp Dần','Biểu tượng của mở rộng, tự chủ và cạnh tranh. Hợp với việc xây năng lực riêng, đổi môi trường và tạo mạng lưới; rủi ro là ôm quá nhiều hướng hoặc muốn tự xử lý mọi thứ.'],
+    ['2026 · Bính Ngọ','Thương Quan thường được đọc như nhu cầu thể hiện, tạo đầu ra và nói tiếng nói riêng. Có lợi khi viết, thuyết trình, nộp hồ sơ; cần kiểm soát phản ứng với cấp trên, deadline và lời hứa quá sức.'],
+    ['Tử Vi · Thân cư Phu Thê','Giai đoạn 24–33 tuổi có Phá Quân và Hóa Lộc được dùng như biểu tượng tái cấu trúc qua quan hệ, cộng tác và quyết định lớn. Chọn người đồng hành có nguyên tắc; thỏa thuận vai trò, tiền và thời hạn bằng văn bản.'],
+    ['Horoscope · Nhà IX và X','Venus nhà IX hỗ trợ hứng thú học xa, ngôn ngữ và trải nghiệm quốc tế; Mặt Trời–Mercury gần MC nhấn mạnh câu chuyện nghề nghiệp. Mercury vuông Mars/Jupiter/Neptune nhắc kiểm tra kỹ hồ sơ, email và giả định trước khi gửi.'],
+    ['Thần số học · 4 (13), 22, năm 9','Số 4 (13) và 22 nhấn mạnh xây nền, hệ thống và công trình dài hạn; năm 9 phù hợp khép việc cũ, dọn hồ sơ và bỏ cam kết không còn phục vụ mục tiêu.']
+  ];
+  return `<details class="forecast-deep-dive"><summary><span>🔭 Luận giải mở rộng 2026 · công việc, du học, xuất ngoại</span><b>Mở để xem</b></summary><div>${rows.map(r=>`<section><h4>${esc(r[0])}</h4><p>${esc(r[1])}</p></section>`).join('')}<p class="forecast-reality"><b>Dấu hiệu thực tế cần theo dõi:</b> điểm ngoại ngữ tăng, shortlist có deadline, SOP được phản biện, người giới thiệu xác nhận và quỹ hồ sơ tăng đều. Các hệ thống chiêm nghiệm không thể bảo đảm một sự kiện sẽ xảy ra.</p></div></details>`;
+}
+function buildManifestCorner(p){
+  return `<section class="manifest-corner"><span class="section-kicker">MANIFEST CÓ CĂN CỨ</span><h3>Hình dung kết quả — rồi tạo bằng chứng hôm nay</h3><div class="manifest-guide"><span><b>1. Viết rõ</b>Mục tiêu, thời điểm và lý do thật sự.</span><span><b>2. Hình dung 2 phút</b>Tập trung vào quá trình: học, viết, hỏi và nộp.</span><span><b>3. Tạo bằng chứng</b>Một hành động 10–20 phút ngay hôm nay.</span><span><b>4. Review Chủ nhật</b>Giữ điều hiệu quả, sửa kế hoạch chưa thực tế.</span></div><label>Mục tiêu bạn đang manifest<textarea id="manifestGoal" placeholder="Ví dụ: Tôi xây một hồ sơ đủ mạnh để nhận học bổng toàn phần kỳ 2028.">${esc(p.manifestGoal||'')}</textarea></label><label>Bằng chứng nhỏ hôm nay<input id="manifestEvidence" value="${escAttr(p.manifestEvidence||'')}" placeholder="Ví dụ: làm 20 phút IELTS hoặc viết 150 từ SOP"></label><button onclick="saveManifest(this)">Lưu manifest & tạo cam kết</button><p class="hint">Manifest không thay thế hành động hay bảo đảm kết quả; nó giúp giữ sự chú ý vào mục tiêu và hành vi có thể kiểm soát.</p></section>`;
+}
+function saveManifest(button){
+  const goal=$('manifestGoal').value.trim(),evidence=$('manifestEvidence').value.trim();if(!goal){toast('Hãy viết mục tiêu manifest trước.');return}
+  button.disabled=true;button.textContent='Đang lưu…';google.script.run.withSuccessHandler(item=>{data.reflectionprofile[0]=Object.assign(data.reflectionprofile[0]||{},item);button.disabled=false;button.textContent='Đã lưu ✓';toast('Đã lưu manifest. Bây giờ làm bằng chứng nhỏ đã ghi.');}).withFailureHandler(e=>{button.disabled=false;button.textContent='Lưu manifest & tạo cam kết';fail(e)}).saveManifest({goal,evidence});
+}
+function renderStudyAbroad(){
+  const p=(data.studyabroadprofile||[])[0]||{},options=data.studyabroadoptions||[],steps=(data.studyabroadchecklist||[]).slice().sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  const year=Number(p.targetIntakeYear||2028),intake=new Date(year,8,1),months=Math.max(0,Math.ceil((intake-new Date())/2629800000));
+  const budget=Number(p.budgetVnd||0),saved=Number(p.savingsVnd||0),gap=Math.max(0,budget-saved),monthly=months?gap/months:gap;
+  const done=steps.filter(s=>s.status==='done').length,progress=steps.length?Math.round(done/steps.length*100):0;
+  const deadlines=options.filter(o=>o.applicationDeadline&&new Date(o.applicationDeadline)>=new Date()).sort((a,b)=>new Date(a.applicationDeadline)-new Date(b.applicationDeadline));
+  $('studyOverview').innerHTML=`<article class="study-hero"><div><span>MỤC TIÊU KỲ NHẬP HỌC</span><b>${year}</b><p>${esc(p.targetCountries||'Chưa chốt quốc gia')} · ${esc(p.targetDegree||'Chưa chốt bậc học')}</p></div><div class="study-progress"><strong>${progress}%</strong><span>${done}/${steps.length} mốc đã hoàn thành · còn khoảng ${months} tháng</span><i><em style="width:${progress}%"></em></i></div></article>`;
+  renderStudyLaunchpad(p,options,steps,months,deadlines);
+  $('studyMetrics').innerHTML=[metricCard('Lựa chọn',options.length+' chương trình',deadlines[0]?`Hạn gần nhất ${dateShort(deadlines[0].applicationDeadline)}`:'Chưa có deadline'),metricCard('Ngoại ngữ',p.currentEnglishScore||'Chưa thi',`Mục tiêu ${p.englishTest||'IELTS'} ${p.targetEnglishScore||'—'}`),metricCard('Quỹ hiện có',vnd(saved),budget?`${Math.round(saved/budget*100)}% ngân sách mục tiêu`:'Chưa nhập ngân sách'),metricCard('Cần để dành',vnd(monthly)+'/tháng',months?`Trong khoảng ${months} tháng`:'Cập nhật kỳ nhập học')].join('');
+  renderScholarshipCommand(p,options,steps);
+  $('studyProfileSummary').innerHTML=studyProfileRow('Ngành mục tiêu',p.targetFields)+studyProfileRow('Học vấn hiện tại',p.currentEducation)+studyProfileRow('GPA',p.currentGpa)+studyProfileRow('Ngoại ngữ',`${p.englishTest||'IELTS'} ${p.currentEnglishScore||'chưa thi'} → ${p.targetEnglishScore||'chưa đặt mục tiêu'}`)+studyProfileRow('Hộ chiếu',p.passportStatus)+studyProfileRow('Học bổng',p.scholarshipTarget)+studyProfileRow('Động lực',p.motivation)+studyProfileRow('Rào cản cần xử lý',p.constraints);
+  $('studyFinance').innerHTML=`<div class="study-money"><span><small>Ngân sách dự kiến</small><b>${budget?vnd(budget):'Chưa nhập'}</b></span><span><small>Còn thiếu</small><b>${budget?vnd(gap):'Chưa tính'}</b></span></div><div class="goal-track"><i style="width:${budget?Math.min(100,saved/budget*100):0}%"></i></div><p class="meta">${esc(p.fundingPlan||'Cập nhật nguồn tiền: tiết kiệm, học bổng, gia đình hoặc khoản vay phù hợp.')}</p><p class="hint">Ngân sách nên gồm học phí, sinh hoạt, bảo hiểm, visa, vé máy bay, tiền đặt cọc nhà và quỹ khẩn cấp 3–6 tháng.</p>`;
+  $('studyOptions').innerHTML=options.map(o=>`<article class="card study-option"><div class="card-top"><div><span class="pill">${esc(o.country||'CHƯA CHỌN NƯỚC')} · ${esc(o.priority||'match')}</span><h3>${esc(o.school||'Chưa nhập trường')}</h3><p class="meta">${esc(o.program||'Chưa nhập chương trình')} · ${esc(o.degree||p.targetDegree||'')}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('studyOption','${o.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('StudyAbroadOptions','${o.id}')">Xoá</button></div></div><div class="study-option-meta"><span><small>Kỳ học</small><b>${esc(o.intake||'—')}</b></span><span><small>Deadline</small><b>${o.applicationDeadline?dateShort(o.applicationDeadline):'—'}</b></span><span><small>Học phí/năm</small><b>${o.tuitionAnnual?vnd(o.tuitionAnnual):'—'}</b></span><span><small>Sinh hoạt/năm</small><b>${o.livingCostAnnual?vnd(o.livingCostAnnual):'—'}</b></span></div><p class="meta">Ngoại ngữ: ${esc(o.languageRequirement||'chưa cập nhật')} · Học bổng: ${esc(o.scholarship||'chưa cập nhật')}</p>${o.website&&safeUrl(o.website)?`<a class="doc-link" href="${escAttr(o.website)}" target="_blank" rel="noopener">Mở trang chương trình ↗</a>`:''}</article>`).join('')||'<div class="empty">Thêm 6–10 lựa chọn và chia thành nhóm an toàn, phù hợp, tham vọng.</div>';
+  $('studyRoadmap').innerHTML=steps.map(s=>`<article class="study-step ${s.status==='done'?'completed':''}"><button class="study-check" onclick="toggleStudyStep('${s.id}')">${s.status==='done'?'✓':'○'}</button><div><span>${esc(s.category||'Hồ sơ')} · ${dateShort(s.dueAt)}</span><b>${esc(s.title)}</b><p>${esc(s.notes||'')}</p></div><div class="card-actions"><button class="outline small" onclick="createStudyReminder('${s.id}')">Nhắc</button><button class="outline small" onclick="editItem('studyChecklist','${s.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('StudyAbroadChecklist','${s.id}')">Xoá</button></div></article>`).join('')||'<div class="empty">Chưa có lộ trình. Thêm bước đầu tiên với một deadline cụ thể.</div>';
+}
+function renderStudyLaunchpad(p,options,steps,months,deadlines){
+  const box=$('studyLaunchpad');if(!box)return;
+  const pending=steps.filter(s=>s.status!=='done').sort((a,b)=>new Date(a.dueAt||'2999-01-01')-new Date(b.dueAt||'2999-01-01'));
+  const mission=pending[0],nextSchool=deadlines[0],countries=String(p.targetCountries||'Thế giới').split(/[,;\n]/).filter(Boolean).slice(0,3).join(' · ');
+  const missionTitle=mission?.title||'Chốt 3 quốc gia và 6 chương trình mục tiêu';
+  const missionMeta=mission?`${mission.category||'Hồ sơ'} · hạn ${dateShort(mission.dueAt)}`:(nextSchool?`Hạn trường gần nhất ${dateShort(nextSchool.applicationDeadline)}`:'Bắt đầu bằng một shortlist có deadline');
+  const actions=[['🎧','IELTS 25 phút','Làm một phiên IELTS tập trung 25 phút',25],['🔎','Săn 1 học bổng','Tìm và lưu một học bổng toàn phần phù hợp',20],['✍️','Viết 150 từ SOP','Viết 150 từ cho bài luận SOP',25],['📩','Nhắn người giới thiệu','Liên hệ một người có thể viết thư giới thiệu',10]];
+  box.innerHTML=`<article class="study-launch-card"><div class="study-launch-copy"><span class="section-kicker">SCHOLARSHIP LAUNCHPAD</span><h2>Đường băng tới ${Number(p.targetIntakeYear||2028)}</h2><p>${esc(countries)} · Mỗi tuần tạo một bằng chứng khiến hồ sơ mạnh hơn.</p><div class="study-destination"><span>VIỆT NAM</span><i></i><b>✈</b><i></i><span>${esc(String(p.targetCountries||'FULL SCHOLARSHIP').split(/[,;\n]/)[0])}</span></div></div><div class="study-countdown"><b>${months}</b><span>tháng để chuẩn bị</span><small>${options.length} chương trình trong radar</small></div><div class="study-week-mission"><span>NHIỆM VỤ TUẦN NÀY</span><h3>${esc(missionTitle)}</h3><p>${esc(missionMeta)}</p>${mission?`<button onclick="createStudyReminder('${mission.id}')">Đưa vào Hôm nay</button>`:`<button onclick="openForm('studyChecklist')">Tạo mốc đầu tiên</button>`}</div><div class="study-sprint-grid">${actions.map(a=>`<button onclick="createStudySprint('${encodeURIComponent(a[2])}',${a[3]},this)"><b>${a[0]}</b><span>${a[1]}</span><small>Bắt đầu nhỏ</small></button>`).join('')}</div></article>`;
+}
+function createStudySprint(encodedTitle,minutes,button){
+  const title=decodeURIComponent(encodedTitle),due=new Date();due.setDate(due.getDate()+1);due.setHours(20,0,0,0);
+  if(button){button.disabled=true;button.querySelector('small').textContent='Đang tạo…'}
+  google.script.run.withSuccessHandler(()=>{toast('Đã đưa một bước du học nhỏ vào tab Hôm nay.');refreshFullData()}).withFailureHandler(e=>{if(button){button.disabled=false;button.querySelector('small').textContent='Thử lại'}fail(e)}).addItem('Tasks',{title:'Du học · '+title,dueAt:due.toISOString(),status:'todo',priority:'high',minutes:Number(minutes||20),area:'Cá nhân',definitionOfDone:'Đã tạo một đầu ra có thể lưu hoặc kiểm chứng và ghi bước tiếp theo.'});
+}
+function renderScholarshipCommand(p,options,steps){
+  const box=$('studyScholarship');if(!box)return;
+  const text=steps.map(s=>(s.title+' '+(s.category||'')).toLowerCase()),current=parseFloat(String(p.currentEnglishScore||'').replace(',','.')),target=parseFloat(String(p.targetEnglishScore||'').replace(',','.'));
+  const pillars=[
+    ['GPA & học thuật',Boolean(p.currentGpa),'Nhập GPA và thành tích nổi bật'],
+    ['Ngoại ngữ',Number.isFinite(current)&&Number.isFinite(target)&&current>=target,`Đạt ${p.englishTest||'IELTS'} ${p.targetEnglishScore||'mục tiêu'}`],
+    ['Shortlist 6+ trường',options.length>=6,`${options.length}/6 lựa chọn`],
+    ['Học bổng cụ thể',options.filter(o=>String(o.scholarship||'').trim()).length>=3,'Ghi tên, quyền lợi và hạn của ít nhất 3 học bổng'],
+    ['Bài luận / SOP',text.some(x=>/sop|essay|bài luận|personal statement/.test(x)),'Tạo mốc viết và phản biện SOP'],
+    ['Thư giới thiệu',text.some(x=>/recommend|giới thiệu|lor/.test(x)),'Chọn người viết và đặt hạn xin thư']
+  ];
+  const completed=pillars.filter(x=>x[1]).length,score=Math.round(completed/pillars.length*100),next=pillars.find(x=>!x[1])||['Nộp hồ sơ thử',false,'Chốt một bộ hồ sơ hoàn chỉnh và xin phản biện'];
+  box.innerHTML=`<article class="card scholarship-command"><div class="scholarship-head"><div><span class="section-kicker">FULL SCHOLARSHIP COMMAND CENTER</span><h2>Hồ sơ học bổng toàn phần</h2><p class="hint">Theo dõi 6 trụ cột quan trọng; bạn không cần hoàn hảo cùng lúc.</p></div><div class="scholarship-score"><b>${score}%</b><small>SẴN SÀNG</small></div></div><div class="scholarship-pillars">${pillars.map(x=>`<div class="scholarship-pillar ${x[1]?'complete':''}"><b>${x[1]?'✓':'○'} ${esc(x[0])}</b><span>${esc(x[2])}</span></div>`).join('')}</div><div class="scholarship-next"><p><b>Bước có đòn bẩy cao nhất:</b> ${esc(next[2])}</p><button onclick="createScholarshipTask('${encodeURIComponent(next[2])}',this)">Tạo việc 7 ngày</button></div></article>`;
+}
+function createScholarshipTask(encodedTitle,button){
+  const title=decodeURIComponent(encodedTitle),due=new Date(Date.now()+7*86400000);due.setHours(20,0,0,0);
+  if(button){button.disabled=true;button.textContent='Đang tạo…'}
+  google.script.run.withSuccessHandler(()=>{toast('Đã tạo một việc học bổng có deadline 7 ngày.');refreshFullData()}).withFailureHandler(e=>{if(button){button.disabled=false;button.textContent='Tạo việc 7 ngày'}fail(e)}).addItem('Tasks',{title:'Học bổng · '+title,dueAt:due.toISOString(),status:'todo',priority:'high',minutes:20,area:'Cá nhân',definitionOfDone:'Đã tạo đầu ra cụ thể, lưu vào Drive và ghi bước tiếp theo.'});
+}
+function studyProfileRow(label,value){return value?`<p><span>${esc(label)}</span><b>${esc(value)}</b></p>`:''}
+function openStudyProfileForm(){openForm('studyProfile',(data.studyabroadprofile||[])[0]||{targetIntakeYear:2028,englishTest:'IELTS',targetEnglishScore:'7.0'})}
+function toggleStudyStep(id){google.script.run.withSuccessHandler(item=>{const i=(data.studyabroadchecklist||[]).findIndex(x=>x.id===id);if(i>=0)data.studyabroadchecklist[i]=item;renderStudyAbroad()}).withFailureHandler(fail).toggleStudyChecklist(id)}
+function createStudyReminder(id){google.script.run.withSuccessHandler(task=>{data.tasks.push(task);toast('Đã tạo việc và đồng bộ deadline du học với Calendar.');render()}).withFailureHandler(fail).createTaskFromStudyChecklist(id)}
+function renderHealth(){
+  const h=(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',exerciseTime:'18:30'};
+  const logs=(data.weightlogs||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const current=Number(h.currentWeightKg||logs[0]?.weightKg||h.startWeightKg||90),start=Number(h.startWeightKg||90),goal1=Number(h.goal1Kg||75),goal2=Number(h.goal2Kg||70),height=Number(h.heightCm||165)/100;
+  const bmi=height?current/(height*height):0,lost=Math.max(0,start-current),remaining=Math.max(0,current-goal2),target=new Date(h.targetDate||'2026-10-31T23:59:59'),weeks=Math.max(0,(target-new Date())/604800000),required=weeks?remaining/weeks:remaining;
+  const safeLow=Math.max(goal2,current-weeks*.9),safeHigh=Math.max(goal2,current-weeks*.45),progress=Math.max(0,Math.min(100,(start-current)/Math.max(1,start-goal2)*100));
+  const person=data.profile[0]||{},reflection=data.reflectionprofile[0]||{},age=person.dateOfBirth?Math.max(18,Math.floor((Date.now()-new Date(person.dateOfBirth))/31557600000)):23,sex=reflection.gender||'male';
+  const bmr=10*current+6.25*Number(h.heightCm||165)-5*age+(sex==='female'?-161:5),factor={sedentary:1.2,light:1.375,active:1.55}[h.activityLevel]||1.2,tdee=Math.round(bmr*factor),deficit=Math.max(0,Number(h.calorieDeficitTarget||500)),intake=Number(h.dailyCalorieTarget||0)||Math.max(0,tdee-deficit),linearWeeks=deficit>0?remaining*7700/(deficit*7):null;
+  $('healthMetrics').innerHTML=[metricCard('Hiện tại',current.toFixed(1)+' kg',`BMI ước tính ${bmi.toFixed(1)}`),metricCard('TDEE ước tính',num(tdee)+' kcal/ngày',`BMR ${num(Math.round(bmr))} · ${labelForOption(h.activityLevel)}`),metricCard('Mức ăn tính toán',num(Math.round(intake))+' kcal/ngày',`Theo thâm hụt ${num(deficit)} kcal bạn đặt`),metricCard('Thời gian tuyến tính',linearWeeks?linearWeeks.toFixed(1)+' tuần':'Chưa tính',`Còn ${remaining.toFixed(1)} kg · thực tế sẽ dao động`)].join('');
+  renderHealthDailyCommand(h,current,goal2,intake);
+  $('weightProgress').innerHTML=`<article class="card goal-card"><div class="goal-head"><div><span>LỘ TRÌNH ĐẾN ${dateShort(h.targetDate)}</span><h2>${current.toFixed(1)} → ${goal1} → ${goal2} kg</h2></div><b>${Math.round(progress)}%</b></div><div class="goal-track"><i style="width:${progress}%"></i><em style="left:${Math.max(0,Math.min(100,(start-goal1)/Math.max(1,start-goal2)*100))}%"></em></div><p class="meta">Để chạm ${goal2} kg đúng hạn cần trung bình ${required.toFixed(1)} kg/tuần. Nhịp giảm từ từ khoảng 0,45–0,9 kg/tuần thường dễ duy trì hơn; theo nhịp đó, vùng cân nặng ước tính vào ngày mục tiêu khoảng ${safeLow.toFixed(1)}–${safeHigh.toFixed(1)} kg.</p><p class="health-formula">Ước tính đơn giản: ${remaining.toFixed(1)} kg × 7.700 kcal ÷ ${num(deficit)} kcal thâm hụt/ngày ≈ ${linearWeeks?linearWeeks.toFixed(1):'—'} tuần. Cơ thể không giảm tuyến tính; hãy dùng xu hướng cân 3–4 tuần để điều chỉnh.</p>${required>.9?'<div class="health-warning"><b>Mục tiêu hiện tại khá gấp.</b><span>Ưu tiên mốc 75 kg trước, sau đó tiếp tục về 70 kg. Nên trao đổi với bác sĩ/chuyên gia dinh dưỡng, đặc biệt nếu có tăng huyết áp, tiểu đường, đau khớp hoặc ngưng thở khi ngủ.</span></div>':''}<div class="weight-history">${logs.slice(0,6).map(w=>`<span><b>${Number(w.weightKg).toFixed(1)} kg</b><small>${dateShort(w.date)}</small><button onclick="removeWeight('${w.id}')" aria-label="Xoá lần cân">×</button></span>`).join('')||'<p class="meta">Chưa có lần cân nào. Ghi một lần mỗi tuần, cùng thời điểm và điều kiện.</p>'}</div></article>`;
+  renderHealthHabits(h);
+  renderCalorieBalance(h,tdee,intake);
+  calculateCalories();
+  $('workoutSuggestions').innerHTML=workoutPlanCards(h);
+  $('meals').innerHTML=data.meals.map(m=>`<article class="card"><div class="card-top"><div><h3>${esc(m.title)} <span class="amount orange">${m.calories||'—'} kcal</span></h3><p class="meta">${esc(m.ingredients)}${m.notes?' · '+esc(m.notes):''}</p></div><button class="outline small" onclick="editItem('meal','${m.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Lưu vài món dễ làm để ngày bận không phải quyết định lại từ đầu.</div>';
+}
+
+function renderHealthDailyCommand(h,current,goal,intake){
+  const box=$('healthDailyCommand');if(!box)return;const logs=todayHealthLogs(),today=localDateKey(new Date());
+  const water=logs.filter(x=>x.type==='water').reduce((s,x)=>s+Number(x.amount||0),0),meals=logs.filter(x=>x.type==='meal').length,waterGoal=Number(h.waterGoalMl||2500),walkGoal=Number(h.walkingGoalMinutes||20);
+  const walk=(data.timelogs||[]).filter(x=>x.kind==='walk'&&localDateKey(x.startAt)===today).reduce((s,x)=>s+Number(x.durationMinutes||0),0),exercise=(data.timelogs||[]).filter(x=>x.kind==='exercise'&&localDateKey(x.startAt)===today).reduce((s,x)=>s+Number(x.durationMinutes||0),0),sleep=(data.timelogs||[]).filter(x=>x.kind==='sleep'&&localDateKey(x.startAt)===today).reduce((s,x)=>s+Number(x.durationMinutes||0),0);
+  const waterPct=Math.min(100,water/Math.max(1,waterGoal)*100),movePct=Math.min(100,(walk+exercise)/Math.max(1,walkGoal)*100),mealPct=Math.min(100,meals/3*100),score=Math.round((waterPct+movePct+mealPct)/3);
+  const next=waterPct<45?['💧','Uống 250 ml nước','quickHealthLog(\'water\')']:movePct<50?['🚶','Đi bộ 5–10 phút','startTimeLog(\'walk\',\'Đi bộ nhẹ\')']:meals<2?['🍽','Log bữa gần nhất','quickHealthLog(\'meal\')']:['✓','Giữ nhịp, không cần hoàn hảo','openForm(\'weightLog\')'];
+  const ring=Math.round(score*3.6);
+  box.innerHTML=`<article class="health-command"><div class="health-command-score" style="--health-score:${ring}deg"><div><b>${score}</b><span>/100</span></div></div><div class="health-command-main"><span class="section-kicker">BODY CHECK-IN · HÔM NAY</span><h2>${score>=75?'Cơ thể đang có nhịp tốt':score>=40?'Chỉ cần thêm một hành động nhỏ':'Ưu tiên phục hồi nền tảng trước'}</h2><p>${sleep?`Đã log ngủ ${minutesText(sleep)} · `:''}Mục tiêu cân nặng ${current.toFixed(1)} → ${goal} kg · mức ăn tham chiếu ${num(Math.round(intake))} kcal.</p><button onclick="${next[2]}"><b>${next[0]}</b> ${next[1]} →</button></div><div class="health-command-bars"><span><small>NƯỚC</small><b>${num(water)}/${num(waterGoal)} ml</b><i><em style="width:${waterPct}%"></em></i></span><span><small>VẬN ĐỘNG</small><b>${walk+exercise}/${walkGoal} phút</b><i><em style="width:${movePct}%"></em></i></span><span><small>BỮA ĐÃ LOG</small><b>${meals}/3</b><i><em style="width:${mealPct}%"></em></i></span></div><div class="health-command-actions"><button onclick="quickHealthLog('water')">＋ Nước</button><button onclick="quickHealthLog('meal')">＋ Bữa ăn</button><button onclick="startTimeLog('walk','Đi bộ')">▶ Đi bộ</button><button onclick="openForm('healthEntry')">＋ Apple Health</button></div></article>`;
+}
+
+function todayHealthLogs(){const today=localDateKey(new Date());return (data.healthlogs||[]).filter(log=>localDateKey(log.date)===today)}
+function renderHealthHabits(h){
+  const logs=todayHealthLogs(),water=logs.filter(x=>x.type==='water').reduce((s,x)=>s+Number(x.amount||0),0),meals=logs.filter(x=>x.type==='meal').length;
+  const walkMinutes=(data.timelogs||[]).filter(x=>x.kind==='walk'&&localDateKey(x.startAt)===localDateKey(new Date())).reduce((s,x)=>s+Number(x.durationMinutes||0),0),waterGoal=Number(h.waterGoalMl||2500),walkGoal=Number(h.walkingGoalMinutes||20);
+  $('healthHabits').innerHTML=`<div><span>💧 Nước</span><b>${num(water)} / ${num(waterGoal)} ml</b><i><em style="width:${Math.min(100,water/waterGoal*100)}%"></em></i></div><div><span>🍽 Bữa đã log</span><b>${meals} bữa</b><i><em style="width:${Math.min(100,meals/3*100)}%"></em></i></div><div><span>🚶 Đi bộ</span><b>${walkMinutes} / ${walkGoal} phút</b><i><em style="width:${Math.min(100,walkMinutes/walkGoal*100)}%"></em></i></div>`;
+}
+function renderCalorieBalance(h,tdee,targetIntake){
+  const summary=$('calorieBalanceSummary'),chart=$('calorieBalanceChart'),entriesBox=$('healthEntries');if(!summary||!chart||!entriesBox)return;
+  const logs=(data.healthlogs||[]).filter(log=>/^(calorie_in|calorie_out|exercise)$/.test(log.type||'')),days=[];
+  for(let offset=6;offset>=0;offset--){const date=new Date();date.setHours(12,0,0,0);date.setDate(date.getDate()-offset);const key=localDateKey(date),rows=logs.filter(log=>localDateKey(log.date)===key),food=rows.filter(x=>x.type==='calorie_in').reduce((s,x)=>s+Number(x.amount||0),0),active=rows.filter(x=>x.type==='calorie_out'||x.type==='exercise').reduce((s,x)=>s+Number(x.amount||0),0);days.push({date,key,food,active})}
+  const today=days[days.length-1],difference=today.food-Number(targetIntake||0);
+  const verdict=!today.food?'Chưa đủ dữ liệu đồ ăn':difference>200?`Đang vượt mục tiêu khoảng ${num(Math.round(difference))} kcal`:difference<-300?`Còn thấp hơn mục tiêu khoảng ${num(Math.round(Math.abs(difference)))} kcal`:'Đang gần mục tiêu calorie';
+  summary.innerHTML=`<div class="calorie-balance-head"><div><span class="section-kicker">CÂN BẰNG HÔM NAY</span><h3>${esc(verdict)}</h3><p class="meta">Nạp ${num(today.food)} kcal · vận động ghi nhận ${num(today.active)} kcal · mục tiêu ăn ${num(Math.round(targetIntake))} kcal.</p></div><div class="calorie-net ${difference>200?'over':'ok'}"><small>SO VỚI MỤC TIÊU</small><b>${today.food?`${difference>0?'+':''}${num(Math.round(difference))}`:'—'} kcal</b></div></div><p class="hint">Mục tiêu ăn được tính từ TDEE khoảng ${num(Math.round(tdee))} kcal và mức thâm hụt bạn đặt. Calorie vận động hiển thị riêng để tránh vô tình “ăn bù” toàn bộ.</p>`;
+  const max=Math.max(1,Number(targetIntake||0),...days.flatMap(d=>[d.food,d.active]));
+  chart.innerHTML=logs.length?`<div class="calorie-bars">${days.map(d=>`<div class="calorie-day"><div><i class="target" style="height:${Number(targetIntake||0)/max*100}%"></i><i class="intake" style="height:${d.food/max*100}%" title="Nạp ${d.food} kcal"></i><i class="burn" style="height:${d.active/max*100}%" title="Vận động ${d.active} kcal"></i></div><span>${d.date.toLocaleDateString('vi-VN',{weekday:'short'})}</span></div>`).join('')}</div><div class="chart-legend"><span><i class="cal-target"></i>Mục tiêu ăn</span><span><i class="cal-intake"></i>Calories nạp</span><span><i class="cal-burn"></i>Vận động</span></div>`:'<div class="empty-chart">Bấm “+ Dữ liệu Health” để nhập calorie nạp hoặc tiêu hao.</div>';
+  const recent=logs.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
+  entriesBox.innerHTML=recent.map(log=>`<div class="health-entry"><div><b>${esc(labelForOption(log.type))} · ${num(log.amount)} kcal</b><span>${esc(log.label||'')} · ${dateShort(log.date)}${log.durationMinutes?` · ${log.durationMinutes} phút`:''}${log.steps?` · ${num(log.steps)} bước`:''}</span></div><button class="danger" onclick="removeItem('HealthLogs','${log.id}')">×</button></div>`).join('')||'<p class="meta">Chưa có dữ liệu calorie nhập tay.</p>';
+}
+function quickHealthLog(type){
+  const labels={water:'Uống nước',meal:'Bữa ăn'},label=type==='meal'?(prompt('Tên bữa hoặc món (có thể ghi rất ngắn):','Bữa ăn')||'').trim():labels[type];if(!label)return;
+  const item={type,label,amount:type==='water'?250:1,date:new Date().toISOString()};
+  google.script.run.withSuccessHandler(log=>{data.healthlogs.push(log);renderHealth();toast(type==='water'?'Đã cộng 250 ml':'Đã log bữa ăn')}).withFailureHandler(fail).logHealthHabit(item);
+}
+function calculateCalories(){
+  const box=$('calorieCalculatorResult');if(!box)return;const h=data.healthprofile[0]||{},weight=Number(h.currentWeightKg||90),met=Number($('calorieActivity')?.value||3.5),minutes=Math.max(1,Number($('calorieMinutes')?.value||20)),target=Math.max(1,Number($('calorieTargetBurn')?.value||300));
+  const perMinute=met*3.5*weight/200,burn=perMinute*minutes,targetMinutes=target/perMinute;
+  box.innerHTML=`<span><small>Ước tính trong ${minutes} phút</small><b>${Math.round(burn)} kcal</b></span><span><small>Để tiêu hao khoảng ${Math.round(target)} kcal</small><b>${Math.ceil(targetMinutes)} phút</b></span><p>Ở ${weight.toFixed(1)} kg · MET ${met}. Đồng hồ và máy tập có thể cho số khác; dùng cùng một công thức để theo dõi xu hướng.</p>`;
+}
+function workoutPlanCards(h){
+  const weekMinutes=(data.timelogs||[]).filter(log=>/^(walk|exercise)$/.test(log.kind||'')&&new Date(log.startAt)>new Date(Date.now()-7*86400000)).reduce((sum,log)=>sum+Number(log.durationMinutes||0),0);
+  const stage=weekMinutes<45?1:weekMinutes<90?2:3;
+  const plans=stage===1?[
+    ['🚶','Đi bộ khởi động','10 phút','Tốc độ vẫn nói được trọn câu. Nếu mệt, chia 2 × 5 phút.','walk'],
+    ['🪑','Sức mạnh với ghế','8 phút','Ngồi–đứng khỏi ghế 6–8 lần · chống đẩy tường 6–8 lần · nhón gót 8 lần. Làm 1 vòng.','exercise'],
+    ['🧘','Giãn cơ & khớp','6 phút','Xoay vai, cổ chân, duỗi bắp chân và hông; chuyển động chậm, không nín thở.','exercise']
+  ]:stage===2?[
+    ['🚶','Đi bộ đều','15–20 phút','Giữ mức vừa: thở nhanh hơn nhưng vẫn nói chuyện được.','walk'],
+    ['🪑','Sức mạnh toàn thân','12 phút','Ngồi–đứng, chống đẩy tường, kéo khăn, nhón gót: 2 vòng × 8 lần.','exercise'],
+    ['🎵','Vận động vui','15 phút','Đi bộ theo nhạc hoặc đạp xe nhẹ; chọn thứ ít gây áp lực lên khớp.','exercise']
+  ]:[
+    ['🚶','Đi bộ nhanh vừa','25–30 phút','Có thể chia 15 + 15 phút. Không cần chạy.','walk'],
+    ['💪','Sức mạnh 2 vòng','15 phút','Ngồi–đứng, chống đẩy tường, bridge hoặc kéo dây nhẹ: 2 vòng × 8–10 lần.','exercise'],
+    ['🏊','Cardio ít tác động','20 phút','Bơi, đạp xe nhẹ hoặc đi bộ; chọn hoạt động khớp chịu được.','exercise']
+  ];
+  const metMap={'Đi bộ khởi động':2.8,'Sức mạnh với ghế':3,'Giãn cơ & khớp':2.3,'Đi bộ đều':3.5,'Sức mạnh toàn thân':3.5,'Vận động vui':4,'Đi bộ nhanh vừa':4.3,'Sức mạnh 2 vòng':4,'Cardio ít tác động':5};
+  const weight=Number(h.currentWeightKg||90);
+  return `<article class="card workout-summary"><span>TUẦN NÀY</span><b>${weekMinutes} / 150 phút</b><p class="meta">Bạn đang ở mức ${stage}/3. Mục tiêu dài hạn là tăng dần tới 150 phút vận động vừa/tuần và 2 buổi sức mạnh; tuần đầu chỉ cần tạo nhịp.</p></article>`+plans.map(p=>{const mins=Number((p[2].match(/\d+/)||[10])[0]),kcal=Math.round((metMap[p[1]]||3.5)*3.5*weight/200*mins);return `<article class="card workout-card"><span class="workout-icon">${p[0]}</span><div><h3>${p[1]}</h3><b>${p[2]} · khoảng ${kcal} kcal</b><p class="meta">${p[3]}</p></div><button onclick="startTimeLog('${p[4]}','${escAttr(p[1])}')">Bắt đầu</button></article>`}).join('')+`<article class="card safety-card"><b>Dừng và kiểm tra sức khỏe nếu có dấu hiệu bất thường</b><p class="meta">Đau ngực, khó thở khác thường, chóng mặt/ngất hoặc đau khớp tăng rõ rệt. Nếu có bệnh nền hoặc lâu rồi chưa vận động, hãy hỏi nhân viên y tế về loại và mức bài tập phù hợp.</p></article>`;
+}
+
+function renderTravel(){
+  const flights=data.flights.slice().sort((a,b)=>new Date(b.departure)-new Date(a.departure));
+  const upcoming=flights.filter(f=>f.departure&&new Date(f.departure)>new Date()&&f.status!=='cancelled').sort((a,b)=>new Date(a.departure)-new Date(b.departure));
+  const totalKm=flights.reduce((s,f)=>s+Number(f.distanceKm||0),0);
+  const yearKm=flights.filter(f=>new Date(f.departure).getFullYear()===new Date().getFullYear()).reduce((s,f)=>s+Number(f.distanceKm||0),0);
+  const topAirline=topBy(flights,f=>f.airline||airlineFromCode(f.code)||'Chưa rõ');
+  const topRoute=topBy(flights,f=>`${f.fromCode||'?'}-${f.toCode||f.destination||'?'}`);
+  $('travelInsights').innerHTML=[
+    metricCard('Tổng chuyến bay',flights.length+' chuyến','Từ PDF + Gmail + nhập tay'),
+    metricCard('Tổng dặm',num(Math.round(totalKm*0.621371))+' mi',num(totalKm)+' km'),
+    metricCard('Sắp tới',upcoming.length+' chuyến',upcoming[0]?countdownLabel(upcoming[0].departure):'Chưa có lịch bay'),
+    metricCard('Top route / hãng',`${esc(topRoute.name)} · ${esc(topAirline.name)}`,`${topRoute.count} lần · ${topAirline.count} lần`)
+  ].join('');
+  renderTravelPrep(upcoming);
+  renderFlightBoard(flights);
+  $('upcomingFlightPlan').innerHTML=upcoming.length?upcoming.slice(0,4).map(f=>flightPlanCard(f)).join(''):'<div class="empty">Chưa có chuyến bay tương lai. Thêm chuyến hoặc bật đồng bộ Gmail.</div>';
+  const visibleFlights=flights.slice(0,flightLimit);
+  $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))} ${flightStatusBadge(flightBoardStatus(f),f.id)}</h3><p class="meta">${dateTime(f.departure)} · ${esc(airlineName(f))} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}${f.terminal?' · Terminal '+esc(f.terminal):''}${f.gate?' · Gate '+esc(f.gate):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}${f.lastCheckedAt?`<p class="meta">Rà lần cuối ${dateTime(f.lastCheckedAt)}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
+  $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
+}
+function renderTravelPrep(upcoming){
+  const box=$('travelPrep');if(!box)return;
+  const f=upcoming[0];if(!f){box.innerHTML=`<article class="travel-prep-empty"><div><span class="section-kicker">NEXT ADVENTURE</span><h3>Chưa có chuyến sắp tới</h3><p>Thêm một chuyến để app tự tính giờ check-in, rời nhà và có mặt tại sân bay.</p></div><button onclick="openForm('flight')">＋ Thêm chuyến bay</button></article>`;return}
+  const dep=new Date(f.departure),hours=Math.max(0,Math.round((dep-Date.now())/3600000)),days=Math.floor(hours/24),remainHours=hours%24,checkin=new Date(dep-24*3600000),checkinReady=Date.now()>=checkin;
+  const readiness=[['PNR',Boolean(f.bookingRef)],['Terminal',Boolean(f.terminal)],['Gate',Boolean(f.gate)],['Check-in',Boolean(f.checkinUrl)]],ready=readiness.filter(x=>x[1]).length;
+  const packTitle=`Chuẩn bị hành lý và giấy tờ cho ${f.code||routeLabel(f)}`;
+  box.innerHTML=`<article class="travel-prep-card"><div class="travel-prep-route"><span>NEXT TRIP · ${esc(f.code||'FLIGHT')}</span><h2>${esc(routeLabel(f))}</h2><p>${esc(airlineName(f))} · ${dateTime(f.departure)}</p></div><div class="travel-countdown"><b>${days}</b><span>ngày</span><b>${remainHours}</b><span>giờ</span></div><div class="travel-readiness"><div><span>TRIP READINESS</span><b>${ready}/4</b></div><i><em style="width:${ready/4*100}%"></em></i><small>${readiness.map(x=>`${x[1]?'✓':'○'} ${x[0]}`).join(' · ')}</small></div><div class="travel-prep-actions"><button class="${checkinReady?'primary':''}" onclick="${f.checkinUrl&&safeUrl(f.checkinUrl)?`window.open('${escAttr(f.checkinUrl)}','_blank')`:`editItem('flight','${f.id}')`}">${checkinReady?'Mở check-in':'Cập nhật check-in'}</button><button onclick="createTravelPrepTask('${encodeURIComponent(packTitle)}',this)">Tạo checklist hành lý</button><button class="outline" onclick="editItem('flight','${f.id}')">Sửa chuyến</button></div></article>`;
+}
+function createTravelPrepTask(encodedTitle,button){
+  const title=decodeURIComponent(encodedTitle),flight=(data.flights||[]).filter(f=>f.departure&&new Date(f.departure)>new Date()).sort((a,b)=>new Date(a.departure)-new Date(b.departure))[0],due=flight?new Date(new Date(flight.departure)-36*3600000):new Date(Date.now()+86400000);
+  if(button){button.disabled=true;button.textContent='Đang tạo…'}
+  google.script.run.withSuccessHandler(()=>{toast('Đã tạo checklist chuẩn bị chuyến đi trong Hôm nay.');refreshFullData()}).withFailureHandler(e=>{if(button){button.disabled=false;button.textContent='Tạo checklist hành lý'}fail(e)}).addItem('Tasks',{title:'Chuyến đi · '+title,dueAt:due.toISOString(),status:'todo',priority:'high',minutes:20,area:'Cá nhân',definitionOfDone:'Đã kiểm tra giấy tờ, hành lý, phương án di chuyển, tiền và thông tin check-in.'});
+}
+function flightBoardStatus(f,now=Date.now()){const manual=String(f.status||'').toLowerCase();if(manual==='cancelled')return 'Cancelled';if(manual==='delayed')return 'Delayed';if(manual==='changed')return 'Changed';const departure=f.departure?new Date(f.departure).getTime():NaN;if(!Number.isFinite(departure))return 'Scheduled';const minutes=(departure-Number(now))/60000;if(minutes<=-15)return 'Departed';if(minutes<=0)return 'Gate Closed';if(minutes<=30)return 'Last Call';if(minutes<=50)return 'Gate Open';if(minutes<=60)return 'Check-in Closed';if(minutes<=1440)return 'Check-in Open';return 'On Time'}
+const airportCities={HAN:'Hanoi',SGN:'Ho Chi Minh',DAD:'Da Nang',CXR:'Nha Trang',PQC:'Phu Quoc',HPH:'Hai Phong',HUI:'Hue',VII:'Vinh',VCA:'Can Tho',BMV:'Buon Ma Thuot',UIH:'Quy Nhon',VCS:'Con Dao',THD:'Thanh Hoa',VDO:'Van Don',DIN:'Dien Bien',VCL:'Chu Lai',VTG:'Vung Tau',ALA:'Almaty',SIN:'Singapore',JHB:'Johor Bahru',KUL:'Kuala Lumpur',BKK:'Bangkok',DMK:'Bangkok',HKG:'Hong Kong',TPE:'Taipei',NRT:'Tokyo Narita',HND:'Tokyo Haneda',ICN:'Seoul Incheon',PUS:'Busan',PEK:'Beijing',PVG:'Shanghai',CAN:'Guangzhou',SZX:'Shenzhen',MNL:'Manila',CGK:'Jakarta',DPS:'Bali',SYD:'Sydney',MEL:'Melbourne',LHR:'London',CDG:'Paris',FRA:'Frankfurt',DXB:'Dubai',DOH:'Doha'};
+function airportLabel(code,fallback=''){const key=String(code||'').trim().toUpperCase(),raw=String(fallback||'').trim(),fallbackCode=raw.toUpperCase();if(!key&&airportCities[fallbackCode])return `${fallbackCode} ${airportCities[fallbackCode]}`;const city=airportCities[key]||raw;if(!key)return city||'—';if(!city||city.toUpperCase()===key)return key;return `${key} ${city}`}
+function airlineName(f){
+  const prefix=String(f.code||'').replace(/[^A-Z0-9]/gi,'').slice(0,2).toUpperCase()||'✈';
+  const names={VH:'Vietnam Helicopters',VU:'Vietravel Airlines',VN:'Vietnam Airlines',VJ:'VietJet Air',QH:'Bamboo Airways',TR:'Scoot',MH:'Malaysia Airlines',BL:'Pacific Airlines','9G':'Sun PhuQuoc Airways',SQ:'Singapore Airlines',AK:'AirAsia',TG:'Thai Airways'};
+  return names[prefix]||f.airline||prefix;
+}
+function boardDate(value){const a=appSettings();try{return new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(value)).toUpperCase()}catch(e){return '—'}}
+function chunkBoardRows(items,size=6){const pages=[];for(let i=0;i<items.length;i+=size)pages.push(items.slice(i,i+size));return pages}
+function flightArrivalAt(f){const departure=new Date(f.departure),fallbackMinutes=Number(f.distanceKm)>0?Math.max(45,Math.round(Number(f.distanceKm)/750*60+30)):120;if(isNaN(departure))return new Date(0);const parts=String(f.arrTime||'').match(/(\d{1,2}):(\d{2})/);if(!parts)return new Date(departure.getTime()+fallbackMinutes*60000);const arrival=new Date(departure);arrival.setHours(Number(parts[1]),Number(parts[2]),0,0);if(arrival<=departure)arrival.setDate(arrival.getDate()+1);return arrival}
+function renderFlightBoard(list){
+  const box=$('flightBoard');if(!box)return;renderFlightBoardClock();
+  const now=Date.now(),valid=(list||[]).filter(f=>f.departure),active=valid.filter(f=>f.status!=='cancelled'&&new Date(f.departure).getTime()<=now&&flightArrivalAt(f).getTime()>now).sort((a,b)=>new Date(b.departure)-new Date(a.departure)),upcoming=valid.filter(f=>f.status!=='cancelled'&&new Date(f.departure).getTime()>now).sort((a,b)=>new Date(a.departure)-new Date(b.departure)),finished=valid.filter(f=>f.status==='cancelled'||flightArrivalAt(f).getTime()<=now).sort((a,b)=>new Date(b.departure)-new Date(a.departure));
+  const selected=[...active,...upcoming].slice(0,12);selected.push(...finished.slice(0,18-selected.length));flightBoardPages=chunkBoardRows(selected.slice(0,18)).map(rows=>({mode:'FLIGHTS',rows}));
+  if(!flightBoardPages.length)flightBoardPages=[{mode:'FLIGHTS',rows:[]}];flightBoardPage=Math.min(flightBoardPage,flightBoardPages.length-1);paintFlightBoard();
+}
+function paintFlightBoard(){
+  const box=$('flightBoard');if(!box)return;const page=flightBoardPages[flightBoardPage]||{mode:'UPCOMING',rows:[]},mode=$('flightBoardMode');if(mode)mode.textContent=`${page.mode} · ${flightBoardPage+1}/${flightBoardPages.length}`;
+  box.innerHTML=`<div class="flight-info-row board-labels"><span>DATE</span><span>AIRLINE</span><span>FLIGHT</span><span>ORIGIN</span><span>DESTINATION</span><span>TIME</span><span>TERMINAL</span><span>STATUS</span></div>`+(page.rows.length?page.rows.map(f=>{const dep=new Date(f.departure),status=flightBoardStatus(f),terminal=f.terminal||'—';return `<div class="flight-info-row"><b>${esc(boardDate(dep))}</b><span class="airline-name">${esc(airlineName(f))}</span><b>${esc(f.code||'—')}</b><span>${esc(airportLabel(f.fromCode,f.from||f.origin))}</span><span>${esc(airportLabel(f.toCode,f.destination))}</span><b>${esc(timeOnly(dep))}</b><b>${esc(terminal)}</b><strong class="board-status ${escAttr(status.toLowerCase().replace(/\s+/g,'-'))}">${esc(status)}</strong></div>`}).join(''):`<div class="flight-board-empty">NO FLIGHTS TO DISPLAY · SELECT “+ FLIGHT” TO ADD ONE</div>`);
+}
+function renderFlightBoardClock(){const el=$('flightBoardClock');if(el)el.textContent=timeOnly(new Date(),true)}
+function cycleFlightBoard(){
+  if(!$('flightBoard')||flightBoardPages.length<2)return;flightBoardPage=(flightBoardPage+1)%flightBoardPages.length;paintFlightBoard();
+}
+function assistantGateFlights(){const briefRows=assistantBrief?.travelFlights||[],source=(data.flights||[]).length?data.flights:briefRows,now=Date.now(),valid=source.filter(f=>f.departure&&f.status!=='cancelled'),active=valid.filter(f=>new Date(f.departure).getTime()<=now&&flightArrivalAt(f).getTime()>now).sort((a,b)=>new Date(b.departure)-new Date(a.departure)),upcoming=valid.filter(f=>new Date(f.departure).getTime()>now).sort((a,b)=>new Date(a.departure)-new Date(b.departure)),recent=valid.filter(f=>flightArrivalAt(f).getTime()<=now).sort((a,b)=>new Date(b.departure)-new Date(a.departure));return [...active,...upcoming,...recent].slice(0,8)}
+function renderAssistantGateDisplay(){const box=$('assistantGateDisplay');if(!box)return;const rows=assistantGateFlights();if(!rows.length){box.innerHTML='<div class="gate-empty">NO UPCOMING FLIGHT</div>';return}const f=rows[assistantGateIndex%rows.length],dep=new Date(f.departure),status=flightBoardStatus(f),statusClass=flightStatusClass(status),gate=f.gate||'—',terminal=f.terminal?`Terminal ${f.terminal}`:'Terminal —';box.innerHTML=`<div class="gate-display"><div class="gate-airline"><strong class="gate-airline-name">${esc(airlineName(f))}</strong><span>GATE ${esc(gate)} · ${assistantGateIndex%rows.length+1}/${rows.length}</span></div><div class="gate-main"><b>${esc(f.code||'—')}</b><span>${esc(airportLabel(f.toCode,f.destination))}</span><strong>DEPARTING ${esc(timeOnly(dep))}</strong></div><div class="gate-status ${escAttr(statusClass)}">${esc(status)}</div><div class="gate-footer"><span>${esc(boardDate(dep))}</span><span>${esc(airportLabel(f.fromCode,f.from||f.origin))}</span><span>${esc(terminal)}</span></div></div>`}
+function rotateAssistantGate(){const rows=assistantGateFlights();if(rows.length>1)assistantGateIndex=(assistantGateIndex+1)%rows.length;renderAssistantGateDisplay()}
+function flightPlanCard(f){
+  const dep=new Date(f.departure),international=(f.flightType||inferFlightType(f))==='international',airportLead=international?180:120,travel=Number(f.airportTravelMinutes||45),checkin=new Date(dep-24*3600000),leave=new Date(dep-(airportLead+travel)*60000),airport=new Date(dep-airportLead*60000);
+  const checkinReady=Date.now()>=checkin&&Date.now()<dep-60*60000;
+  const status=flightBoardStatus(f);
+  return `<article class="card flight-plan ${escAttr(flightStatusClass(status))}"><div class="flight-plan-head"><div><span class="pill">${international?'QUỐC TẾ':'NỘI ĐỊA'} · ${esc(airlineName(f))}</span><h2><b>${esc(f.fromCode||'—')}</b><i>→</i><b>${esc(f.toCode||f.destination||'—')}</b></h2><p>${dateTime(f.departure)} ${flightStatusBadge(status,f.id)}</p></div><button class="flight-edit" onclick="editItem('flight','${f.id}')">Sửa</button></div><div class="flight-booking-ref ${f.bookingRef?'ready':'missing'}"><span>PNR / MÃ ĐẶT CHỖ</span><b>${esc(f.bookingRef||'CHƯA NHẬP')}</b><small>${f.bookingRef?'Đưa mã này khi check-in':'Bấm Sửa để thêm mã vé'}</small></div><div class="flight-timeline"><div class="${checkinReady?'active':''}"><small>01 · CHECK-IN</small><b>${dateTime(checkin)}</b><span>${checkinReady?'Làm ngay bây giờ':'Mở trước giờ bay 24h'}</span></div><div><small>02 · RỜI ĐI</small><b>${dateTime(leave)}</b><span>Đã gồm ${travel} phút di chuyển</span></div><div><small>03 · TỚI SÂN BAY</small><b>${dateTime(airport)}</b><span>Trước ${airportLead/60} giờ</span></div><div><small>04 · CẤT CÁNH</small><b>${timeOnly(dep)}</b><span>${esc([f.terminal?`Terminal ${f.terminal}`:'',f.gate?`Gate ${f.gate}`:''].filter(Boolean).join(' · ')||'Kiểm tra lại nhà ga')}</span></div></div><div class="flight-actions">${f.checkinUrl&&safeUrl(f.checkinUrl)?`<a class="button-link" href="${escAttr(f.checkinUrl)}" target="_blank" rel="noopener">Mở check-in</a>`:''}<button class="outline" onclick="reviewFutureFlightsUi()">Rà email thay đổi</button></div></article>`;
+}
+function inferFlightType(f){const vn=['HAN','SGN','DAD','HPH','DIN','VCL','VCS','VTG','HUI','CXR','PQC','UIH','BMV','THD','VII'];return vn.includes(String(f.fromCode||'').toUpperCase())&&vn.includes(String(f.toCode||'').toUpperCase())?'domestic':'international'}
+function flightStatusClass(status){return String(status||'scheduled').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'scheduled'}
+function flightStatusBadge(status,id=''){const value=String(status||'Scheduled'),key=value.toLowerCase(),tone=/cancelled|delayed|gate closed/.test(key)?'danger':/changed|last call|check-in closed/.test(key)?'warning':'ok';return `<span class="status-badge ${tone} ${escAttr(flightStatusClass(value))}"${id?` data-flight-status="${escAttr(id)}"`:''}>${esc(value)}</span>`}
+function renderLiveFlightStatuses(){document.querySelectorAll('[data-flight-status]').forEach(node=>{const flight=(data.flights||[]).find(row=>String(row.id)===String(node.dataset.flightStatus));if(!flight)return;const value=flightBoardStatus(flight),key=value.toLowerCase();node.textContent=value;node.className=`status-badge ${/cancelled|delayed|gate closed/.test(key)?'danger':/changed|last call|check-in closed/.test(key)?'warning':'ok'} ${flightStatusClass(value)}`})}
+function countdownLabel(value){const ms=new Date(value)-new Date(),days=Math.floor(ms/86400000),hours=Math.floor(ms%86400000/3600000);return days>0?`Còn ${days} ngày ${hours} giờ`:`Còn ${Math.max(0,hours)} giờ`}
+function renderInstall(){
+  const ios=$('iosProfileLink');
+  if(ios)ios.href='https://datphm.github.io/my-assistant/My-Assistant.mobileconfig';
+  const s=appSettings(),summary=$('appSettingsSummary');
+  if(summary)summary.innerHTML=[['Múi giờ',s.timezone],['Trang mở',labelForOption(s.startupPage)],['Giao diện',labelForOption(s.theme)],['Cỡ chữ',(s.fontScale||100)+'%'],['Giờ yên lặng',`${clockValue(s.quietHoursStart,'23:00:00')} → ${clockValue(s.quietHoursEnd,'07:00:00')}`],['Email',s.emailReminders==='no'?'Tắt':'Bật'],['Calendar',s.calendarReminders==='no'?'Tắt':'Bật'],['Ẩn số tiền',s.hideFinancialAmounts==='yes'?'Có':'Không']].map(x=>`<span><small>${esc(x[0])}</small><b>${esc(x[1]||'—')}</b></span>`).join('');
+  updateNotificationStatus();
+}
+function openAppSettingsForm(){openForm('appSettings',appSettings())}
+function resetAppSettingsUi(){if(!confirm('Khôi phục toàn bộ cài đặt ứng dụng về mặc định? Dữ liệu công việc và tài chính không bị xoá.'))return;google.script.run.withSuccessHandler(value=>{data.appsettings=[value];applyAppSettings();renderInstall();toast('Đã khôi phục cài đặt mặc định.')}).withFailureHandler(fail).resetAppSettings()}
+function openDataSheet(){const tab=window.open('about:blank','_blank');google.script.run.withSuccessHandler(url=>{if(tab)tab.location=url;else location.href=url}).withFailureHandler(e=>{if(tab)tab.close();fail(e)}).getDataSheetUrl()}
+function showInstallHelp(){alert('iPhone / iPad:\n1. Mở My Assistant bằng Safari.\n2. Bấm Tải hồ sơ iPhone.\n3. Mở Cài đặt → Đã tải về hồ sơ → Cài đặt.\n\nAndroid:\n1. Mở bằng Chrome.\n2. Bấm menu ⋮ → Thêm vào màn hình chính.');}
+function routeLabel(f){return f.fromCode||f.toCode?`${f.fromCode||'?'} → ${f.toCode||f.destination||'?'}`:(f.destination||'Chưa rõ điểm đến')}
+function topBy(list,fn){const m={};list.forEach(x=>{const k=fn(x);m[k]=(m[k]||0)+1});const e=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return {name:e?e[0]:'—',count:e?e[1]:0}}
+function airlineFromCode(code){const m=String(code||'').match(/^[A-Z0-9]{2}/);return m?m[0]:''}
+
+function complete(id){const task=data.tasks.find(t=>t.id===id),steps=taskSteps(id),openSteps=steps.filter(s=>!truth(s.done));if(!task)return;if(openSteps.length&&!confirm(`Còn ${openSteps.length} bước checklist chưa xong. Bạn vẫn muốn đóng việc?`))return;if(task.definitionOfDone&&!confirm(`Kiểm tra đóng vòng lặp:\n${task.definitionOfDone}\n\nBạn đã cập nhật tài liệu và báo lại chưa?`))return;const key=`complete:${id}`;if(!beginAction(key))return;const before={done:task.done,status:task.status};task.done=true;task.status='done';render();toast('Đã hoàn thành — đang đồng bộ nền');google.script.run.withSuccessHandler(()=>{endAction(key)}).withFailureHandler(e=>{endAction(key);Object.assign(task,before);render();fail(e)}).completeTask(id)}
+function startTask(id){focusTask(id)}
+function toggleChase(id){
+  const task=data.tasks.find(t=>t.id===id);if(!task)return;
+  const key=`chase:${id}`;if(!beginAction(key))return;
+  const before=task.chaseMode;task.chaseMode=before==='urgent'?'normal':'urgent';render();
+  google.script.run.withSuccessHandler(msg=>{endAction(key);toast(msg)}).withFailureHandler(e=>{endAction(key);task.chaseMode=before;render();fail(e)}).toggleTaskChase(id);
+}
+function createTaskFromMessage(){
+  const box=$('taskMessage'); const message=box.value.trim();
+  if(!message){toast('Nhập một câu công việc trước đã.');return}
+  const key='create-task-message';if(!beginAction(key))return;
+  google.script.run.withSuccessHandler(task=>{
+    endAction(key);toast(`Đã tạo: ${task.title} · ${task.checklistCount||0} bước checklist · hạn ${dateTime(task.dueAt)}.`);box.value='';$('taskSuggestions').innerHTML='';refreshToday(true);
+  }).withFailureHandler(e=>{endAction(key);fail(e)}).createTaskFromMessage(message);
+}
+let suggestedTasks=[];
+function suggestTaskPlan(){
+  const message=$('taskMessage').value.trim();
+  if(!message){toast('Dán nhiệm vụ bạn vừa nhận trước đã.');return}
+  google.script.run.withSuccessHandler(plan=>{suggestedTasks=plan;renderTaskSuggestions()}).withFailureHandler(fail).suggestTaskPlan(message);
+}
+function renderTaskSuggestions(){
+  const box=$('taskSuggestions');
+  box.innerHTML=`<div class="suggestion-head"><div><b>Chuỗi hành động đề xuất</b><p class="hint">Bỏ chọn bước không cần. Deadline có thể sửa trong Kanban sau khi thêm.</p></div><button onclick="addSuggestedTasks()">Thêm các bước đã chọn</button></div><div class="suggestion-list">${suggestedTasks.map((task,index)=>`<label><input type="checkbox" data-suggestion="${index}" checked><span><b>${index+1}. ${esc(task.title)}</b><small>${task.minutes} phút · dự kiến ${dateTime(task.dueAt)}</small></span></label>`).join('')}</div>`;
+}
+function addSuggestedTasks(){
+  const selected=[...document.querySelectorAll('[data-suggestion]:checked')].map(el=>suggestedTasks[Number(el.dataset.suggestion)]);
+  if(!selected.length){toast('Hãy chọn ít nhất một bước.');return}
+  const key='add-suggested-tasks';if(!beginAction(key))return;
+  const message=$('taskMessage').value.trim();google.script.run.withSuccessHandler(result=>{endAction(key);$('taskMessage').value='';$('taskSuggestions').innerHTML='';suggestedTasks=[];toast(`Đã tạo 1 việc với ${result.count} bước checklist`);refreshToday(true)}).withFailureHandler(e=>{endAction(key);fail(e)}).addSuggestedTasks(selected,message);
+}
+function resetDeepChecklist(){document.querySelectorAll('[data-deep]').forEach(box=>box.checked=false);toast('Đã làm mới checklist Think Deep.')}
+function truth(x){return x===true||x==='TRUE'}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escAttr(s){return esc(s).replace(/`/g,'&#96;')}
+function dateTime(s){if(!s)return 'Chưa đặt giờ';const a=appSettings();try{return new Intl.DateTimeFormat(a.locale||'vi-VN',{dateStyle:'medium',timeStyle:'short',timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(s))}catch(e){return new Date(s).toLocaleString('vi-VN')}}
+function dateShort(s){if(!s)return 'vừa cập nhật';const a=appSettings();try{return new Intl.DateTimeFormat(a.locale||'vi-VN',{dateStyle:'medium',timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(s))}catch(e){return new Date(s).toLocaleDateString('vi-VN')}}
+function timeOnly(s,seconds=false){const a=appSettings();try{return new Intl.DateTimeFormat(a.locale||'vi-VN',{hour:'2-digit',minute:'2-digit',second:seconds?'2-digit':undefined,hour12:false,timeZone:a.timezone||'Asia/Ho_Chi_Minh'}).format(new Date(s))}catch(e){return new Date(s).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:seconds?'2-digit':undefined,hour12:false})}}
+function localDateKey(value){const d=new Date(value);if(isNaN(d))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function safeUrl(url){return /^https:\/\//i.test(url||'')}
+
+const fields={
+ task:[['title','Việc cần làm','text'],['outcome','Đầu ra cụ thể phải bàn giao','textarea'],['definitionOfDone','Khi nào được coi là hoàn thành?','textarea'],['nextAction','Bước nhỏ tiếp theo','text'],['dueAt','Deadline cuối','datetime-local'],['followUpAt','Mốc phải follow-up / cập nhật','datetime-local'],['waitingFor','Đang chờ ai / điều gì','text'],['area','Nhóm','select','Công việc,Cá nhân,Sức khỏe,Tiền bạc'],['minutes','Thời lượng phiên bắt đầu (phút)','number'],['priority','Ưu tiên','select','high,medium,low'],['energy','Năng lượng cần','select','low,medium,high'],['chaseMode','Mức nhắc','select','normal,urgent'],['status','Trạng thái','select','todo,doing,waiting,blocked,done']],
+ timeLog:[['kind','Nhóm thời gian','select','work,dead,travel,sleep,play,personal,walk,exercise,meal,custom'],['label','Tên hoạt động','text'],['startAt','Bắt đầu lúc','datetime-local'],['endAt','Kết thúc lúc','datetime-local'],['note','Ghi chú / nhớ lại việc đã làm','textarea']],
+ taskUpdate:[['taskId','Mã việc','hidden'],['note','Cập nhật: đã chốt gì, còn kẹt gì, bước tiếp theo','textarea'],['status','Trạng thái sau cập nhật','select','doing,waiting,blocked,todo'],['nextFollowUpAt','Mốc follow-up tiếp theo','datetime-local']],
+ debt:[['name','Tên khoản nợ','text'],['balance','Số dư','number'],['annualRate','Lãi suất năm (%)','number'],['minimumPayment','Trả tối thiểu','number'],['dueDay','Ngày đến hạn','number']],
+ debtAdjust:[['debtId','Mã khoản nợ','hidden'],['direction','Cách cập nhật','select','decrease,increase,set'],['amount','Số tiền','number']],
+ meal:[['title','Tên món','text'],['calories','Calories','number'],['ingredients','Nguyên liệu','text'],['notes','Ghi chú','text']],
+ healthProfile:[['heightCm','Chiều cao (cm)','number'],['startWeightKg','Cân nặng bắt đầu (kg)','number'],['currentWeightKg','Cân nặng hiện tại (kg)','number'],['goal1Kg','Mốc đầu tiên (kg)','number'],['goal2Kg','Mục tiêu tiếp theo (kg)','number'],['targetDate','Ngày mục tiêu','date'],['activityLevel','Mức vận động hiện tại','select','sedentary,light,active'],['calorieDeficitTarget','Thâm hụt calorie muốn mô phỏng mỗi ngày','number'],['dailyCalorieTarget','Mục tiêu calorie/ngày (để trống nếu dùng ước tính)','number'],['walkingGoalMinutes','Mục tiêu đi bộ mỗi ngày (phút)','number'],['waterGoalMl','Mục tiêu nước mỗi ngày (ml)','number'],['exerciseTime','Giờ nhắc vận động','time'],['limitations','Đau/giới hạn vận động cần lưu ý','textarea']],
+ healthEntry:[['date','Ngày ghi nhận','date'],['type','Loại dữ liệu','select','calorie_in,calorie_out,exercise'],['amount','Calories (kcal)','number'],['durationMinutes','Thời lượng vận động (phút, nếu có)','number'],['steps','Số bước (nếu có)','number'],['label','Tên món / bài tập','text'],['source','Nguồn dữ liệu','select','iPhone Health,Apple Watch,Nhập tay,Khác'],['note','Ghi chú','textarea']],
+ appointment:[['title','Tên cuộc hẹn','text'],['type','Loại cuộc hẹn','select','coffee,friend,meeting,hometown,personal'],['startAt','Bắt đầu lúc','datetime-local'],['endAt','Kết thúc lúc (không bắt buộc)','datetime-local'],['location','Địa điểm / địa chỉ','text'],['withWhom','Đi với / gặp ai','text'],['transport','Cách di chuyển','text'],['notes','Ghi chú cần nhớ','textarea']],
+ weightLog:[['date','Ngày cân','date'],['weightKg','Cân nặng (kg)','number'],['note','Ghi chú','text']],
+ flight:[['code','Mã chuyến bay','text'],['bookingRef','Mã đặt chỗ / PNR','text'],['airline','Hãng bay','text'],['fromCode','Sân bay đi (mã IATA, ví dụ HAN)','text'],['toCode','Sân bay đến (mã IATA, ví dụ SGN)','text'],['departure','Ngày và giờ khởi hành dự kiến','datetime-local'],['arrTime','Giờ đến dự kiến','time'],['terminal','Terminal / nhà ga','text'],['gate','Gate / cửa ra máy bay','text'],['flightType','Loại chuyến bay','select','domestic,international'],['airportTravelMinutes','Thời gian đi tới sân bay (phút)','number'],['checkinUrl','Link check-in online','url'],['status','Trạng thái ngoại lệ','select','scheduled,changed,delayed,cancelled'],['distanceKm','Khoảng cách km','number'],['ticketPrice','Giá vé đã mua','number'],['aircraft','Máy bay','text'],['seat','Ghế','text'],['note','Ghi chú delay / thay đổi','textarea']],
+ hotel:[['name','Tên khách sạn','text'],['city','Thành phố','text'],['address','Địa chỉ đầy đủ','text'],['checkIn','Check-in','date'],['checkOut','Check-out','date'],['bookingRef','Mã đặt phòng','text'],['price','Giá đã đặt','number'],['notes','Ghi chú','textarea']],
+ wallet:[['name','Tên ví / tài khoản','text'],['type','Loại','select','Tiền mặt,Tài khoản ngân hàng,Thẻ tín dụng,Tiết kiệm'],['balance','Số dư hiện tại','number']],
+ balance:[['walletId','Ví / tài khoản','wallet'],['balance','Số dư mới','number']],
+ walletAdjust:[['walletId','Ví / tài khoản','wallet'],['amount','Số tiền điều chỉnh','number'],['direction','Cộng hay trừ','select','income,expense'],['merchant','Ghi chú','text']],
+ expense:[['date','Ngày giao dịch','date'],['amount','Số tiền','number'],['direction','Loại','select','expense,income'],['merchant','Nơi chi / ghi chú','text'],['category','Nhóm','select','Ăn uống,Di chuyển,Hóa đơn,Mua sắm,Sức khỏe,Công việc,Trả nợ,Khác'],['walletId','Từ ví / tài khoản','wallet'],['debtId','Khoản nợ được trả (nếu có)','debt']],
+ allocation:[['name','Tên mục tiêu','text'],['percent','Tỷ trọng (%)','number'],['color','Màu','color']],
+ cv:[['title','Tên CV / phiên bản','text'],['targetRole','Vai trò hướng tới','text'],['content','Nội dung hoặc ghi chú thay đổi','textarea'],['driveUrl','Link Google Drive / Docs (nếu có)','url'],['cvFile','Upload file PDF CV','file']],
+ reflection:[['fullName','Họ và tên','text'],['dateOfBirth','Ngày sinh dương lịch','date'],['birthTime','Giờ sinh','time'],['birthPlace','Nơi sinh (thành phố, quốc gia)','text'],['gender','Giới tính dùng khi lập lá số','select','male,female,other'],['strengths','Thế mạnh thực tế','textarea'],['interests','Sở thích nghề nghiệp','textarea'],['workStyle','Môi trường/cách làm việc phù hợp','textarea'],['targetIndustries','Ngành muốn thử','textarea'],['tuViSummary','Tóm tắt từ Tử vi','textarea'],['batTuSummary','Tóm tắt từ Bát tự','textarea'],['horoscopeSummary','Tóm tắt từ Horoscope','textarea'],['numerologySummary','Tóm tắt từ Thần số học','textarea'],['personalitySummary','Tổng hợp tính cách','textarea'],['strengthsSummary','Tổng hợp điểm mạnh','textarea'],['weaknessesSummary','Tổng hợp điểm yếu / rủi ro','textarea'],['improvementSummary','Điểm cần cải thiện','textarea'],['spiritualMoney','Chiêm nghiệm về tiền bạc','textarea'],['spiritualCareer','Chiêm nghiệm về công việc','textarea'],['spiritualTravel','Chiêm nghiệm về xuất ngoại','textarea'],['spiritualStudy','Chiêm nghiệm về du học','textarea'],['tuViNotes','Dán toàn bộ nội dung tử vi','textarea'],['batTuNotes','Dán toàn bộ nội dung bát tự','textarea'],['numerologyNotes','Dán phân tích thần số học','textarea'],['horoscopeNotes','Dán horoscope/bản đồ sao','textarea'],['dailyGuidanceEnabled','Email lời khuyên hằng ngày','select','yes,no']],
+ profile:[['fullName','Họ và tên','text'],['preferredName','Tên muốn được gọi','text'],['dateOfBirth','Ngày sinh','date'],['bloodType','Nhóm máu','select','Chưa rõ,A+,A−,B+,B−,AB+,AB−,O+,O−'],['phone','Số điện thoại','text'],['email','Email cá nhân','email'],['address','Địa chỉ','textarea'],['nationality','Quốc tịch','text'],['emergencyContact','Liên hệ khẩn cấp (tên + số)','text'],['emergencyContactRelation','Quan hệ với liên hệ khẩn cấp','text'],['allergies','Dị ứng','textarea'],['medications','Thuốc đang sử dụng','textarea'],['medicalConditions','Bệnh nền / tình trạng cần biết','textarea'],['medicalNotes','Ghi chú sức khỏe khác','textarea'],['passportNumber','Số hộ chiếu','text'],['passportExpiry','Ngày hết hạn hộ chiếu','date'],['insuranceProvider','Đơn vị bảo hiểm','text'],['insuranceNumber','Mã bảo hiểm','text'],['documentFolderUrl','Link thư mục Google Drive giấy tờ','url'],['personalGoals','Mục tiêu cá nhân 12 tháng','textarea'],['privateNotes','Ghi chú riêng','textarea']],
+ routine:[['breakfastTime','Giờ ăn sáng','time'],['lunchTime','Giờ ăn trưa','time'],['dinnerTime','Giờ ăn tối','time'],['bedtime','Giờ bắt đầu đi ngủ','time'],['wakeTime','Giờ thức dậy mục tiêu','time'],['targetSleepHours','Mục tiêu ngủ mỗi đêm (giờ)','number'],['sleepLatencyMinutes','Thời gian để ngủ (phút)','number'],['logIntervalMinutes','Hỏi log lại sau (phút)','number'],['waterReminderEnabled','Nhắc uống nước','select','yes,no'],['waterStartTime','Bắt đầu nhắc nước','time'],['waterEndTime','Dừng nhắc nước','time'],['waterIntervalMinutes','Khoảng cách nhắc nước (phút)','number'],['mealLogReminderEnabled','Nhắc log bữa ăn','select','yes,no'],['mealLogReminderTime','Giờ nhắc log bữa ăn','time'],['walkReminderEnabled','Nhắc đi bộ','select','yes,no'],['walkReminderTime','Giờ nhắc đi bộ','time']],
+ plan:[['name','Tên kế hoạch','text'],['type','Loại','select','trip,purchase,education,health,other'],['targetDate','Ngày cần tiền','date'],['estimatedCost','Tổng chi phí dự kiến','number'],['savedAmount','Đã dành sẵn','number'],['priority','Ưu tiên','select','high,medium,low'],['notes','Ghi chú / các khoản cấu thành','textarea']],
+ studyProfile:[['targetIntakeYear','Năm nhập học mục tiêu','number'],['targetCountries','Quốc gia mục tiêu','textarea'],['targetDegree','Bậc học','text'],['targetFields','Ngành / lĩnh vực mục tiêu','textarea'],['currentEducation','Học vấn hiện tại','textarea'],['currentGpa','GPA / xếp loại','text'],['englishTest','Bài thi ngoại ngữ','select','IELTS,TOEFL,PTE,Duolingo,Khác'],['currentEnglishScore','Điểm hiện tại','text'],['targetEnglishScore','Điểm mục tiêu','text'],['otherLanguages','Ngoại ngữ khác','text'],['budgetVnd','Tổng ngân sách dự kiến (VND)','number'],['savingsVnd','Quỹ du học hiện có (VND)','number'],['fundingPlan','Nguồn tài chính','textarea'],['scholarshipTarget','Mục tiêu học bổng','textarea'],['passportStatus','Tình trạng hộ chiếu','text'],['visaNotes','Lưu ý visa / chứng minh tài chính','textarea'],['motivation','Lý do muốn du học','textarea'],['constraints','Rào cản cần xử lý','textarea']],
+ studyOption:[['country','Quốc gia','text'],['school','Trường','text'],['program','Tên chương trình / ngành','text'],['degree','Bậc học','text'],['intake','Kỳ nhập học','text'],['applicationDeadline','Deadline nộp hồ sơ','date'],['tuitionAnnual','Học phí mỗi năm (VND)','number'],['livingCostAnnual','Sinh hoạt phí mỗi năm (VND)','number'],['scholarship','Học bổng','textarea'],['languageRequirement','Yêu cầu ngoại ngữ / GPA','textarea'],['status','Trạng thái','select','researching,shortlisted,applying,submitted,offer,rejected'],['priority','Nhóm lựa chọn','select','safe,match,reach'],['website','Website chương trình','url'],['notes','Ghi chú','textarea']],
+ studyChecklist:[['category','Nhóm','select','Định hướng,Ngoại ngữ,Tài chính,Danh sách trường,Hồ sơ,Học bổng,Nộp hồ sơ,Visa & đi học'],['title','Đầu ra cần hoàn thành','text'],['dueAt','Deadline','datetime-local'],['status','Trạng thái','select','todo,doing,done'],['notes','Chi tiết / bước kế tiếp','textarea']],
+ appSettings:[['timezone','Múi giờ IANA (ví dụ Asia/Ho_Chi_Minh)','text'],['locale','Ngôn ngữ hiển thị ngày','select','vi-VN,en-US,en-GB'],['startupPage','Trang mở mặc định','select','today,assistant,study,money,time,travel,food,cv,profile,install'],['theme','Giao diện','select','pastel,system,dark,light'],['fontScale','Cỡ chữ','select','90,100,110,120'],['reducedMotion','Giảm chuyển động','select','yes,no'],['compactMode','Giao diện gọn','select','yes,no'],['hideFinancialAmounts','Ẩn nhanh số tiền','select','yes,no'],['defaultTaskMinutes','Thời lượng việc mặc định (phút)','number'],['defaultChaseMode','Mức nhắc việc mặc định','select','normal,urgent'],['quietHoursStart','Bắt đầu giờ yên lặng','time'],['quietHoursEnd','Kết thúc giờ yên lặng','time'],['emailReminders','Email nhắc deadline','select','yes,no'],['calendarReminders','Tự tạo Google Calendar cho việc mới','select','yes,no'],['routineReminders','Nhắc ăn, ngủ, vận động và log giờ','select','yes,no'],['flightReminders','Nhắc check-in và ra sân bay','select','yes,no'],['confirmBeforeDelete','Hỏi lại trước khi xoá','select','yes,no']]
+};
+
+function openProfileForm(){openForm('profile',data.profile[0]||{})}
+function openHealthForm(){openForm('healthProfile',(data.healthprofile||[])[0]||{heightCm:165,startWeightKg:90,currentWeightKg:90,goal1Kg:75,goal2Kg:70,targetDate:'2026-10-31',activityLevel:'sedentary',calorieDeficitTarget:500,walkingGoalMinutes:20,waterGoalMl:2500,exerciseTime:'18:30'})}
+function openReflectionForm(){openForm('reflection',(data.reflectionprofile||[])[0]||{fullName:'Phạm Nguyễn Gia Đạt',dateOfBirth:'2003-05-12',birthTime:'10:25',dailyGuidanceEnabled:'yes'})}
+function editCv(id){openForm('cv',data.cvs.find(cv=>cv.id===id)||{})}
+function viewCv(id){
+  const cv=data.cvs.find(item=>item.id===id);if(!cv){toast('Không tìm thấy CV.');return}
+  viewingCvId=id;$('cvViewTitle').textContent=cv.title||'CV';$('cvViewMeta').textContent=`${cv.targetRole||'Chưa chọn vai trò'} · ${cv.fileName||'Bản nội dung'} · cập nhật ${dateShort(cv.updatedAt)}`;
+  const fileLink=cv.driveUrl&&safeUrl(cv.driveUrl)?`<a class="button-link" href="${escAttr(cv.driveUrl)}" target="_blank" rel="noopener">Mở PDF / Google Drive ↗</a>`:'';
+  $('cvViewBody').innerHTML=`${fileLink}${cv.content?`<pre>${esc(cv.content)}</pre>`:'<div class="empty">CV này chưa có nội dung văn bản. Bạn có thể mở file Drive hoặc bấm Chỉnh sửa để dán toàn bộ nội dung.</div>'}`;
+  cvViewDialog.showModal();
+}
+function editViewedCv(){const id=viewingCvId;cvViewDialog.close();if(id)editCv(id)}
+function editItem(kind,id){
+  const map={task:['task',data.tasks],timeLog:['timeLog',data.timelogs],flight:['flight',data.flights],hotel:['hotel',data.hotels],appointment:['appointment',data.appointments],expense:['expense',data.expenses],debt:['debt',data.debts],meal:['meal',data.meals],wallet:['wallet',data.wallets],plan:['plan',data.plans],studyOption:['studyOption',data.studyabroadoptions],studyChecklist:['studyChecklist',data.studyabroadchecklist]};
+  const found=map[kind]?.[1].find(x=>x.id===id);
+  if(!found){toast('Không tìm thấy mục để sửa.');return}
+  openForm(map[kind][0],found);
+}
+function openTaskUpdate(id){const task=data.tasks.find(t=>t.id===id);if(!task)return;openForm('taskUpdate',{taskId:id,status:task.waitingFor?'waiting':task.status||'doing',nextFollowUpAt:task.followUpAt||''})}
+function openForm(type,item={}){
+  if(type==='task'&&!item.id)item=Object.assign({minutes:appSettings().defaultTaskMinutes||15,chaseMode:appSettings().defaultChaseMode||'normal',status:'todo',priority:'medium',energy:'medium',definitionOfDone:'Đã cập nhật tài liệu/lịch liên quan và báo lại người giao việc.'},item);
+  if(type==='healthEntry')item=Object.assign({date:localDateKey(new Date()),type:'exercise',source:'iPhone Health'},item);
+  if(type==='timeLog'&&!item.id){const end=new Date(),start=new Date(end.getTime()-30*60000);item=Object.assign({kind:'work',label:'Công việc',startAt:start.toISOString(),endAt:end.toISOString()},item)}
+  currentType=type;editingId=item.id||'';
+  formDialog.classList.toggle('cv-editor-dialog',type==='cv');
+  const deleteButton=$('formDelete'),canDelete=type==='flight'&&Boolean(editingId);if(deleteButton)deleteButton.hidden=!canDelete;formDialog.querySelector('.dialog-actions')?.classList.toggle('has-delete',canDelete);
+  const names={task:editingId?'Sửa việc':'Thêm việc',timeLog:editingId?'Sửa thời gian đã log':'Thêm thời gian thủ công',taskUpdate:'Cập nhật tiến độ & follow-up',debt:editingId?'Sửa khoản nợ':'Thêm khoản nợ',debtAdjust:'Cập nhật số nợ',meal:editingId?'Sửa thực đơn':'Lưu thực đơn',healthProfile:'Mục tiêu sức khỏe',healthEntry:'Nhập dữ liệu iPhone Health',weightLog:'Ghi cân nặng',appointment:editingId?'Sửa cuộc hẹn':'Thêm cuộc hẹn',flight:editingId?'Sửa chuyến bay':'Thêm chuyến bay',hotel:editingId?'Sửa khách sạn':'Thêm khách sạn',wallet:editingId?'Sửa ví / tài khoản':'Thêm ví / tài khoản',balance:'Cập nhật số dư',walletAdjust:'Cộng / trừ tiền',expense:editingId?'Sửa giao dịch':'Thêm giao dịch',allocation:'Thiết lập tỷ trọng',cv:editingId?'Cập nhật CV':'Lưu CV',reflection:'Định hướng & chiêm nghiệm',profile:'Cập nhật hồ sơ',routine:'Lịch sinh hoạt & nhắc log',plan:editingId?'Sửa kế hoạch lớn':'Thêm kế hoạch lớn',studyProfile:'Mục tiêu du học',studyOption:editingId?'Sửa trường / chương trình':'Thêm trường / chương trình',studyChecklist:editingId?'Sửa bước hồ sơ':'Thêm bước hồ sơ',appSettings:'Thiết lập ứng dụng'};
+  $('formTitle').textContent=names[type];
+  $('formFields').innerHTML=fields[type].map(([name,label,input,options])=>fieldHtml(name,label,input,options,item[name])).join('');
+  formDialog.showModal();
+}
+function fieldHtml(name,label,input,options,value){
+  const val=value===undefined||value===null?'':value;
+  if(input==='hidden')return `<input type="hidden" name="${name}" value="${escAttr(val)}">`;
+  if(input==='select'){return `<div class="field"><label>${label}</label><select name="${name}">${options.split(',').map(o=>`<option value="${escAttr(o)}" ${String(o)===String(val)?'selected':''}>${esc(labelForOption(o))}</option>`).join('')}</select></div>`}
+  if(input==='wallet'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Chưa chọn</option>${data.wallets.map(w=>`<option value="${escAttr(w.id)}" ${w.id===val?'selected':''}>${esc(w.name)}</option>`).join('')}</select></div>`}
+  if(input==='debt'){return `<div class="field"><label>${label}</label><select name="${name}"><option value="">Không liên kết khoản nợ</option>${data.debts.map(d=>`<option value="${escAttr(d.id)}" ${d.id===val?'selected':''}>${esc(d.name)} · ${vnd(d.balance)}</option>`).join('')}</select></div>`}
+  if(input==='textarea')return `<div class="field"><label>${label}</label><textarea name="${name}">${esc(val)}</textarea></div>`;
+  if(input==='file')return `<div class="field"><label>${label}</label><input name="${name}" type="file" accept="application/pdf,.pdf"><small class="hint">Nếu chọn file mới, app sẽ upload PDF này vào Google Drive của bạn.</small></div>`;
+  let normalized=val;if(input==='datetime-local'&&val){const d=new Date(val);normalized=isNaN(d)?'':`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}if(input==='date'&&val)normalized=new Date(val).toISOString().slice(0,10);
+  const defaults=name==='minutes'&&!val?'value="15" min="1"':name==='dueDay'&&!val?'value="1" min="1" max="31"':name==='percent'?'min="0" max="100" step="1"':name==='color'&&!val?'value="#245647"':'';
+  const optional=['terminal','gate','airline','aircraft','seat','distanceKm','fromCode','toCode','bookingRef','checkinUrl','airportTravelMinutes','depTime','arrTime','destination','ticketPrice','driveUrl','birthPlace','currentGpa','currentEnglishScore','otherLanguages','budgetVnd','savingsVnd','passportStatus','applicationDeadline','tuitionAnnual','livingCostAnnual','website','intake','dailyCalorieTarget','preferredName','phone','email','nationality','emergencyContactRelation','passportNumber','passportExpiry','insuranceProvider','insuranceNumber','documentFolderUrl','nextAction','followUpAt','waitingFor','nextFollowUpAt','durationMinutes','steps','label','endAt','withWhom','transport'];
+  return `<div class="field"><label>${label}</label><input ${input==='color'||optional.includes(name)?'':'required'} name="${name}" type="${input}" value="${escAttr(normalized)}" ${input==='time'?'step="1"':''} ${defaults}></div>`;
+}
+function saveForm(event){
+  event.preventDefault();
+  if(formSaving){toast('Đang lưu, không cần bấm lại.');return}formSaving=true;const saveButton=event.target.querySelector('[type="submit"]');if(saveButton){saveButton.disabled=true;saveButton.textContent='Đang lưu…'}
+  const item=Object.fromEntries(new FormData(event.target)); if(editingId)item.id=editingId;
+  delete item.cvFile;
+  ['dueAt','departure','followUpAt','nextFollowUpAt','startAt','endAt'].forEach(k=>{if(item[k])item[k]=new Date(item[k]).toISOString()});
+  if(currentType==='timeLog'){
+    const start=new Date(item.startAt),end=new Date(item.endAt);
+    if(isNaN(start)||isNaN(end)||end<=start){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}toast('Giờ kết thúc phải sau giờ bắt đầu.');return}
+    item.durationMinutes=Math.max(1,Math.round((end-start)/60000));
+  }
+  if(item.date)item.date=new Date(item.date).toISOString();
+  if(currentType==='cv'){saveCvForm(event.target,item,saveButton);return}
+  const runner=google.script.run.withSuccessHandler(result=>{formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}formDialog.close();toast(result&&result.calendarWarning?'Đã lưu việc; hãy bấm Calendar để cấp lại quyền Google.':'Đã lưu và đồng bộ');load()}).withFailureHandler(e=>{formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}fail(e)});
+  if(currentType==='profile'){runner.saveProfile(item);return}
+  if(currentType==='taskUpdate'){runner.addTaskUpdate(item);return}
+  if(currentType==='reflection'){runner.saveReflectionProfile(item);return}
+  if(currentType==='studyProfile'){runner.saveStudyAbroadProfile(item);return}
+  if(currentType==='appSettings'){runner.saveAppSettings(item);return}
+  if(currentType==='healthProfile'){runner.saveHealthProfile(item);return}
+  if(currentType==='healthEntry'){runner.logHealthHabit(item);return}
+  if(currentType==='weightLog'){runner.logWeight(item);return}
+  if(currentType==='routine'){runner.saveRoutineSettings(item);return}
+  if(currentType==='balance'){runner.updateWalletBalanceManual(item);return}
+  if(currentType==='walletAdjust'){runner.adjustWalletManual(item);return}
+  if(currentType==='debtAdjust'){
+    const preview=debtAdjustmentPreview(item),verb=item.direction==='decrease'?'Đã trả':item.direction==='increase'?'Tăng nợ':'Đặt lại';
+    if(!preview.debt){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}toast('Không tìm thấy khoản nợ.');return}
+    if(!confirm(`${verb}: ${vnd(preview.amount)}\n\nSố nợ: ${vnd(preview.current)} → ${vnd(preview.next)}\n\nXác nhận cập nhật?`)){formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}return}
+    runner.adjustDebtManual(item);return
+  }
+  const type={task:'Tasks',timeLog:'TimeLogs',debt:'Debts',meal:'Meals',appointment:'Appointments',flight:'Flights',hotel:'Hotels',wallet:'Wallets',expense:'Expenses',allocation:'Allocations',plan:'Plans',studyOption:'StudyAbroadOptions',studyChecklist:'StudyAbroadChecklist'}[currentType];
+  editingId?runner.updateItem(type,item):runner.addItem(type,item);
+}
+function deleteCurrentFormItem(){if(currentType!=='flight'||!editingId)return;if(!confirmDelete('Xoá chuyến bay này? Thao tác này không thể hoàn tác.'))return;const id=editingId,key=`delete-flight:${id}`,button=$('formDelete');if(!beginAction(key))return;if(button){button.disabled=true;button.textContent='Đang xoá…'}google.script.run.withSuccessHandler(()=>{endAction(key);if(button){button.disabled=false;button.textContent='Xoá chuyến'}formDialog.close();data.flights=(data.flights||[]).filter(f=>f.id!==id);toast('Đã xoá chuyến bay');load()}).withFailureHandler(e=>{endAction(key);if(button){button.disabled=false;button.textContent='Xoá chuyến'}fail(e)}).deleteItem('Flights',id)}
+function labelForOption(o){return {expense:'Chi ra',income:'Tiền vào',calorie_in:'Calories nạp vào',calorie_out:'Calories vận động / tiêu hao',work:'Công việc',dead:'Thời gian chết',travel:'Di chuyển',sleep:'Ngủ',play:'Đi chơi',personal:'Cá nhân',walk:'Đi bộ',exercise:'Thể dục',meal:'Ăn uống',custom:'Mục riêng',coffee:'Cà phê',friend:'Đi chơi với bạn',meeting:'Cuộc hẹn / gặp mặt',hometown:'Về quê',decrease:'Giảm số nợ / đã trả',increase:'Tăng số nợ',set:'Đặt số dư nợ mới',todo:'Cần làm',doing:'Đang làm',waiting:'Đang chờ / follow-up',blocked:'Đang kẹt',done:'Đã xong',normal:'Nhắc thường · 2 giờ',urgent:'Bám đuổi · 15 phút',trip:'Chuyến đi',purchase:'Mua sắm lớn',education:'Học tập',health:'Sức khỏe',other:'Khác',high:'Cao',medium:'Vừa',low:'Thấp',sedentary:'Ít vận động',light:'Vận động nhẹ',active:'Đang vận động đều',male:'Nam',female:'Nữ',yes:'Bật',no:'Tắt',domestic:'Nội địa',international:'Quốc tế',scheduled:'Đúng lịch',changed:'Đã đổi giờ',delayed:'Bị delay',cancelled:'Đã huỷ',researching:'Đang tìm hiểu',shortlisted:'Đã vào shortlist',applying:'Đang làm hồ sơ',submitted:'Đã nộp',offer:'Có offer',rejected:'Không được nhận',safe:'An toàn',match:'Phù hợp',reach:'Tham vọng',system:'Theo thiết bị',dark:'Tối',pastel:'Pastel sáng',light:'Sáng',today:'Hôm nay',assistant:'Trợ lý',study:'Du học',money:'Tiền',time:'Thời gian',food:'Sức khỏe',cv:'CV',profile:'Hồ sơ',install:'Cài đặt'}[o]||o}
+function beginAction(key){if(pendingActions.has(key)){toast('Đang xử lý — không cần bấm lại.');return false}pendingActions.add(key);return true}
+function endAction(key){pendingActions.delete(key)}
+function confirmDelete(message){return appSettings().confirmBeforeDelete==='no'||confirm(message)}
+function removeItem(type,id){if(!confirmDelete('Xoá mục này? Nếu là giao dịch, số dư và dư nợ liên quan sẽ được hoàn tác.'))return;const key=`delete:${type}:${id}`;if(!beginAction(key))return;let snapshot=null;if(type==='Tasks'){snapshot={task:data.tasks.find(x=>x.id===id),steps:data.tasksteps.filter(x=>x.taskId===id),updates:data.taskupdates.filter(x=>x.taskId===id)};data.tasks=data.tasks.filter(x=>x.id!==id);data.tasksteps=data.tasksteps.filter(x=>x.taskId!==id);data.taskupdates=data.taskupdates.filter(x=>x.taskId!==id);render()}else if(type==='TaskSteps'){snapshot=data.tasksteps.find(x=>x.id===id);data.tasksteps=data.tasksteps.filter(x=>x.id!==id);render()}google.script.run.withSuccessHandler(()=>{endAction(key);toast('Đã xoá');if(type!=='Tasks'&&type!=='TaskSteps')load()}).withFailureHandler(e=>{endAction(key);if(type==='Tasks'&&snapshot?.task){data.tasks.push(snapshot.task);data.tasksteps.push(...snapshot.steps);data.taskupdates.push(...snapshot.updates)}else if(type==='TaskSteps'&&snapshot)data.tasksteps.push(snapshot);render();fail(e)}).deleteItem(type,id)}
+function removeWeight(id){if(!confirmDelete('Xoá lần cân này?'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWeightLog(id)}
+function removeWallet(id){if(!confirmDelete('Xoá ví / tài khoản này? Các giao dịch cũ vẫn được giữ nhưng sẽ không còn liên kết với ví.'))return;google.script.run.withSuccessHandler(msg=>{toast(msg);load()}).withFailureHandler(fail).deleteWallet(id)}
+function addTaskStepUi(taskId){const title=(prompt('Bước nhỏ tiếp theo là gì? Hãy bắt đầu bằng một động từ:','')||'').trim();if(!title)return;const key=`add-step:${taskId}`;if(!beginAction(key))return;google.script.run.withSuccessHandler(step=>{endAction(key);if(!data.tasksteps.some(x=>x.id===step.id))data.tasksteps.push(step);render();toast('Đã thêm bước nhỏ')}).withFailureHandler(e=>{endAction(key);fail(e)}).addTaskStep(taskId,title)}
+function editTaskStepUi(id){const step=data.tasksteps.find(s=>s.id===id);if(!step)return;const title=(prompt('Sửa nội dung bước nhỏ:',step.title)||'').trim();if(!title||title===step.title)return;const key=`edit-step:${id}`;if(!beginAction(key))return;const before=step.title;step.title=title;render();google.script.run.withSuccessHandler(saved=>{endAction(key);step.title=saved.title;render();toast('Đã sửa bước checklist')}).withFailureHandler(e=>{endAction(key);step.title=before;render();fail(e)}).editTaskStep(id,title)}
+function toggleTaskStepUi(id){const step=data.tasksteps.find(s=>s.id===id);if(!step)return;const key=`step:${id}`;if(!beginAction(key))return;const before=truth(step.done),desired=!before;step.done=desired;render();google.script.run.withSuccessHandler(result=>{endAction(key);step.done=result.done;if(result.taskId){const task=data.tasks.find(t=>t.id===result.taskId);if(task&&result.nextAction)task.nextAction=result.nextAction}render()}).withFailureHandler(e=>{endAction(key);step.done=before;render();fail(e)}).setTaskStepDone(id,desired)}
+function generateChecklistUi(taskId){const key=`generate:${taskId}`;if(!beginAction(key))return;google.script.run.withSuccessHandler(count=>{endAction(key);toast(`Đã tạo ${count} bước nhỏ`);refreshToday(true)}).withFailureHandler(e=>{endAction(key);fail(e)}).generateChecklistForTask(taskId)}
+function focusTask(id){const task=data.tasks.find(t=>t.id===id);if(!task)return;const key=`focus:${id}`;if(!beginAction(key))return;const before={status:task.status,startedAt:task.startedAt,lastProgressAt:task.lastProgressAt};task.status='doing';task.startedAt=task.startedAt||new Date().toISOString();task.lastProgressAt=task.lastProgressAt||task.startedAt;render();google.script.run.withSuccessHandler(result=>{endAction(key);task.startedAt=result.startedAt||task.startedAt;if(!activeTimeLog)startTimeLog('work',task.title);else toast('Việc đã chuyển sang Đang làm; bộ đếm hiện tại vẫn tiếp tục.')}).withFailureHandler(e=>{endAction(key);Object.assign(task,before);render();fail(e)}).startTask(id)}
+function saveCvForm(form,item,saveButton){
+  const file=form.querySelector('input[name="cvFile"]').files[0];
+  const reset=()=>{formSaving=false;if(saveButton){saveButton.disabled=false;saveButton.textContent='Lưu'}};
+  const done=()=>{reset();formDialog.close();toast('Đã lưu CV');load()};
+  const runner=google.script.run.withSuccessHandler(done).withFailureHandler(e=>{reset();fail(e)});
+  if(!file){runner.saveCv(item);return}
+  if(file.type&&file.type!=='application/pdf'){reset();fail('CV nên là file PDF.');return}
+  if(file.size>8*1024*1024){reset();fail('File CV nên dưới 8MB để Apps Script upload ổn định.');return}
+  const reader=new FileReader();
+  reader.onload=()=>runner.saveCvWithFile(item,{name:file.name,type:file.type||'application/pdf',dataUrl:reader.result});
+  reader.onerror=()=>{reset();fail('Không đọc được file CV.')};
+  reader.readAsDataURL(file);
+}
+
+function importExpenses(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(r=>{toast(`Đã nhập ${r.count} giao dịch${r.balanceUpdates?` · cập nhật ${r.balanceUpdates} số dư`:''}`);load()}).withFailureHandler(fail).importExpensesFromGmail(q,walletId)}
+function enableBankSync(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installBankSync(q,walletId)}
+function disableBankSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallBankSync()}
+function importTravel(){const q=$('travelQuery').value;google.script.run.withSuccessHandler(r=>{toast(`Đã thêm ${r.flights||0} chuyến · cập nhật ${r.updatedFlights||0} chuyến · ${r.hotels||0} khách sạn`);load()}).withFailureHandler(fail).importTravelFromGmail(q)}
+function reviewFutureFlightsUi(){google.script.run.withSuccessHandler(r=>{toast(`Đã rà ${r.futureFlights} chuyến tương lai · cập nhật ${r.updatedFlights} · đồng bộ ${r.calendarSynced} lịch`);load()}).withFailureHandler(fail).reviewFutureFlights()}
+function enableTravelSync(){const q=$('travelQuery').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installTravelSync(q)}
+function disableTravelSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallTravelSync()}
+function enableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installReminderTrigger()}
+function connectReminderServices(){google.script.run.withSuccessHandler(toast).withFailureHandler(e=>fail((e.message||String(e))+' — Nếu Google yêu cầu quyền, mở Apps Script và chạy authorizeReminderServices một lần.')).authorizeReminderServices()}
+function enableSmartRemindersUi(){google.script.run.withSuccessHandler(msg=>{toast(msg);const el=$('notificationStatus');if(el)el.textContent='Đã bật: Calendar + email + nhắc việc/chuyến bay thông minh.'}).withFailureHandler(e=>fail((e.message||String(e))+' — Google có thể yêu cầu cấp quyền Calendar và email lần đầu.')).enableSmartReminders()}
+function installHealthCalendarUi(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installHealthCalendar()}
+function disableEmails(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallReminderTrigger()}
+function syncCalendar(id){
+  const key=`calendar:${id}`;if(!beginAction(key))return;
+  google.script.run.withSuccessHandler(msg=>{endAction(key);toast(msg);refreshToday(true)}).withFailureHandler(e=>{endAction(key);fail(e)}).syncTaskToCalendar(id);
+}
+function enableDeviceNotifications(){
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  if(ios){toast('Bản Google dùng Calendar để nổ thông báo nền trên iPhone. Đang bật hệ thống nhắc…');enableSmartRemindersUi();return}
+  if(!('Notification' in window)){toast('Trình duyệt này chưa hỗ trợ thông báo web. Đang bật Calendar + email thay thế.');enableSmartRemindersUi();return}
+  Notification.requestPermission().then(permission=>{
+    updateNotificationStatus();
+    if(permission==='granted'){
+      new Notification('My Assistant đã bật thông báo', {body:'Thông báo thử trên thiết bị này. Email nhắc vẫn là kênh chính.'});
+      toast('Đã bật thông báo trên thiết bị này.');
+    }else toast('Bạn chưa cấp quyền thông báo.');
+  }).catch(fail);
+}
+function updateNotificationStatus(){
+  const el=$('notificationStatus'); if(!el)return;
+  if(/iPad|iPhone|iPod/.test(navigator.userAgent)){el.textContent='iPhone: nhắc nền qua Google Calendar + email; không cần tải lại profile khi app cập nhật.';return}
+  if(!('Notification' in window)){el.textContent='Thông báo nền đang dùng Google Calendar + email.';return}
+  el.textContent='Trạng thái thông báo: '+Notification.permission;
+}
+function copyAppLink(){
+  const link=location.origin+location.pathname;
+  navigator.clipboard?.writeText(link).then(()=>toast('Đã copy link app')).catch(()=>toast(link));
+}
+function exportAllDataFile(){
+  google.script.run.withSuccessHandler(payload=>{const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='my-assistant-google-data.json';a.click();toast('Đã xuất dữ liệu JSON.');}).withFailureHandler(fail).exportAllData();
+}
+function activatePage(page){
+  const btn=document.querySelector(`nav button[data-page="${page}"]`);
+  const section=$(page);
+  if(!btn||!section)return;
+  document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active'); section.classList.add('active');
+  if(page!=='today'&&!fullDataLoaded){refreshFullData(page);return}
+  renderCurrentPage();
+}
+function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
+function fail(e){toast(e.message||String(e))}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
+restoreUiFolds();
+load();
+</script>
+<script>
+let data={tasks:[],tasksteps:[],taskupdates:[],debts:[],meals:[],healthprofile:[],weightlogs:[],healthlogs:[],flights:[],hotels:[],appointments:[],expenses:[],wallets:[],allocations:[],cvs:[],reflectionprofile:[],studyabroadprofile:[],studyabroadoptions:[],studyabroadchecklist:[],appsettings:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[]};
+let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
+let viewingCvId='';
+let initialPageApplied=false;
+let fullDataLoaded=false,todayLoading=false,fullLoading=false,formSaving=false;
+const pendingActions=new Set();
+const defaultKanbanFold={overdue:false,upcoming:false,done:true};
+let kanbanCollapsed=(()=>{try{return Object.assign({},defaultKanbanFold,JSON.parse(localStorage.getItem('my-assistant-kanban-fold-v1')||'{}'))}catch(e){return Object.assign({},defaultKanbanFold)}})();
+const kanbanScrollPositions={};
+let assistantBrief=null,assistantBriefLoading=false;
+let assistantMode=localStorage.getItem('my-assistant-mode-v1')||'focus';
+let activeTimeLog=JSON.parse(localStorage.getItem('my-assistant-active-time-v1')||'null');
+let taskFoldState=(()=>{try{return JSON.parse(localStorage.getItem('my-assistant-task-fold-v1')||'{}')}catch(e){return {}}})();
+let uiFoldState=(()=>{try{return JSON.parse(localStorage.getItem('my-assistant-ui-fold-v1')||'{}')}catch(e){return {}}})();
+let tickerHidden=localStorage.getItem('my-assistant-ticker-hidden-v1')==='yes';
+let tickerCustomMessage=localStorage.getItem('my-assistant-ticker-message-v1')||'';
+let miniCalendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let flightBoardPages=[],flightBoardPage=0,assistantGateIndex=0;
+const $=id=>document.getElementById(id);
+const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
+const num=n=>new Intl.NumberFormat('vi-VN').format(Number(n||0));
+const colors=['#203a66','#245647','#87aa99','#e5b44f','#e55d6f','#5795d0'];
+const periodLabels={week:'tuần này',month:'tháng này',year:'năm nay',twoYears:'2 năm gần đây'};
+
+function applyServerData(d){data=Object.assign(data,d);applyAppSettings();const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1')}
+function load(){const page=document.querySelector('.page.active')?.id||'today';if(page==='today'||!fullDataLoaded)refreshToday();else refreshFullData(page)}
+function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(!silent)document.body.classList.add('today-loading');google.script.run.withSuccessHandler(d=>{todayLoading=false;document.body.classList.remove('today-loading');applyServerData(d);render();if(!assistantBrief&&!assistantBriefLoading)loadAssistantBrief();if(!initialPageApplied){initialPageApplied=true;activatePage(location.hash.replace('#','')||appSettings().startupPage||'assistant')}}).withFailureHandler(e=>{todayLoading=false;document.body.classList.remove('today-loading');fail(e)}).getTodayData()}
+function refreshFullData(){if(fullLoading)return;fullLoading=true;document.body.classList.add('full-loading');google.script.run.withSuccessHandler(d=>{fullLoading=false;fullDataLoaded=true;document.body.classList.remove('full-loading');applyServerData(d);render()}).withFailureHandler(e=>{fullLoading=false;document.body.classList.remove('full-loading');fail(e)}).getData()}
+function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',startupPage:'assistant',theme:'pastel',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes'}}
+function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
+function rememberUiFold(key,details){uiFoldState[key]=details.open;localStorage.setItem('my-assistant-ui-fold-v1',JSON.stringify(uiFoldState))}
+function restoreUiFolds(){document.querySelectorAll('details[data-ui-fold]').forEach(details=>{details.open=uiFoldState[details.dataset.uiFold]===true})}
+function render(){
+  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
+  $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
+  renderTicker();
+  renderLivePulse(open);
+  renderTodayCoach(open);
+  renderAssistantBrief();
+  renderKanban();
+  renderNotifications();
+  renderTimeAnchor();
+  renderCurrentPage();
+}
+function renderCurrentPage(){
+  const page=document.querySelector('.page.active')?.id||'today';
+  if(page==='assistant')renderAssistantBrief();
+  if(page==='profile')renderProfile();
+  if(page==='money')renderMoney();
+  if(page==='cv')renderCvs();
+  if(page==='study')renderStudyAbroad();
+  if(page==='food')renderHealth();
+  if(page==='travel')renderTravel();
+  if(page==='time')renderTime();
+  if(page==='install')renderInstall();
+}
+function renderTicker(){
+  const shell=$('reminderTicker'),track=$('tickerTrack'),toggle=$('tickerToggle');if(!shell||!track||!toggle)return;
+  shell.classList.toggle('ticker-hidden',tickerHidden);toggle.textContent=tickerHidden?'Hiện bảng tin':'Ẩn';if(tickerHidden)return;
+  const now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0],notices=(data.notifications||[]).filter(n=>!n.readAt).slice(-3).reverse();
+  const messages=[];if(tickerCustomMessage)messages.push(tickerCustomMessage);if(activeTimeLog)messages.push(`Đang tập trung: ${activeTimeLog.label}`);if(overdue.length)messages.push(`${overdue.length} việc đã quá hạn — chọn một bước nhỏ và xử lý ngay`);if(next)messages.push(`Kế tiếp: ${next.title} · ${dateTime(next.dueAt)}`);notices.forEach(n=>messages.push(`${n.title}: ${n.message||''}`));if(!messages.length)messages.push('Không có cảnh báo gấp · hãy chọn một đầu ra quan trọng nhất cho hôm nay');
+  const line=messages.map(esc).join('<span aria-hidden="true">◆</span>');track.innerHTML=`<span>${line}</span><span aria-hidden="true">${line}</span>`;
+}
+function toggleTickerVisibility(){tickerHidden=!tickerHidden;localStorage.setItem('my-assistant-ticker-hidden-v1',tickerHidden?'yes':'no');renderTicker()}
+function editTickerMessage(){const value=prompt('Thông điệp riêng muốn ghim lên bảng tin (để trống để xoá):',tickerCustomMessage);if(value===null)return;tickerCustomMessage=value.trim().slice(0,220);if(tickerCustomMessage)localStorage.setItem('my-assistant-ticker-message-v1',tickerCustomMessage);else localStorage.removeItem('my-assistant-ticker-message-v1');renderTicker();toast(tickerCustomMessage?'Đã ghim thông điệp lên bảng tin':'Đã bỏ thông điệp riêng')}
+function renderLivePulse(open){
+  const box=$('livePulse');if(!box)return;const now=Date.now(),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now).length,follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now).length,unread=(data.notifications||[]).filter(n=>!n.readAt).length,totalBalance=(data.wallets||[]).reduce((s,w)=>s+Number(w.balance||0),0);
+  const balanceLabel=appSettings().hideFinancialAmounts==='yes'?'••••':fullDataLoaded?vnd(totalBalance):'Mở tab Tiền';box.innerHTML=`<button onclick="activatePage('today')"><small>VIỆC MỞ</small><b>${open.length}</b></button><button class="${overdue?'attention':''}" onclick="activatePage('today')"><small>QUÁ HẠN</small><b>${overdue}</b></button><button onclick="activatePage('today')"><small>FOLLOW-UP</small><b>${follow}</b></button><button onclick="activatePage('time')"><small>ĐANG LOG</small><b>${activeTimeLog?esc(activeTimeLog.label):'Chưa bật'}</b></button><button onclick="activatePage('money')"><small>SỐ DƯ</small><b>${balanceLabel}</b></button><button onclick="activatePage('today')"><small>THÔNG BÁO</small><b>${unread}</b></button>`;
+}
+function taskCard(t){
+  const steps=taskSteps(t.id),doneSteps=steps.filter(s=>truth(s.done)).length,next=steps.find(s=>!truth(s.done)),updates=taskUpdates(t.id),progress=steps.length?Math.round(doneSteps/steps.length*100):0;
+  const collapsed=taskFoldState[t.id]!==false;
+  const checklist=`<details class="task-checklist-panel"><summary><span>Checklist · ${doneSteps}/${steps.length} bước</span><b>Mở / ẩn</b></summary><div class="task-checklist">${steps.map(s=>`<label class="${truth(s.done)?'completed':''}"><button onclick="toggleTaskStepUi('${s.id}')" aria-label="Đổi trạng thái">${truth(s.done)?'✓':'○'}</button><span>${esc(s.title)}</span><button class="step-edit" onclick="editTaskStepUi('${s.id}')" aria-label="Sửa bước">✎</button><button class="step-delete" onclick="removeItem('TaskSteps','${s.id}')" aria-label="Xoá bước">×</button></label>`).join('')||'<p class="meta">Chưa có checklist. Bạn có thể thêm bước hoặc tạo checklist mẫu.</p>'}</div></details>`;
+  return `<article class="card task-workspace ${t.chaseMode==='urgent'?'chasing':''}" id="task-${escAttr(t.id)}"><div class="card-top"><div><div class="task-badges"><span class="status-badge ${t.priority==='high'?'danger':t.status==='waiting'?'warning':'ok'}">${esc(taskStatusLabel(t))}</span>${t.waitingFor?`<span class="pill">CHỜ ${esc(t.waitingFor)}</span>`:''}</div><h3>${t.chaseMode==='urgent'?'🚨 ':''}${esc(t.title)}</h3><p class="meta">${dateTime(t.dueAt)} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')}${t.followUpAt?' · follow-up '+dateTime(t.followUpAt):''}</p></div><button class="done" onclick="complete('${t.id}')" aria-label="Hoàn thành">✓</button></div><details class="task-body" ${collapsed?'':'open'} ontoggle="rememberTaskFold('${t.id}',this)"><summary><span class="task-fold-label"></span><b>${steps.length?`${doneSteps}/${steps.length} bước · ${progress}%`:'Chưa có checklist'}</b></summary><div class="task-details"><div class="task-next"><small>BƯỚC DUY NHẤT LÚC NÀY</small><b>${esc(next?.title||t.nextAction||'Chọn một bước nhỏ trong 5–10 phút')}</b>${t.outcome?`<span>Đầu ra: ${esc(t.outcome)}</span>`:''}</div>${steps.length?`<div class="task-progress"><i><em style="width:${progress}%"></em></i><b>${doneSteps}/${steps.length} bước · ${progress}%</b></div>`:''}${checklist}<div class="task-actions-primary"><button onclick="focusTask('${t.id}')">▶ Focus 10 phút</button><button class="outline" onclick="openTaskUpdate('${t.id}')">↻ Cập nhật / follow-up</button></div><details class="task-more"><summary>Thêm bước · sửa · Calendar · xoá</summary><div class="task-actions-secondary"><button onclick="addTaskStepUi('${t.id}')">+ Bước</button>${steps.length?'':`<button onclick="generateChecklistUi('${t.id}')">Checklist mẫu</button>`}<button onclick="editItem('task','${t.id}')">Sửa</button><button onclick="syncCalendar('${t.id}')">Calendar</button><button class="${t.chaseMode==='urgent'?'danger':''}" onclick="toggleChase('${t.id}')">${t.chaseMode==='urgent'?'Tắt bám':'Bám đuổi'}</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button></div></details>${updates.length?`<details class="task-updates"><summary>${updates.length} cập nhật gần đây</summary>${updates.slice(0,3).map(u=>`<p><b>${dateTime(u.createdAt)}</b><span>${esc(u.note)}</span></p>`).join('')}</details>`:''}</div></details></article>`;
+}
+function rememberTaskFold(id,details){taskFoldState[id]=!details.open;localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState))}
+function setAllTaskFolds(collapsed){data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').forEach(t=>taskFoldState[t.id]=collapsed);localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));render();toast(collapsed?'Đã thu gọn các việc':'Đã mở chi tiết các việc')}
+function taskSteps(taskId){return (data.tasksteps||[]).filter(s=>s.taskId===taskId).sort((a,b)=>Number(a.position||0)-Number(b.position||0))}
+function taskUpdates(taskId){return (data.taskupdates||[]).filter(u=>u.taskId===taskId).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))}
+function taskStatusLabel(t){return t.status==='waiting'?'Đang chờ follow-up':t.status==='blocked'?'Đang kẹt':t.status==='doing'?'Đang làm':t.priority==='high'?'Ưu tiên cao':'Cần làm'}
+function taskAttentionScore(t,now=Date.now()){
+  const due=t.dueAt?new Date(t.dueAt)-now:null,follow=t.followUpAt&&new Date(t.followUpAt)<=now;
+  return (t.status==='doing'?1000:0)+(t.status==='blocked'?650:0)+(t.priority==='high'?500:0)+(follow?400:0)+(due===null?0:due<=0?450:Math.max(0,300-due/3600000))+(assistantMode==='low'&&t.energy==='low'?380:0)+(assistantMode==='overwhelmed'&&Number(t.minutes||15)<=10?420:0);
+}
+function assistantTopTask(){
+  return data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a))[0]||null;
+}
+function renderTodayCoach(open){
+  const box=$('todayCoach');if(!box)return;const now=Date.now(),planned=open.reduce((s,t)=>s+Number(t.minutes||15),0),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),stale=open.filter(t=>t.startedAt&&now-new Date(t.lastProgressAt||t.startedAt)>2*3600000);
   const focus=assistantTopTask(),next=focus&&taskSteps(focus.id).find(s=>!truth(s.done)),session=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
   box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY · CHẾ ĐỘ ${assistantMode==='overwhelmed'?'GIẢI CỨU':assistantMode==='low'?'ÍT NĂNG LƯỢNG':'TẬP TRUNG'}</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu ${session} phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button></div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
 }
