@@ -49,9 +49,10 @@
     <section id="today" class="page">
       <div class="section-head tab-heading"><div><span class="section-kicker">HÔM NAY · CHỈ VIỆC CẦN LÀM</span><h2>Việc kế tiếp</h2><p class="hint">Nhìn Kanban, chọn một bước nhỏ rồi bắt đầu. Công cụ phụ được thu gọn bên dưới.</p></div><button onclick="openForm('task')">+ Thêm việc</button></div>
       <div id="todayLaunchPad" class="today-launch-pad" aria-live="polite"></div>
-      <article class="card time-anchor" data-home-panel="clock">
-        <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
-        <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
+      <article class="card time-anchor deadline-command" data-home-panel="clock">
+        <div class="current-time-chip"><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
+        <div id="deadlineRing" class="deadline-ring" style="--deadline-progress:0deg"><div class="deadline-ring-core"><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">--:--:--</b><small id="nextTaskTitle">Chưa có deadline</small></div></div>
+        <div class="deadline-queue-wrap"><span>CŨNG CẦN CHÚ Ý</span><div id="deadlineQueue" class="deadline-queue"></div></div>
       </article>
       <div id="todayCoach" class="today-coach" data-home-panel="coach"></div>
       <section data-home-panel="kanban"><div class="section-head subhead"><h2>Kanban việc nhỏ</h2><button class="outline" onclick="enableEmails()">Bật nhắc email</button></div><div id="kanban" class="kanban"></div></section>
@@ -102,6 +103,7 @@
         <div class="section-head subhead"><div><span class="section-kicker">DAILY CAREER COACH</span><h2>Định hướng & chiêm nghiệm</h2></div><button class="outline" onclick="openReflectionForm()">Cập nhật hồ sơ</button></div>
         <p class="hint">Lời khuyên nghề nghiệp dựa trên CV và dữ liệu bạn nhập. Góc chiêm nghiệm được tách riêng để hỗ trợ tự suy ngẫm.</p>
         <div id="dailyGuidance" class="daily-guidance"></div>
+        <div id="manifestStandalone" class="manifest-standalone"></div>
         <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Điểm mạnh, điểm cần cải thiện, tử vi, bát tự và horoscope</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
           <div id="careerAnalysis" class="cards"></div>
           <div id="reflectionProfile" class="cards"></div>
