@@ -90,7 +90,8 @@
     </section>
 
     <section id="profile" class="page">
-      <div class="section-head"><h2>Hồ sơ cá nhân</h2><button onclick="openProfileForm()">Cập nhật</button></div>
+      <div class="section-head tab-heading"><div><span class="section-kicker">PERSONAL VAULT</span><h2>Hồ sơ cá nhân</h2><p class="hint">Thông tin quan trọng, giấy tờ và lối tắt dùng ngay khi cần.</p></div><div class="actions"><button class="outline" onclick="toggleProfilePrivacy()">◉ Che / hiện</button><button onclick="openProfileForm()">Cập nhật</button></div></div>
+      <div id="profileCommand" class="profile-command-center" aria-live="polite"></div>
       <div id="profileInsights" class="insight-grid"></div>
       <div id="profileCard" class="cards"></div>
       <details class="compact-section" data-ui-fold="profile-wallets" ontoggle="rememberUiFold('profile-wallets',this)"><summary><span><b>◉ Ví & tài khoản trong hồ sơ</b><small>Xem, sửa hoặc xoá tài khoản đã lưu</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div><div id="walletsProfile" class="cards"></div></div></details>
