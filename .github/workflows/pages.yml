@@ -1,7 +1,8 @@
 name: Publish My Assistant web
+# GitHub Pages is intentionally manual because the repository is private and
+# My Assistant is published through Google Apps Script. Keeping this workflow
+# available for an explicit future test avoids a failed email on every commit.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
