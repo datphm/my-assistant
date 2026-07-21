@@ -17,6 +17,7 @@ let tickerHidden=localStorage.getItem('my-assistant-ticker-hidden-v1')==='yes';
 let tickerCustomMessage=localStorage.getItem('my-assistant-ticker-message-v1')||'';
 let miniCalendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let flightBoardPages=[],flightBoardPage=0,assistantGateIndex=0;
+let flightJourneyFacts=[],flightJourneyFactIndex=0,flightJourneyFactTimer=null;
 let profilePrivacyHidden=localStorage.getItem('my-assistant-profile-private-v1')!=='no';
 const $=id=>document.getElementById(id);
 const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(Number(n||0));
@@ -854,6 +855,7 @@ function renderTravel(){
     metricCard('Sắp tới',upcoming.length+' chuyến',upcoming[0]?countdownLabel(upcoming[0].departure):'Chưa có lịch bay'),
     metricCard('Top route / hãng',`${esc(topRoute.name)} · ${esc(topAirline.name)}`,`${topRoute.count} lần · ${topAirline.count} lần`)
   ].join('');
+  renderFlightJourneyStats(flights);
   renderTravelPrep(upcoming);
   renderTravelFootprint();
   renderFlightBoard(flights);
@@ -861,6 +863,35 @@ function renderTravel(){
   const visibleFlights=flights.slice(0,flightLimit);
   $('flights').innerHTML=visibleFlights.map(f=>`<article class="card"><div class="card-top"><div><h3>${esc(f.code||'Chuyến bay')} — ${esc(routeLabel(f))} ${flightStatusBadge(flightBoardStatus(f),f.id)}</h3><p class="meta">${dateTime(f.departure)} · ${esc(airlineName(f))} · ${esc(f.aircraft||'Máy bay chưa rõ')} · ${f.distanceKm?num(f.distanceKm)+' km / '+num(Math.round(Number(f.distanceKm)*0.621371))+' mi':'chưa có dặm'}${f.ticketPrice?' · vé '+vnd(f.ticketPrice):''}${f.terminal?' · Terminal '+esc(f.terminal):''}${f.gate?' · Gate '+esc(f.gate):''}</p>${f.seat||f.note?`<p class="meta">Ghế ${esc(f.seat||'—')} · ${esc(f.note||'')}</p>`:''}${f.lastCheckedAt?`<p class="meta">Rà lần cuối ${dateTime(f.lastCheckedAt)}</p>`:''}</div><button class="outline small" onclick="editItem('flight','${f.id}')">Sửa</button></div></article>`).join('')+(flights.length>flightLimit?`<button class="load-more" onclick="flightLimit+=20;renderTravel()">Xem thêm ${Math.min(20,flights.length-flightLimit)} chuyến</button>`:'')||'<div class="empty">Chưa có chuyến đi.</div>';
   $('hotels').innerHTML=data.hotels.slice().sort((a,b)=>new Date(b.checkIn)-new Date(a.checkIn)).map(h=>`<article class="card"><div class="card-top"><div><h3>${esc(h.name||'Khách sạn')}</h3><p class="meta">${esc(h.city||'Chưa rõ thành phố')} · ${esc(h.address||'Chưa có địa chỉ')} · check-in ${dateShort(h.checkIn)}${h.checkOut?' · check-out '+dateShort(h.checkOut):''} ${h.bookingRef?'· mã '+esc(h.bookingRef):''}${h.price?' · '+vnd(h.price):''}</p></div><button class="outline small" onclick="editItem('hotel','${h.id}')">Sửa</button></div></article>`).join('')||'<div class="empty">Chưa có booking khách sạn. Nhập query Gmail Booking/Agoda/Expedia để thử.</div>';
+}
+function flightDurationMinutes(f){
+  const departure=new Date(f.departure),arrival=flightArrivalAt(f),minutes=(arrival-departure)/60000;
+  return Number.isFinite(minutes)&&minutes>0&&minutes<=2880?minutes:0;
+}
+function flightRatio(value){
+  if(!Number.isFinite(value)||value<=0)return '0';
+  const digits=value>=10?1:value>=1?2:value>=.1?2:value>=.01?3:5;
+  return value.toFixed(digits).replace(/(\.\d*?[1-9])0+$/,'$1').replace(/\.0+$/,'');
+}
+function paintFlightJourneyFact(){
+  const fact=$('flightJourneyFact');if(!fact||!flightJourneyFacts.length)return;
+  fact.textContent=flightJourneyFacts[flightJourneyFactIndex%flightJourneyFacts.length];
+  const position=$('flightJourneyFactPosition');if(position)position.textContent=`${flightJourneyFactIndex%flightJourneyFacts.length+1}/${flightJourneyFacts.length}`;
+}
+function startFlightJourneyFactTimer(){
+  if(flightJourneyFactTimer)return;
+  flightJourneyFactTimer=setInterval(()=>{if(!flightJourneyFacts.length)return;flightJourneyFactIndex=(flightJourneyFactIndex+1)%flightJourneyFacts.length;paintFlightJourneyFact()},10000);
+}
+function renderFlightJourneyStats(flights){
+  const box=$('flightJourneyStats');if(!box)return;
+  const valid=(flights||[]).filter(f=>String(f.status||'').toLowerCase()!=='cancelled');
+  const totalKm=valid.reduce((sum,f)=>sum+Math.max(0,Number(f.distanceKm)||0),0),totalMiles=totalKm*.621371;
+  const totalMinutes=Math.round(valid.reduce((sum,f)=>sum+flightDurationMinutes(f),0)),hours=Math.floor(totalMinutes/60),minutes=totalMinutes%60;
+  const days=totalMinutes/1440,weeks=days/7,months=days/30.4375,years=days/365.25;
+  flightJourneyFacts=[`${flightRatio(totalKm/40075)}x around Earth`,`${flightRatio(totalKm/384400)}x to the Moon`,`${flightRatio(totalKm/149597870)}x to the Sun`,`${flightRatio(weeks)} weeks in the air`,`${flightRatio(months)} months in the air`,`${flightRatio(years)} years in the air`];
+  flightJourneyFactIndex%=flightJourneyFacts.length;
+  box.innerHTML=`<article class="flight-journey-card"><div class="flight-journey-heading"><div><span class="section-kicker">FLIGHT LOG · AUTO TOTAL</span><h3>Hành trình trên không</h3></div><small>Tự tính lại khi thêm, sửa hoặc xoá chuyến</small></div><div class="flight-journey-metrics"><div class="flight-distance-total"><strong>${num(Math.round(totalMiles))}<em> miles</em></strong><b>${num(Math.round(totalKm))}<em> km</em></b></div><div class="flight-time-total"><strong>${num(hours)}<em> h</em> ${minutes}<em> min</em></strong><b>${flightRatio(days)}<em> days</em></b></div><div class="flight-perspective"><span>FLIGHT PERSPECTIVE · <i id="flightJourneyFactPosition">1/${flightJourneyFacts.length}</i></span><b id="flightJourneyFact"></b><small>Đổi góc nhìn sau mỗi 10 giây</small></div></div></article>`;
+  paintFlightJourneyFact();startFlightJourneyFactTimer();
 }
 const footprintCountries={CN:'Trung Quốc',ID:'Indonesia',KZ:'Kazakhstan',MY:'Malaysia',SG:'Singapore',TH:'Thái Lan',VN:'Việt Nam',US:'Hoa Kỳ',GB:'Anh',AU:'Úc',JP:'Nhật Bản',KR:'Hàn Quốc',FR:'Pháp',DE:'Đức'};
 const airportCountry={HAN:'VN',SGN:'VN',DAD:'VN',VTG:'VN',VCS:'VN',SIN:'SG',KUL:'MY',JHB:'MY',ALA:'KZ',BKK:'TH',HKT:'TH',CGK:'ID',DPS:'ID',PEK:'CN',PKX:'CN',PVG:'CN',CAN:'CN',NRT:'JP',HND:'JP',ICN:'KR',SYD:'AU',MEL:'AU',LHR:'GB',CDG:'FR',FRA:'DE'};
