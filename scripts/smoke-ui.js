@@ -114,6 +114,7 @@ try {
     renderAssistantBrief();
     renderMoney();
     renderStudyAbroad();
+    renderProfile();
     renderCvs();
     renderHealth();
     renderTravel();
@@ -139,11 +140,13 @@ try {
   if (!getElement('assistantBrief').innerHTML.includes('BÂY GIỜ · MỘT VIỆC DUY NHẤT') || !getElement('assistantBrief').innerHTML.includes('🛟 Cứu tôi') || !getElement('assistantBrief').innerHTML.includes('DAILY CAPSULE · MOMENTUM')) throw new Error('Hourly assistant return loop did not render');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
   if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('id="formDelete"') || !indexSource.includes('deleteCurrentFormItem()') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant tab, flight delete action, Health import, or manual time UI missing');
+  if (indexSource.includes('data-page="cv"') || indexSource.includes('section id="cv"') || !indexSource.includes('id="profileCareer"') || indexSource.indexOf('id="profileCareer"') < indexSource.indexOf('id="profile"')) throw new Error('CV was not merged into the Profile tab correctly');
   if (!indexSource.includes('data-ui-fold="money-bank-sync"') || !indexSource.includes('data-ui-fold="money-recent-transactions"') || !indexSource.includes('data-ui-fold="today-capture"') || !indexSource.includes('data-ui-fold="travel-email-sync"') || !indexSource.includes('data-ui-fold="study-roadmap"') || !indexSource.includes('data-ui-fold="health-meals"') || !indexSource.includes('data-ui-fold="time-entries"') || !source.includes('rememberUiFold')) throw new Error('Compact remembered tab controls are missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
   const styleSource=fs.readFileSync(path.join(__dirname,'..','Styles.html'),'utf8');
   if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar') || !styleSource.includes('Stable Changi-style flight information board') || styleSource.includes('airport-board-turn')) throw new Error('Health, calendar, or stable Changi board styles missing');
   if (!styleSource.includes('2026 compact tab system') || !styleSource.includes('.compact-section') || !styleSource.includes('.mini-calendar-card .mini-day{min-height:36px') || !styleSource.includes('.assistant-utility-grid{display:grid;grid-template-columns:minmax(0,.9fr)') || !getElement('assistantBrief').innerHTML.includes('THAO TÁC 30 GIÂY')) throw new Error('Compact tab, narrow life calendar, or quick console styles missing');
+  if (getElement('assistantBrief').innerHTML.indexOf('THAO TÁC 30 GIÂY') < getElement('assistantBrief').innerHTML.indexOf('Trạng thái đầu việc') || getElement('assistantBrief').innerHTML.indexOf('THAO TÁC 30 GIÂY') > getElement('assistantBrief').innerHTML.indexOf('Thu – chi 6 tháng')) throw new Error('30-second actions must sit beside the task status card');
   if (!styleSource.includes('.flight-info-row:not(.board-labels)>b:nth-child(3)') || !styleSource.includes('background:#facc15')) throw new Error('Yellow full-cell flight number styling is missing');
   if (!styleSource.includes('2026 delight pass') || !styleSource.includes('.flight-plans{display:grid!important;grid-template-columns:repeat(2') || !styleSource.includes('.study-launch-card')) throw new Error('Delight pass, travel cards, or study launchpad styles missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');

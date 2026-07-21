@@ -106,7 +106,7 @@ function readRowsSafe_(ss, name) {
 function getPageData(page) {
   const ss = getBook_();
   const map = {
-    profile: ['Profile', 'Wallets'],
+    profile: ['Profile', 'Wallets', 'CVs', 'ReflectionProfile'],
     money: ['Wallets', 'Expenses', 'Debts', 'Allocations', 'Plans'],
     cv: ['CVs', 'ReflectionProfile'],
     study: ['StudyAbroadProfile', 'StudyAbroadOptions', 'StudyAbroadChecklist'],
@@ -115,7 +115,7 @@ function getPageData(page) {
     time: ['TimeLogs', 'TimeState', 'RoutineSettings', 'Appointments'],
     install: ['AppSettings']
   };
-  if (page === 'cv') { ensureDefaultCv_(ss); ensureDefaultReflection_(ss); seedReflectionDetails_(ss); ensureReflectionSynthesis_(ss); }
+  if (page === 'profile' || page === 'cv') { ensureDefaultCv_(ss); ensureDefaultReflection_(ss); seedReflectionDetails_(ss); ensureReflectionSynthesis_(ss); }
   if (page === 'study') ensureDefaultStudyAbroad_(ss);
   if (page === 'food') { ensureDefaultRoutine_(ss); ensureDefaultHealth_(ss); ensureHabitDefaults_(ss); }
   if (page === 'travel') ensureDefaultFlights_(ss);
@@ -123,7 +123,7 @@ function getPageData(page) {
   if (page === 'install') ensureDefaultAppSettings_(ss);
   const result = { partial: true };
   (map[page] || []).forEach(function(name) { result[name.toLowerCase()] = readRows_(ss.getSheetByName(name)); });
-  if (page === 'cv') result.dailyguidance = buildDailyGuidance_(ss);
+  if (page === 'profile' || page === 'cv') result.dailyguidance = buildDailyGuidance_(ss);
   return result;
 }
 

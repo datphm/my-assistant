@@ -39,7 +39,6 @@
       <button data-page="today" data-mobile-label="⌂ Hôm nay">Hôm nay</button>
       <button data-page="profile" data-mobile-label="♙ Hồ sơ">Hồ sơ</button>
       <button data-page="money" data-mobile-label="₫ Tiền">Tiền</button>
-      <button data-page="cv" data-mobile-label="▤ CV">CV</button>
       <button data-page="study" data-mobile-label="✦ Du học">Du học</button>
       <button data-page="food" data-mobile-label="♡ Sức khỏe">Sức khỏe</button>
       <button data-page="travel" data-mobile-label="✈ Chuyến đi">Chuyến đi</button>
@@ -95,6 +94,19 @@
       <div id="profileInsights" class="insight-grid"></div>
       <div id="profileCard" class="cards"></div>
       <details class="compact-section" data-ui-fold="profile-wallets" ontoggle="rememberUiFold('profile-wallets',this)"><summary><span><b>◉ Ví & tài khoản trong hồ sơ</b><small>Xem, sửa hoặc xoá tài khoản đã lưu</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div><div id="walletsProfile" class="cards"></div></div></details>
+      <section id="profileCareer" class="profile-career-zone">
+        <div class="section-head subhead profile-career-head"><div><span class="section-kicker">CAREER PASSPORT</span><h2>CV & hồ sơ nghề nghiệp</h2><p class="hint">CV, định hướng nghề nghiệp và góc chiêm nghiệm nay nằm chung trong Hồ sơ cá nhân.</p></div><div class="actions"><button class="outline" onclick="openReflectionForm()">Cập nhật định hướng</button><button onclick="openForm('cv')">+ Lưu CV</button></div></div>
+        <div id="cvCommandCenter" class="cv-command-center" aria-live="polite"></div>
+        <div id="cvCareerKpis" class="insight-grid cv-kpis"></div>
+        <details class="compact-section cv-library" data-ui-fold="cv-library" ontoggle="rememberUiFold('cv-library',this)" open><summary><span><b>▣ Thư viện CV</b><small>Các phiên bản theo từng vai trò · mở để xem, sửa hoặc cập nhật</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>CV đang lưu</h3><button class="outline small" onclick="openForm('cv')">+ Phiên bản mới</button></div><div id="cvs" class="cards cv-grid"></div></div></details>
+        <div class="section-head subhead"><div><span class="section-kicker">DAILY CAREER COACH</span><h2>Định hướng & chiêm nghiệm</h2></div><button class="outline" onclick="openReflectionForm()">Cập nhật hồ sơ</button></div>
+        <p class="hint">Lời khuyên nghề nghiệp dựa trên CV và dữ liệu bạn nhập. Góc chiêm nghiệm được tách riêng để hỗ trợ tự suy ngẫm.</p>
+        <div id="dailyGuidance" class="daily-guidance"></div>
+        <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Điểm mạnh, điểm cần cải thiện, tử vi, bát tự và horoscope</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
+          <div id="careerAnalysis" class="cards"></div>
+          <div id="reflectionProfile" class="cards"></div>
+        </div></div></details>
+      </section>
     </section>
 
     <section id="money" class="page">
@@ -137,20 +149,6 @@
       <details class="compact-section" data-ui-fold="money-recent-transactions" ontoggle="rememberUiFold('money-recent-transactions',this)"><summary><span><b>₫ Giao dịch gần đây</b><small>12 giao dịch mới nhất · mở để sửa hoặc xoá</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Giao dịch gần đây</h3><button class="outline small" onclick="openForm('expense')">+ Giao dịch</button></div><div id="expenses" class="cards compact-cards"></div></div></details>
       <details class="compact-section" data-ui-fold="money-debts" ontoggle="rememberUiFold('money-debts',this)"><summary><span><b>◎ Khoản nợ & kế hoạch trả</b><small>Ưu tiên, cập nhật số nợ và ghi nhận thanh toán</small></span><i></i></summary><div class="compact-section-body"><div id="debtPayoffPlan"></div><div id="debts" class="cards"></div></div></details>
       <details class="compact-section" data-ui-fold="money-plans" ontoggle="rememberUiFold('money-plans',this)"><summary><span><b>◇ Kế hoạch chi lớn</b><small>Chuyến đi và khoản chi cần chuẩn bị trước</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Kế hoạch chi lớn / chuyến đi sắp tới</h3><button class="outline" onclick="openForm('plan')">+ Kế hoạch</button></div><div id="moneyCoach" class="cards"></div><div id="plans" class="cards"></div></div></details>
-    </section>
-
-    <section id="cv" class="page">
-      <div class="section-head tab-heading"><div><span class="section-kicker">CAREER PASSPORT</span><h2>CV & hồ sơ nghề nghiệp</h2><p class="hint">Một nơi để biết CV nào đang dùng, hồ sơ còn thiếu gì và bước nghề nghiệp tiếp theo.</p></div><div class="actions"><button class="outline" onclick="openReflectionForm()">Cập nhật định hướng</button><button onclick="openForm('cv')">+ Lưu CV</button></div></div>
-      <div id="cvCommandCenter" class="cv-command-center" aria-live="polite"></div>
-      <div id="cvCareerKpis" class="insight-grid cv-kpis"></div>
-      <details class="compact-section cv-library" data-ui-fold="cv-library" ontoggle="rememberUiFold('cv-library',this)" open><summary><span><b>▣ Thư viện CV</b><small>Các phiên bản theo từng vai trò · mở để xem, sửa hoặc cập nhật</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>CV đang lưu</h3><button class="outline small" onclick="openForm('cv')">+ Phiên bản mới</button></div><div id="cvs" class="cards cv-grid"></div></div></details>
-      <div class="section-head subhead"><div><span class="section-kicker">DAILY CAREER COACH</span><h2>Định hướng & chiêm nghiệm</h2></div><button class="outline" onclick="openReflectionForm()">Cập nhật hồ sơ</button></div>
-      <p class="hint">Lời khuyên nghề nghiệp dựa trên CV và dữ liệu bạn nhập. Góc chiêm nghiệm được tách riêng để hỗ trợ tự suy ngẫm.</p>
-      <div id="dailyGuidance" class="daily-guidance"></div>
-      <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Điểm mạnh, điểm cần cải thiện, tử vi, bát tự và horoscope</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
-        <div id="careerAnalysis" class="cards"></div>
-        <div id="reflectionProfile" class="cards"></div>
-      </div></div></details>
     </section>
 
     <section id="study" class="page">
