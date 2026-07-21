@@ -34,7 +34,7 @@ const getElement = id => {
 };
 const page = getElement('today');
 page.classList.contains = name => name === 'active';
-const navButtons = ['assistant','today','profile','money','cv','study','food','travel','time','install'].map(name => {
+const navButtons = ['assistant','today','profile','money','cv','study','food','travel','time','calm','install'].map(name => {
   const item = new Element(); item.dataset.page = name; return item;
 });
 const document = {
@@ -109,6 +109,8 @@ try {
     data.studyabroadprofile=[{targetIntakeYear:2028,currentGpa:'3.4',englishTest:'IELTS',currentEnglishScore:'6.5',targetEnglishScore:'7.0',scholarshipTarget:'Toàn phần'}];
     data.studyabroadoptions=[{id:'school-1',school:'Example University',program:'Public Policy',scholarship:'Full tuition',applicationDeadline:new Date(Date.now()+120*86400000).toISOString()}];
     data.studyabroadchecklist=[{id:'study-1',title:'Viết bản nháp SOP',category:'Hồ sơ',dueAt:new Date(Date.now()+14*86400000).toISOString(),status:'todo'}];
+    data.scriptures=[{id:'scripture-1',title:'Bài đọc riêng',category:'Bài của tôi',content:'Thở chậm và trở về.',note:'Bản thử'}];
+    data.meritlogs=[{id:'merit-1',date:new Date().toISOString(),kind:'mindfulness',action:'Đã ngồi yên',minutes:5}];
     fullDataLoaded=true;
     assistantBrief={generatedAt:new Date().toISOString(),finance:{balance:12000000,debt:3000000,walletCount:1,nextPlan:null},health:{currentWeightKg:90,goalKg:75,waterMl:750,waterGoalMl:2500,walkMinutes:20,walkGoalMinutes:30},time:{loggedMinutes:90,entries:1,active:null},travel:data.flights[0],travelFlights:data.flights,study:{pending:1,next:data.studyabroadchecklist[0]}};
     renderAssistantBrief();
@@ -121,10 +123,14 @@ try {
     cycleFlightBoard();
     document.getElementById('timeDate').value=localDateKey(new Date());
     renderTime();
+    renderCalm();
+    tet2026=solarToLunar(17,2,2026,7);
     statusTimeline=[2880,1380,55,45,20,0,-16].map(minutes=>flightBoardStatus({departure:new Date(Date.now()+minutes*60000).toISOString(),status:'scheduled'}));
     flightFormKeys=fields.flight.map(field=>field[0]);
   `, context, {filename:'smoke-fixtures.js'});
   if (!getElement('moneyFlowChart').innerHTML || !getElement('timeWeeklyChart').innerHTML || !getElement('tickerTrack').innerHTML || !getElement('studyScholarship').innerHTML || !getElement('studyLaunchpad').innerHTML.includes('SCHOLARSHIP LAUNCHPAD') || !getElement('travelPrep').innerHTML.includes('TRIP READINESS') || !getElement('reflectionProfile').innerHTML || !getElement('debtPayoffPlan').innerHTML || !getElement('calorieBalanceChart').innerHTML || !getElement('calorieBalanceSummary').innerHTML) throw new Error('Dashboard visual, study launchpad, or trip readiness did not render');
+  if (!getElement('calmCalendar').innerHTML.includes('calm-day') || !getElement('scriptureLibrary').innerHTML.includes('Chú Đại Bi') || !getElement('scriptureLibrary').innerHTML.includes('Bài đọc riêng') || !getElement('meritLogList').innerHTML.includes('Đã ngồi yên')) throw new Error('An Tâm calendar, scripture library, or reflection journal did not render');
+  if (JSON.stringify(context.tet2026)!==JSON.stringify([1,1,2026,0])) throw new Error('Lunar converter did not recognize Tet 2026');
   if (!getElement('tasks').innerHTML.includes('task-checklist-panel') || getElement('tasks').innerHTML.includes('task-checklist-panel" open')) throw new Error('Task checklist must render collapsed');
   if (!getElement('reflectionProfile').innerHTML.includes('Đường đời 4 (13)') || !getElement('manifestStandalone').innerHTML.includes('MANIFEST CÓ CĂN CỨ') || getElement('reflectionProfile').innerHTML.includes('MANIFEST CÓ CĂN CỨ')) throw new Error('Reflection corrections or standalone Manifest did not render');
   if (getElement('studyScholarship').innerHTML.includes('scholarship-pillar done')) throw new Error('Scholarship layout class collision returned');
@@ -140,7 +146,7 @@ try {
   if (!getElement('assistantGateDisplay').innerHTML.includes('GATE A1 · 1/4') || getElement('assistantGateDisplay').innerHTML.includes('DISPLAY AT GATE ·') || !getElement('assistantGateDisplay').innerHTML.includes('VN999') || !getElement('assistantGateDisplay').innerHTML.includes('gate-status departed') || !getElement('assistantBrief').innerHTML.trim().startsWith('<article class="card assistant-now')) throw new Error('Active flight gate and sequence were not rendered correctly');
   if (!getElement('assistantBrief').innerHTML.includes('BÂY GIỜ · MỘT VIỆC DUY NHẤT') || !getElement('assistantBrief').innerHTML.includes('🛟 Cứu tôi') || !getElement('assistantBrief').innerHTML.includes('DAILY CAPSULE · MOMENTUM')) throw new Error('Hourly assistant return loop did not render');
   const indexSource=fs.readFileSync(path.join(__dirname,'..','Index.html'),'utf8');
-  if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('id="formDelete"') || !indexSource.includes('deleteCurrentFormItem()') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant tab, flight delete action, Health import, or manual time UI missing');
+  if (!indexSource.includes('data-page="assistant"') || !indexSource.includes('data-page="calm"') || !indexSource.includes('id="formDelete"') || !indexSource.includes('deleteCurrentFormItem()') || !indexSource.includes('+ Dữ liệu Health') || !indexSource.includes('+ Log thủ công')) throw new Error('Assistant, An Tâm, flight delete action, Health import, or manual time UI missing');
   if (indexSource.includes('data-page="cv"') || indexSource.includes('section id="cv"') || !indexSource.includes('id="profileCareer"') || indexSource.indexOf('id="profileCareer"') < indexSource.indexOf('id="profile"')) throw new Error('CV was not merged into the Profile tab correctly');
   if (!indexSource.includes('data-ui-fold="money-bank-sync"') || !indexSource.includes('data-ui-fold="money-recent-transactions"') || !indexSource.includes('data-ui-fold="today-capture"') || !indexSource.includes('data-ui-fold="travel-email-sync"') || !indexSource.includes('data-ui-fold="study-roadmap"') || !indexSource.includes('data-ui-fold="health-meals"') || !indexSource.includes('data-ui-fold="time-entries"') || !source.includes('rememberUiFold')) throw new Error('Compact remembered tab controls are missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');

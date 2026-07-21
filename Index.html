@@ -43,6 +43,7 @@
       <button data-page="food" data-mobile-label="♡ Sức khỏe">Sức khỏe</button>
       <button data-page="travel" data-mobile-label="✈ Chuyến đi">Chuyến đi</button>
       <button data-page="time" data-mobile-label="◷ Thời gian">Thời gian</button>
+      <button data-page="calm" data-mobile-label="◌ An Tâm">An Tâm</button>
       <button data-page="install" data-mobile-label="⚙ Cài đặt">Cài đặt</button>
     </nav>
 
@@ -251,6 +252,47 @@
       </div>
       <div id="timeStats" class="insight-grid"></div>
       <details class="compact-section" data-ui-fold="time-entries" ontoggle="rememberUiFold('time-entries',this)"><summary><span><b>◷ Dòng thời gian chi tiết</b><small>Sửa hoặc xoá các bản ghi tự động và nhập lại</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><div><h2>Dòng thời gian</h2><p class="hint">Bạn có thể sửa hoặc xoá cả bản ghi tự động lẫn bản ghi nhập lại.</p></div><button class="outline" onclick="openManualTimeLog()">+ Thêm thời gian đã quên</button></div><div id="timeEntries" class="cards"></div></div></details>
+    </section>
+
+    <section id="calm" class="page">
+      <div class="section-head calm-heading">
+        <div><span class="section-kicker">KHÔNG GIAN RIÊNG · NHẸ VÀ KÍN ĐÁO</span><h2>An Tâm</h2><p class="hint">Đọc một đoạn ngắn, thở chậm và soi lại ngày hôm nay mà không tự phán xét.</p></div>
+        <div class="actions"><button class="outline" onclick="openForm('meritLog')">+ Ghi lại hôm nay</button><button onclick="openForm('scripture')">+ Thêm bài đọc</button></div>
+      </div>
+      <div id="calmDaily" class="calm-daily" aria-live="polite"></div>
+      <div class="calm-main-grid">
+        <article class="card breath-space">
+          <span class="section-kicker">CHÁNH NIỆM NHANH</span>
+          <h3>Trở về với ba hơi thở</h3>
+          <div id="breathOrb" class="breath-orb"><div><span id="breathLabel">Sẵn sàng</span><b id="breathClock">03:00</b></div></div>
+          <div class="breath-presets"><button onclick="setMindfulMinutes(1)">1 phút</button><button class="active" onclick="setMindfulMinutes(3)">3 phút</button><button onclick="setMindfulMinutes(5)">5 phút</button></div>
+          <div class="breath-actions"><button id="breathStart" onclick="toggleMindfulTimer()">Bắt đầu</button><button class="outline" onclick="resetMindfulTimer()">Làm mới</button></div>
+          <p class="hint">Hít vào chậm · nhận biết cơ thể · thở ra dài hơn một chút. Không cần cố làm đầu óc trống rỗng.</p>
+        </article>
+        <article class="card calm-today-card">
+          <span class="section-kicker">NHẬT KÝ HÔM NAY</span>
+          <h3>Một ngày có ý thức</h3>
+          <div id="calmTodayStats" class="calm-today-stats"></div>
+          <div class="calm-quick-actions">
+            <button onclick="quickCalmLog('mindfulness','Đã dành thời gian chánh niệm',5)">◉ Thiền 5 phút</button>
+            <button onclick="quickCalmLog('recitation','Đã tụng kinh / niệm Phật',10)">◌ Đã tụng / niệm</button>
+            <button onclick="quickCalmLog('vegetarian','Ăn chay hôm nay',0)">☘ Đã ăn chay</button>
+            <button onclick="openForm('meritLog',{kind:'reflection',date:localDateKey(new Date())})">◇ Điều cần soi lại</button>
+          </div>
+          <div id="calmPrompt" class="calm-prompt"></div>
+        </article>
+      </div>
+      <article class="card lunar-calendar-card">
+        <div class="section-head compact"><div><span class="section-kicker">LỊCH NHỊP TÂM</span><h3 id="calmCalendarTitle">Lịch âm · dương</h3></div><div class="calendar-controls"><button class="outline small" onclick="moveCalmMonth(-1)">‹</button><button class="outline small" onclick="goCalmToday()">Hôm nay</button><button class="outline small" onclick="moveCalmMonth(1)">›</button></div></div>
+        <div id="calmCalendar" class="calm-calendar"></div>
+        <div class="calm-calendar-legend"><span>☘ Ngày ăn chay</span><span>◌ Mùng 1 / Rằm · gợi ý đi chùa</span><span>◇ Có nhật ký</span></div>
+        <p class="hint">Lịch dùng danh sách Thập Trai phổ biến: mùng 1, 8, 14, 15, 18, 23, 24, 28, 29, 30 âm lịch. Bạn có thể chọn ngày để ghi thêm hoặc sửa theo truyền thống mình thực hành.</p>
+        <button class="outline calm-reminder-button" onclick="installCalmRemindersUi()">🔔 Thêm 90 ngày nhắc vào Google Calendar</button>
+      </article>
+      <div class="section-head subhead"><div><h2>Tủ bài đọc</h2><p class="hint">Mở đúng phần bạn cần; các mục dài luôn được thu gọn để không gây quá tải.</p></div><button class="outline" onclick="openForm('scripture')">+ Bài của tôi</button></div>
+      <div id="scriptureLibrary" class="scripture-library"></div>
+      <details class="compact-section" data-ui-fold="calm-reflections" ontoggle="rememberUiFold('calm-reflections',this)"><summary><span><b>◇ Nhật ký soi lại & chuyển hóa</b><small>Ghi nhận trung thực, không tính điểm phước hay kết tội bản thân</small></span><i></i></summary><div class="compact-section-body"><div id="meritLogList" class="cards calm-log-list"></div></div></details>
+      <article class="card calm-note"><b>Lưu ý dịu dàng</b><p>Không có con số nào trong app đo được “phước đức”. Mục này chỉ giúp bạn nhận ra hành động, hậu quả và một bước sửa chữa cụ thể: xin lỗi, hoàn thành lời hứa, giúp lại người khác hoặc dừng một thói quen gây tổn thương.</p></article>
     </section>
 
     <section id="install" class="page">
