@@ -49,6 +49,7 @@
 
     <section id="today" class="page">
       <div class="section-head tab-heading"><div><span class="section-kicker">HÔM NAY · CHỈ VIỆC CẦN LÀM</span><h2>Việc kế tiếp</h2><p class="hint">Nhìn Kanban, chọn một bước nhỏ rồi bắt đầu. Công cụ phụ được thu gọn bên dưới.</p></div><button onclick="openForm('task')">+ Thêm việc</button></div>
+      <div id="todayLaunchPad" class="today-launch-pad" aria-live="polite"></div>
       <article class="card time-anchor" data-home-panel="clock">
         <div><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
         <div><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">Chưa có deadline</b><small id="nextTaskTitle"></small></div>
@@ -174,6 +175,7 @@
         <h2>Sức khỏe & giảm cân</h2>
         <div class="actions"><button class="outline" onclick="openHealthForm()">Cập nhật mục tiêu</button><button onclick="openForm('weightLog')">+ Cân nặng</button></div>
       </div>
+      <div id="healthDailyCommand" class="health-daily-command" aria-live="polite"></div>
       <p class="hint">Lộ trình dành cho người đang ít vận động: khởi đầu rất nhỏ, ưu tiên bài ít tác động và tăng dần. Đây không phải chẩn đoán hay phác đồ y khoa.</p>
       <div id="healthMetrics" class="insight-grid"></div>
       <div id="weightProgress" class="health-progress"></div>
@@ -218,6 +220,7 @@
         <div><span>ĐANG LÀM</span><b id="activeTimeLabel">Chưa bắt đầu</b><small id="activeTimeClock">00:00:00</small></div>
         <button id="stopTimeButton" class="stop-time" onclick="stopTimeLog()" disabled>Dừng & lưu</button>
       </article>
+      <div id="timeDayCommand" class="time-day-command" aria-live="polite"></div>
       <div class="time-kinds">
         <button onclick="startTimeLog('work','Công việc')">💼 Công việc</button><button onclick="startTimeLog('dead','Thời gian chết')">🫥 Thời gian chết</button><button onclick="startTimeLog('travel','Di chuyển')">🚗 Di chuyển</button><button onclick="startTimeLog('sleep','Ngủ')">😴 Ngủ</button><button onclick="startTimeLog('play','Đi chơi')">🎉 Đi chơi</button><button onclick="startTimeLog('personal','Cá nhân')">🧍 Cá nhân</button><button onclick="startTimeLog('walk','Đi bộ')">🚶 Đi bộ</button><button onclick="startTimeLog('exercise','Thể dục')">🏃 Thể dục</button><button onclick="startTimeLog('meal','Ăn uống')">🍜 Ăn uống</button>
       </div>
