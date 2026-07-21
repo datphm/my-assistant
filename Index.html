@@ -92,9 +92,6 @@
     <section id="profile" class="page">
       <div class="section-head tab-heading"><div><span class="section-kicker">PERSONAL VAULT</span><h2>Hồ sơ cá nhân</h2><p class="hint">Thông tin quan trọng, giấy tờ và lối tắt dùng ngay khi cần.</p></div><div class="actions"><button class="outline" onclick="toggleProfilePrivacy()">◉ Che / hiện</button><button onclick="openProfileForm()">Cập nhật</button></div></div>
       <div id="profileCommand" class="profile-command-center" aria-live="polite"></div>
-      <div id="profileInsights" class="insight-grid"></div>
-      <div id="profileCard" class="cards"></div>
-      <details class="compact-section" data-ui-fold="profile-wallets" ontoggle="rememberUiFold('profile-wallets',this)"><summary><span><b>◉ Ví & tài khoản trong hồ sơ</b><small>Xem, sửa hoặc xoá tài khoản đã lưu</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div><div id="walletsProfile" class="cards"></div></div></details>
       <section id="profileCareer" class="profile-career-zone">
         <div class="section-head subhead profile-career-head"><div><span class="section-kicker">CAREER PASSPORT</span><h2>CV & hồ sơ nghề nghiệp</h2><p class="hint">CV, định hướng nghề nghiệp và góc chiêm nghiệm nay nằm chung trong Hồ sơ cá nhân.</p></div><div class="actions"><button class="outline" onclick="openReflectionForm()">Cập nhật định hướng</button><button onclick="openForm('cv')">+ Lưu CV</button></div></div>
         <div id="cvCommandCenter" class="cv-command-center" aria-live="polite"></div>
@@ -104,11 +101,14 @@
         <p class="hint">Lời khuyên nghề nghiệp dựa trên CV và dữ liệu bạn nhập. Góc chiêm nghiệm được tách riêng để hỗ trợ tự suy ngẫm.</p>
         <div id="dailyGuidance" class="daily-guidance"></div>
         <div id="manifestStandalone" class="manifest-standalone"></div>
-        <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Điểm mạnh, điểm cần cải thiện, tử vi, bát tự và horoscope</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
-          <div id="careerAnalysis" class="cards"></div>
-          <div id="reflectionProfile" class="cards"></div>
+        <details class="compact-section" data-ui-fold="cv-reflection" ontoggle="rememberUiFold('cv-reflection',this)"><summary><span><b>◇ Phân tích nghề nghiệp & chiêm nghiệm chi tiết</b><small>Hai không gian riêng, mở đúng phần bạn cần</small></span><i></i></summary><div class="compact-section-body"><div class="career-reflection-grid">
+          <details class="career-pane" open><summary><span><b>▤ Phân tích nghề nghiệp</b><small>Vai trò, bằng chứng và kế hoạch kiểm chứng</small></span><i></i></summary><div id="careerAnalysis" class="cards career-pane-body"></div></details>
+          <details class="career-pane"><summary><span><b>◇ Góc chiêm nghiệm</b><small>Tóm tắt trước; luận giải dài được thu gọn bên trong</small></span><i></i></summary><div id="reflectionProfile" class="cards career-pane-body"></div></details>
         </div></div></details>
       </section>
+      <div id="profileInsights" class="insight-grid"></div>
+      <div id="profileCard" class="cards"></div>
+      <details class="compact-section" data-ui-fold="profile-wallets" ontoggle="rememberUiFold('profile-wallets',this)"><summary><span><b>◉ Ví & tài khoản trong hồ sơ</b><small>Xem, sửa hoặc xoá tài khoản đã lưu</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h2>Ví & tài khoản</h2><button onclick="openForm('wallet')">+ Thêm ví</button></div><div id="walletsProfile" class="cards"></div></div></details>
     </section>
 
     <section id="money" class="page">
@@ -179,7 +179,7 @@
       <div id="healthDailyCommand" class="health-daily-command" aria-live="polite"></div>
       <p class="hint">Lộ trình dành cho người đang ít vận động: khởi đầu rất nhỏ, ưu tiên bài ít tác động và tăng dần. Đây không phải chẩn đoán hay phác đồ y khoa.</p>
       <div id="healthMetrics" class="insight-grid"></div>
-      <div id="weightProgress" class="health-progress"></div>
+      <div class="health-overview-grid"><div id="weightProgress" class="health-progress"></div><div id="healthWeeklyPulse" class="health-weekly-pulse"></div></div>
       <div class="health-tools-grid">
         <article class="card"><h3>Hôm nay: nước · bữa ăn · đi bộ</h3><div id="healthHabits" class="habit-dashboard"></div><div class="habit-actions"><button onclick="quickHealthLog('water')">+ 250 ml</button><button class="outline" onclick="quickHealthLog('meal')">+ Bữa ăn</button><button class="outline" onclick="startTimeLog('walk','Đi bộ')">Bắt đầu đi bộ</button></div></article>
         <article class="card calorie-calculator"><h3>Máy tính calorie vận động</h3><p class="hint">Ước tính theo cân nặng, thời lượng và MET; không phải số đo y tế.</p><div class="calculator-inputs"><select id="calorieActivity" onchange="calculateCalories()"><option value="2.8">Đi bộ chậm</option><option value="3.5" selected>Đi bộ vừa</option><option value="4.3">Đi bộ nhanh</option><option value="4">Đạp xe nhẹ</option><option value="3">Bài sức mạnh với ghế</option><option value="5.8">Bơi nhẹ</option></select><input id="calorieMinutes" type="number" min="1" value="20" oninput="calculateCalories()" aria-label="Số phút"><input id="calorieTargetBurn" type="number" min="1" value="300" oninput="calculateCalories()" aria-label="Mục tiêu calorie"></div><div id="calorieCalculatorResult" class="calculator-result"></div></article>
