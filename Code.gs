@@ -17,7 +17,7 @@ const HEADERS = {
   JobApplications: ['id', 'company', 'role', 'jobUrl', 'appliedAt', 'status', 'nextStep', 'nextStepAt', 'contact', 'salary', 'source', 'notes', 'updatedAt'],
   ReflectionProfile: ['id', 'fullName', 'dateOfBirth', 'birthTime', 'birthPlace', 'gender', 'zodiacSign', 'lifePathNumber', 'strengths', 'interests', 'workStyle', 'targetIndustries', 'tuViSummary', 'batTuSummary', 'horoscopeSummary', 'numerologySummary', 'personalitySummary', 'strengthsSummary', 'weaknessesSummary', 'improvementSummary', 'spiritualMoney', 'spiritualCareer', 'spiritualTravel', 'spiritualStudy', 'manifestGoal', 'manifestEvidence', 'manifestUpdatedAt', 'tuViNotes', 'batTuNotes', 'numerologyNotes', 'horoscopeNotes', 'dailyGuidanceEnabled', 'updatedAt'],
   StudyAbroadProfile: ['id', 'targetIntakeYear', 'targetCountries', 'targetDegree', 'targetFields', 'currentEducation', 'currentGpa', 'englishTest', 'currentEnglishScore', 'targetEnglishScore', 'otherLanguages', 'budgetVnd', 'savingsVnd', 'fundingPlan', 'scholarshipTarget', 'passportStatus', 'visaNotes', 'motivation', 'constraints', 'updatedAt'],
-  StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes'],
+  StudyAbroadOptions: ['id', 'country', 'school', 'program', 'degree', 'intake', 'applicationDeadline', 'tuitionAnnual', 'livingCostAnnual', 'scholarship', 'languageRequirement', 'status', 'priority', 'website', 'notes', 'submittedAt', 'decisionAt', 'nextAction', 'nextActionAt', 'applicationPortal', 'applicationId', 'fundingStatus'],
   StudyAbroadChecklist: ['id', 'category', 'title', 'dueAt', 'status', 'notes'],
   AppSettings: ['id', 'timezone', 'locale', 'startupPage', 'theme', 'fontScale', 'reducedMotion', 'compactMode', 'hideFinancialAmounts', 'defaultTaskMinutes', 'defaultChaseMode', 'quietHoursStart', 'quietHoursEnd', 'emailReminders', 'calendarReminders', 'routineReminders', 'flightReminders', 'confirmBeforeDelete', 'dailyLogEnabled', 'dailyLogMorningTime', 'dailyLogEveningTime', 'spotifyUrl', 'spotifyFocusEnabled', 'updatedAt'],
   Profile: ['id', 'fullName', 'preferredName', 'dateOfBirth', 'bloodType', 'phone', 'email', 'address', 'nationality', 'emergencyContact', 'emergencyContactRelation', 'allergies', 'medications', 'medicalConditions', 'medicalNotes', 'citizenId', 'citizenIdIssuedAt', 'citizenIdExpiry', 'passportNumber', 'passportExpiry', 'insuranceProvider', 'insuranceNumber', 'documentFolderUrl', 'personalGoals', 'privateNotes', 'updatedAt'],
@@ -34,7 +34,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-22-calm-space-v16';
+const SCHEMA_VERSION = '2026-07-22-study-pipeline-v17';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
