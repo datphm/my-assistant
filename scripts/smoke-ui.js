@@ -125,6 +125,11 @@ try {
     renderTime();
     renderCalm();
     tet2026=solarToLunar(17,2,2026,7);
+    footprintAliasResults={
+      laos:resolveCountryCode('Laos'),lao:resolveCountryCode('Lào'),china:resolveCountryCode('Trung Quốc'),
+      usa:resolveCountryCode('United States'),newZealand:resolveCountryCode('New Zealand'),
+      hcm:resolveVietnamProvince('Hồ Chí Minh'),hcmPrefix:resolveVietnamProvince('TP. Hồ Chí Minh'),hcmFull:resolveVietnamProvince('Thành phố Hồ Chí Minh')
+    };
     statusTimeline=[2880,1380,55,45,20,0,-16].map(minutes=>flightBoardStatus({departure:new Date(Date.now()+minutes*60000).toISOString(),status:'scheduled'}));
     flightFormKeys=fields.flight.map(field=>field[0]);
   `, context, {filename:'smoke-fixtures.js'});
@@ -140,6 +145,8 @@ try {
   if (!getElement('miniCalendar').innerHTML.includes('✈️') || !getElement('miniCalendar').innerHTML.includes('☕') || !getElement('appointments').innerHTML.includes('Cà phê với Minh')) throw new Error('Mini calendar or appointments did not render');
   if (!getElement('flightBoard').innerHTML.includes('flight-info-row') || !getElement('flightBoard').innerHTML.includes('HAN Hanoi') || !getElement('flightBoard').innerHTML.includes('SGN Ho Chi Minh') || getElement('flightBoard').innerHTML.includes('Ho Chi Minh City') || !getElement('flightBoard').innerHTML.includes('ALA Almaty') || !getElement('flightBoard').innerHTML.includes('VTG Vung Tau') || getElement('flightBoard').innerHTML.includes('Vung Tau Airport') || !getElement('flightBoard').innerHTML.includes('Vietnam Helicopters') || !getElement('flightBoard').innerHTML.includes('TERMINAL') || !getElement('flightBoard').innerHTML.includes(String(new Date().getFullYear())) || getElement('flightBoard').innerHTML.includes('airline-mark') || getElement('flightBoard').innerHTML.includes('<img')) throw new Error('Stable compact-name flight board did not render correctly');
   if (!getElement('travelInsights').innerHTML.includes('flight-log-card') || !getElement('travelInsights').innerHTML.includes('Tổng quãng đường') || !getElement('travelInsights').innerHTML.includes('flightJourneyFact') || !getElement('flightJourneyFact').textContent.includes('around Earth')) throw new Error('Compact automatic flight totals did not render');
+  if (!getElement('travelFootprint').innerHTML.includes('journey-passport') || !getElement('travelFootprint').innerHTML.includes('Checklist 34 tỉnh/thành') || !getElement('travelFootprint').innerHTML.includes('🇱🇦') || !getElement('travelFootprint').innerHTML.includes('Laos') || getElement('travelFootprint').innerHTML.includes('<svg') || getElement('travelFootprint').innerHTML.includes('Bản đồ Việt Nam')) throw new Error('Stable map-free journey passport did not render');
+  if (JSON.stringify(context.footprintAliasResults)!==JSON.stringify({laos:'LA',lao:'LA',china:'CN',usa:'US',newZealand:'NZ',hcm:'TP Hồ Chí Minh',hcmPrefix:'TP Hồ Chí Minh',hcmFull:'TP Hồ Chí Minh'})) throw new Error('Country or Vietnam province alias normalization failed');
   if (!getElement('studySubmissionPipeline').innerHTML.includes('SUBMISSION PIPELINE') || !getElement('studySubmissionPipeline').innerHTML.includes('BƯỚC KẾ TIẾP')) throw new Error('Study submission pipeline did not render');
   if (!getElement('reflectionProfile').innerHTML.includes('Luận giải mở rộng 2026–2028') || !getElement('reflectionProfile').innerHTML.includes('Mậu Thân · Năm cá nhân 2/11')) throw new Error('2026–2028 reflection forecast did not render');
   if (getElement('flightBoard').innerHTML.indexOf('VN999')>getElement('flightBoard').innerHTML.indexOf('VJ161') || !getElement('flightBoard').innerHTML.includes('board-status departed')) throw new Error('In-flight row was not pinned first until expected arrival');
@@ -152,6 +159,7 @@ try {
   if (indexSource.includes('data-page="cv"') || indexSource.includes('section id="cv"') || !indexSource.includes('id="profileCareer"') || indexSource.indexOf('id="profileCareer"') < indexSource.indexOf('id="profile"')) throw new Error('CV was not merged into the Profile tab correctly');
   if (!indexSource.includes('data-ui-fold="money-bank-sync"') || !indexSource.includes('data-ui-fold="money-recent-transactions"') || !indexSource.includes('data-ui-fold="today-capture"') || !indexSource.includes('data-ui-fold="travel-email-sync"') || !indexSource.includes('data-ui-fold="study-roadmap"') || !indexSource.includes('data-ui-fold="health-meals"') || !indexSource.includes('data-ui-fold="time-entries"') || !source.includes('rememberUiFold')) throw new Error('Compact remembered tab controls are missing');
   if (indexSource.indexOf('data-page="assistant"')>indexSource.indexOf('data-page="today"') || indexSource.indexOf('Kanban việc nhỏ')>indexSource.indexOf('THINK DEEP · 5 PHÚT')) throw new Error('Assistant must be first and Think Deep must sit below Kanban');
+  if (indexSource.indexOf('id="travelFootprint"')<indexSource.indexOf('data-ui-fold="travel-hotels"')) throw new Error('Journey passport must stay below flights and hotels');
   const styleSource=fs.readFileSync(path.join(__dirname,'..','Styles.html'),'utf8');
   if (!styleSource.includes('Fixed health goal marker') || !styleSource.includes('.mini-calendar') || !styleSource.includes('Stable Changi-style flight information board') || styleSource.includes('airport-board-turn')) throw new Error('Health, calendar, or stable Changi board styles missing');
   if (!styleSource.includes('2026 compact tab system') || !styleSource.includes('.compact-section') || !styleSource.includes('.mini-calendar-card .mini-day{min-height:36px') || !styleSource.includes('.assistant-utility-grid{display:grid;grid-template-columns:minmax(0,.9fr)') || !getElement('assistantBrief').innerHTML.includes('THAO TÁC 30 GIÂY')) throw new Error('Compact tab, narrow life calendar, or quick console styles missing');
@@ -159,6 +167,7 @@ try {
   if (!styleSource.includes('.flight-info-row:not(.board-labels)>b:nth-child(3)') || !styleSource.includes('background:#facc15')) throw new Error('Yellow full-cell flight number styling is missing');
   if (!styleSource.includes('2026 delight pass') || !styleSource.includes('.flight-plans{display:grid!important;grid-template-columns:repeat(2') || !styleSource.includes('.study-launch-card')) throw new Error('Delight pass, travel cards, or study launchpad styles missing');
   if (indexSource.includes('id="flightJourneyStats"') || !indexSource.includes('id="studySubmissionPipeline"') || !styleSource.includes('one compact flight log') || !styleSource.includes('.flight-log-card') || !source.includes('flightJourneyFactTimer=setInterval')) throw new Error('Compact flight totals, study pipeline, or single timer missing');
+  if (!styleSource.includes('Stable journey passport') || !styleSource.includes('.footprint-choice-grid.provinces')) throw new Error('Stable checklist journey passport styles missing');
   console.log('UI smoke test passed; clock:', getElement('currentClock').textContent, 'dashboard: rendered');
 } catch (error) {
   console.error(error.stack || error);
