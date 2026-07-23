@@ -38,9 +38,11 @@ const SCHEMA_VERSION = '2026-07-22-study-pipeline-v17';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
+  const repairFinance = e && e.parameter && e.parameter.repairFinance;
   if (download === 'ios-profile') return buildIosProfile_();
   if (download === 'android-apk') return buildAndroidApkNote_();
   if (download === 'json') return buildJsonExport_();
+  if (repairFinance === '1') return runBundledFinanceRecovery_();
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('My Assistant')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -1287,6 +1289,17 @@ function importStatementBundle(bundle) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function runBundledFinanceRecovery_() {
+  const result = importStatementBundle(getBundledFinanceRecovery_());
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      ok: true,
+      message: 'Bundled finance recovery applied.',
+      result: result
+    }, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function backupFinanceSheets_(ss, walletSheet, expenseSheet, recoveryKey) {
