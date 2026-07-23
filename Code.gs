@@ -1123,6 +1123,116 @@ function deleteWallet(id) {
   return 'Đã xoá ví. Lịch sử giao dịch vẫn được giữ lại.';
 }
 
+function importStatementBundle(bundle) {
+  if (!bundle || Number(bundle.version) !== 1 || !Array.isArray(bundle.accounts)) {
+    throw new Error('Gói sao kê không đúng định dạng My Assistant.');
+  }
+  if (bundle.accounts.length < 1 || bundle.accounts.length > 20) {
+    throw new Error('Gói sao kê phải có từ 1 đến 20 tài khoản.');
+  }
+  const transactionCount = bundle.accounts.reduce(function(sum, account) {
+    return sum + (Array.isArray(account.transactions) ? account.transactions.length : 0);
+  }, 0);
+  if (transactionCount > 5000) throw new Error('Gói sao kê vượt quá 5.000 giao dịch.');
+
+  const lock = LockService.getUserLock();
+  lock.waitLock(30000);
+  try {
+    const ss = getBook_();
+    const walletSheet = ss.getSheetByName('Wallets');
+    const expenseSheet = ss.getSheetByName('Expenses');
+    ensureHeaders_(walletSheet, HEADERS.Wallets);
+    ensureHeaders_(expenseSheet, HEADERS.Expenses);
+    const existingWallets = readRows_(walletSheet);
+    const existingExpenses = readRows_(expenseSheet);
+    const knownIds = {};
+    existingExpenses.forEach(function(item) {
+      if (item.gmailMessageId) knownIds[String(item.gmailMessageId)] = true;
+    });
+
+    const normalize = function(value) {
+      return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
+    const bankMatch = function(wallet, account) {
+      const walletName = normalize(wallet.name);
+      const accountName = normalize(account.name);
+      if (wallet.id === account.walletId || walletName === accountName) return true;
+      if (accountName.indexOf('tpbank') >= 0) return walletName.indexOf('tpbank') >= 0;
+      if (accountName.indexOf('vpbank') >= 0 || accountName.indexOf('cake') >= 0) {
+        return walletName.indexOf('vpbank') >= 0 || walletName.indexOf('cake') >= 0;
+      }
+      if (accountName.indexOf('mb') === 0) {
+        return walletName === 'mb' || walletName.indexOf('mbbank') >= 0 || walletName.indexOf('nganhangquandoi') >= 0;
+      }
+      return false;
+    };
+
+    const pendingRows = [];
+    const walletResults = [];
+    let skipped = 0;
+    bundle.accounts.forEach(function(account) {
+      if (!account || !Array.isArray(account.transactions)) return;
+      let wallet = existingWallets.find(function(item) { return bankMatch(item, account); });
+      const walletId = wallet && wallet.id || String(account.walletId || Utilities.getUuid()).slice(0, 120);
+      const balance = Number(account.closingBalance || 0);
+      const walletValue = Object.assign({}, wallet || {}, {
+        id: walletId,
+        name: wallet && wallet.name || String(account.name || 'Tài khoản sao kê').slice(0, 160),
+        type: wallet && wallet.type || String(account.type || 'Tài khoản ngân hàng').slice(0, 80),
+        balance: balance,
+        currency: String(account.currency || 'VND').slice(0, 10),
+        lastUpdatedAt: new Date()
+      });
+      upsertRow_(walletSheet, walletValue);
+      if (!wallet) {
+        wallet = walletValue;
+        existingWallets.push(walletValue);
+      }
+      walletResults.push({ id: walletId, name: walletValue.name, balance: balance });
+
+      account.transactions.forEach(function(item) {
+        const externalId = String(item.externalId || '').trim();
+        if (!externalId) { skipped++; return; }
+        const dedupeId = 'statement:' + walletId + ':' + externalId;
+        if (knownIds[dedupeId]) { skipped++; return; }
+        const value = Number(item.amount || 0);
+        const parsedDate = new Date(item.date);
+        if (!(value > 0) || isNaN(parsedDate.getTime())) { skipped++; return; }
+        knownIds[dedupeId] = true;
+        const record = {
+          id: Utilities.getUuid(),
+          date: parsedDate,
+          amount: value,
+          merchant: String(item.merchant || 'Giao dịch chưa rõ nội dung').slice(0, 2000),
+          source: String(item.source || account.name || 'Nhập sao kê').slice(0, 240),
+          gmailMessageId: dedupeId,
+          category: String(item.category || 'Khác').slice(0, 120),
+          direction: item.direction === 'income' ? 'income' : 'expense',
+          walletId: walletId,
+          debtId: ''
+        };
+        pendingRows.push(HEADERS.Expenses.map(function(key) {
+          return record[key] === undefined ? '' : record[key];
+        }));
+      });
+    });
+
+    if (pendingRows.length) {
+      expenseSheet.getRange(expenseSheet.getLastRow() + 1, 1, pendingRows.length, HEADERS.Expenses.length).setValues(pendingRows);
+    }
+    CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+    return {
+      ok: true,
+      added: pendingRows.length,
+      skipped: skipped,
+      wallets: walletResults,
+      debtsChanged: 0
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function saveProfile(item) {
   const sheet = getBook_().getSheetByName('Profile');
   ensureHeaders_(sheet, HEADERS.Profile);

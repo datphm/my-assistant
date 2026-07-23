@@ -152,6 +152,11 @@
           <button class="outline" onclick="enableBankSync()">Bật tự động</button>
           <button class="outline danger" onclick="disableBankSync()">Tắt tự động</button>
         </div>
+        <div class="inline wrap statement-import-row">
+          <input id="statementImportFile" type="file" accept=".json,application/json">
+          <button class="outline" onclick="importStatementFile()">Nhập sao kê đã chuẩn hoá</button>
+          <span class="hint">Khử trùng lặp theo mã giao dịch; chỉ cập nhật giao dịch và số dư, không sửa khoản nợ.</span>
+        </div>
       </div></details>
       <details class="compact-section" data-ui-fold="money-recent-transactions" ontoggle="rememberUiFold('money-recent-transactions',this)"><summary><span><b>₫ Giao dịch gần đây</b><small>12 giao dịch mới nhất · mở để sửa hoặc xoá</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Giao dịch gần đây</h3><button class="outline small" onclick="openForm('expense')">+ Giao dịch</button></div><div id="expenses" class="cards compact-cards"></div></div></details>
       <details class="compact-section" data-ui-fold="money-debts" ontoggle="rememberUiFold('money-debts',this)"><summary><span><b>◎ Khoản nợ & kế hoạch trả</b><small>Ưu tiên, cập nhật số nợ và ghi nhận thanh toán</small></span><i></i></summary><div class="compact-section-body"><div id="debtPayoffPlan"></div><div id="debts" class="cards"></div></div></details>
