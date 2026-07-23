@@ -187,7 +187,7 @@ function renderAssistantBrief(){
   <div class="assistant-signal-strip"><button class="work ${overdue.length?'attention':''}" onclick="openAssistantAction('today','${overdue.length?'overdue':'followup'}')"><span>WORK RADAR</span><b>${overdue.length?`${overdue.length} việc quá hạn`:focus?'Một việc đang chờ bạn':'Không có việc cháy'}</b><small>${overdue.length?'Chọn 1 việc và đặt lại deadline thật':focus?focus.title:'Giữ lịch trống cho việc quan trọng'}</small></button><button class="money ${net<0?'attention':''}" onclick="activatePage('money')"><span>MONEY RUNWAY</span><b>${assistantMoney(net)}</b><small>Số dư sau khi trừ toàn bộ dư nợ</small></button><button class="life" onclick="activatePage('${flight?'travel':'food'}')"><span>NEXT CHECKPOINT</span><b>${flight?`${flight.code||'Chuyến bay'} · ${dateShort(flight.departure)}`:`${num(b.health.waterMl||0)}/${num(b.health.waterGoalMl||2500)} ml nước`}</b><small>${flight?`${flight.fromCode||''} → ${flight.toCode||flight.destination||''}`:'Giữ năng lượng để hoàn thành việc'}</small></button></div>
   <div class="assistant-view-rail"><button onclick="jumpAssistantSection('assistantPriority')"><b>01</b><span>Ưu tiên</span></button><button onclick="jumpAssistantSection('assistantOverview')"><b>02</b><span>Toàn cảnh</span></button><button onclick="jumpAssistantSection('assistantAdvice')"><b>03</b><span>Lời khuyên</span></button><button onclick="jumpAssistantSection('assistantAnalytics')"><b>04</b><span>Biểu đồ & ghi nhanh</span></button><button onclick="jumpAssistantSection('assistantTools')"><b>05</b><span>Lịch</span></button></div>
   <section id="assistantPriority" class="assistant-priority-grid"><article class="card operation-queue assistant-top-queue"><div class="operation-chart-head"><div><span class="section-kicker">HÀNG ĐỢI ĐIỀU HÀNH</span><h3>5 việc cần mắt bạn nhất</h3></div><button onclick="activatePage('today')">Xem toàn bộ</button></div><div id="opsPriorityQueue"></div></article>
-  <article class="card assistant-quick-console assistant-quick-console-top"><div><span class="section-kicker">THAO TÁC 30 GIÂY</span><h3>Ghi ngay, đừng giữ trong đầu</h3><p>Mỗi nút mở đúng biểu mẫu hoặc bắt đầu hành động ngay.</p></div><div class="assistant-quick-grid"><button onclick="openForm('task')"><b>＋</b><span>Ghi việc</span></button><button class="primary" onclick="assistantQuickFocus()"><b>▶</b><span>Focus việc đầu</span></button><button onclick="quickHealthLog('water')"><b>💧</b><span>+ 250 ml</span></button><button onclick="openForm('expense')"><b>₫</b><span>Giao dịch</span></button><button onclick="openManualTimeLog()"><b>◷</b><span>Log thời gian</span></button><button onclick="openForm('appointment')"><b>☕</b><span>Cuộc hẹn</span></button></div><small>Nếu đứng hình, bấm “Focus việc đầu” và chỉ làm trong 5–10 phút.</small></article></section>
+  <article class="card assistant-quick-console assistant-quick-console-top"><div><span class="section-kicker">THAO TÁC 30 GIÂY</span><h3>Ghi ngay, đừng giữ trong đầu</h3><p>Mỗi nút mở đúng biểu mẫu hoặc bắt đầu hành động ngay.</p></div><div class="assistant-quick-grid"><button onclick="openForm('task')"><b>＋</b><span>Ghi việc</span></button><button class="primary" onclick="assistantQuickFocus()"><b>▶</b><span>Focus việc đầu</span></button><button onclick="assistantPickForMe()"><b>⚡</b><span>Chọn giúp tôi</span></button><button onclick="quickHealthLog('water')"><b>💧</b><span>+ 250 ml</span></button><button onclick="openForm('expense')"><b>₫</b><span>Giao dịch</span></button><button onclick="openManualTimeLog()"><b>◷</b><span>Log thời gian</span></button><button onclick="openForm('appointment')"><b>☕</b><span>Cuộc hẹn</span></button></div><small>Nếu đứng hình, bấm “Chọn giúp tôi”; trợ lý sẽ đưa bạn tới việc cấp thiết nhất.</small></article></section>
   <section class="assistant-gate-capsule-grid"><article class="card assistant-gate-card assistant-gate-top"><div class="operation-chart-head"><div><span class="section-kicker">DISPLAY AT GATE</span><h3>8 chuyến bay gần nhất</h3></div><button onclick="activatePage('travel')">Mở chuyến đi</button></div><div id="assistantGateDisplay"></div></article>
   <article class="card daily-capsule"><div class="capsule-symbol"><b>${momentum.stage}</b><span>${momentum.score}/100</span></div><div><span class="section-kicker">DAILY CAPSULE · MOMENTUM</span><h3>${esc(momentum.label)}</h3><p>${esc(b.dailyGuidance?.headline||operationAdvice)}</p></div><div class="capsule-chips"><span>✅ ${open.length} việc mở</span><span>⏱ ${minutesText(Number(b.time.loggedMinutes||0))} đã log</span><span>💧 ${num(b.health.waterMl||0)} ml</span><span>🎓 ${b.study.pending||0} bước hồ sơ</span></div></article></section>
   <article id="assistantOverview" class="card assistant-hq">
@@ -211,7 +211,6 @@ function renderAssistantBrief(){
   <div id="operationKpis" class="operation-kpis"></div>
   <section id="assistantAnalytics" class="operation-chart-grid">
     <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">CÔNG VIỆC</span><h3>Trạng thái đầu việc</h3></div><button onclick="activatePage('today')">Mở Kanban</button></div><div id="opsTaskChart"></div></article>
-    <article class="card assistant-quick-console assistant-quick-console-top"><div><span class="section-kicker">THAO TÁC 30 GIÂY</span><h3>Ghi ngay, đừng giữ trong đầu</h3><p>Mỗi nút mở đúng biểu mẫu hoặc bắt đầu hành động ngay.</p></div><div class="assistant-quick-grid"><button onclick="openForm('task')"><b>＋</b><span>Ghi việc</span></button><button class="primary" onclick="assistantQuickFocus()"><b>▶</b><span>Focus việc đầu</span></button><button onclick="quickHealthLog('water')"><b>💧</b><span>+ 250 ml</span></button><button onclick="openForm('expense')"><b>₫</b><span>Giao dịch</span></button><button onclick="openManualTimeLog()"><b>◷</b><span>Log thời gian</span></button><button onclick="openForm('appointment')"><b>☕</b><span>Cuộc hẹn</span></button></div><small>Mẹo: nếu đứng hình, bấm “Focus việc đầu” và chỉ làm trong 5–10 phút.</small></article>
     <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">DÒNG TIỀN</span><h3>Thu – chi 6 tháng</h3></div><button onclick="activatePage('money')">Mở Tiền</button></div><div id="opsMoneyChart"></div></article>
     <article class="card operation-chart"><div class="operation-chart-head"><div><span class="section-kicker">THỜI GIAN</span><h3>Phân bố 7 ngày</h3></div><button onclick="activatePage('time')">Mở nhật ký</button></div><div id="opsTimeChart"></div></article>
   </section>
@@ -237,6 +236,17 @@ function renderOperationCenter(b){
 }
 function operationProgress(label,value,target,detail){const percent=Math.max(0,Math.min(100,Number(target)?Number(value)/Number(target)*100:0));return `<div><p><span>${esc(label)}</span><b>${esc(detail)}</b></p><i><em style="width:${percent}%"></em></i></div>`}
 function openOperationTask(id){activatePage('today');setTimeout(()=>$(`task-${id}`)?.scrollIntoView({behavior:'smooth',block:'start'}),120)}
+function assistantPickForMe(){
+  const task=assistantTopTask();
+  if(!task){activatePage('today');openForm('task');toast('Chưa có việc mở. Hãy ghi việc đầu tiên.');return}
+  activatePage('today');
+  setTimeout(()=>{
+    const card=$(`task-${task.id}`),details=card?.querySelector('details');
+    if(details)details.open=true;
+    card?.scrollIntoView({behavior:'smooth',block:'start'});
+    toast(`Trợ lý chọn: ${task.title}. Chỉ làm bước đầu trong 5–10 phút.`);
+  },120);
+}
 function moveMiniCalendar(months){miniCalendarCursor=new Date(miniCalendarCursor.getFullYear(),miniCalendarCursor.getMonth()+months,1);renderMiniCalendar()}
 function resetMiniCalendar(){miniCalendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);renderMiniCalendar()}
 function appointmentIcon(type){return {coffee:'☕',friend:'🎉',meeting:'🤝',hometown:'🏡',personal:'📌'}[type]||'📌'}
@@ -476,6 +486,7 @@ function renderMoney(){
   const tx=expensesInPeriod();
   const income=tx.filter(e=>e.direction==='income').reduce((s,e)=>s+Number(e.amount||0),0);
   const expense=tx.filter(e=>e.direction!=='income').reduce((s,e)=>s+Number(e.amount||0),0);
+  renderMoneyTicker(totalBalance,totalDebt,income,expense,tx);
   renderMoneyControlCenter(totalBalance,totalDebt,income,expense,tx);
   $('financeInsights').innerHTML=[
     metricCard('Tiền vào',vnd(income),'Ghi có, refund, received'),
@@ -493,6 +504,27 @@ function renderMoney(){
   const recent=data.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,12);
   $('expenses').innerHTML=recent.map(e=>`<article class="card"><div class="card-top"><div><h3>${esc(e.merchant)} <span class="amount ${e.direction==='income'?'positive':''}">${e.direction==='income'?'+':'−'}${vnd(e.amount)}</span></h3><p class="meta">${esc(e.category||'Khác')}${e.debtId?' · đã trừ vào khoản nợ':''} · ${dateShort(e.date)} · ${esc(e.source||'Nhập tay')}</p></div><div class="card-actions"><button class="outline small" onclick="editItem('expense','${e.id}')">Sửa</button><button class="outline small danger" onclick="removeItem('Expenses','${e.id}')">Xoá</button></div></div></article>`).join('')||'<div class="empty">Chưa có giao dịch nào.</div>';
   renderPlans(totalBalance,totalDebt);
+}
+
+function renderMoneyTicker(totalBalance,totalDebt,income,expense,tx){
+  const track=$('moneyTickerTrack'),period=$('moneyTickerPeriod');if(!track)return;
+  const net=income-expense,available=totalBalance-totalDebt,ratio=income?Math.round(expense/income*100):expense?999:0;
+  const top=tx.filter(e=>e.direction!=='income').slice().sort((a,b)=>Number(b.amount||0)-Number(a.amount||0))[0];
+  if(period)period.textContent=(periodLabels[moneyPeriod]||moneyPeriod).toUpperCase();
+  const quote=(label,value,detail,tone,arrow)=>`<span class="money-quote ${tone}"><small>${esc(label)}</small><b><i aria-hidden="true">${arrow}</i>${esc(value)}</b><em>${esc(detail)}</em></span>`;
+  const items=[
+    quote('SỐ DƯ',assistantMoney(totalBalance),totalBalance>=0?'Tài sản khả dụng':'Cần kiểm tra số dư',totalBalance>=0?'up':'down',totalBalance>=0?'↑':'↓'),
+    quote('TIỀN VÀO',assistantMoney(income),periodLabels[moneyPeriod],'up','↑'),
+    quote('TIỀN RA',assistantMoney(expense),periodLabels[moneyPeriod],expense>income&&income?'down':'warn','↓'),
+    quote('DÒNG TIỀN RÒNG',assistantMoney(net),net>=0?'Thặng dư trong kỳ':'Thiếu hụt trong kỳ',net>0?'up':net<0?'down':'flat',net>0?'↑':net<0?'↓':'→'),
+    quote('SAU KHI TRỪ NỢ',assistantMoney(available),available>=0?'Còn khả dụng':'Đang thiếu so với dư nợ',available>=0?'up':'down',available>=0?'↑':'↓'),
+    quote('DƯ NỢ',assistantMoney(totalDebt),totalDebt>totalBalance?'Cao hơn tổng số dư':'Trong phạm vi số dư',totalDebt>totalBalance?'down':'warn','↓'),
+    quote('TỶ LỆ CHI / THU',ratio>998?'—':ratio+'%',ratio>100?'Chi đang vượt thu':'Trong kỳ đang xem',ratio>100?'down':'flat',ratio>100?'↓':'→'),
+    quote('GIAO DỊCH',String(tx.length),top?`Chi lớn nhất: ${top.merchant||top.category||'Khác'} · ${assistantMoney(top.amount)}`:'Chưa có khoản chi','flat','•')
+  ];
+  const content=items.join('');
+  const loop=`<span class="money-ticker-loop">${content}<span class="money-ticker-divider" aria-hidden="true">◆</span></span>`;
+  track.innerHTML=loop+loop;
 }
 
 function renderMoneyControlCenter(totalBalance,totalDebt,income,expense,tx){
