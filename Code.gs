@@ -1146,9 +1146,13 @@ function importStatementBundle(bundle) {
     const existingWallets = readRows_(walletSheet);
     const existingExpenses = readRows_(expenseSheet);
     const knownIds = {};
-    existingExpenses.forEach(function(item) {
-      if (item.gmailMessageId) knownIds[String(item.gmailMessageId)] = true;
+    existingExpenses.forEach(function(item, index) {
+      if (item.gmailMessageId) {
+        knownIds[String(item.gmailMessageId)] = { item: item, index: index };
+      }
     });
+    const correctionCategories = {};
+    const correctionMerchants = {};
 
     const normalize = function(value) {
       return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1156,7 +1160,9 @@ function importStatementBundle(bundle) {
     const bankMatch = function(wallet, account) {
       const walletName = normalize(wallet.name);
       const accountName = normalize(account.name);
-      if (wallet.id === account.walletId || walletName === accountName) return true;
+      if (String(wallet.id) === String(account.walletId)) return true;
+      if (account.allowBankNameMatch === false) return false;
+      if (walletName === accountName) return true;
       if (accountName.indexOf('tpbank') >= 0) return walletName.indexOf('tpbank') >= 0;
       if (accountName.indexOf('vpbank') >= 0 || accountName.indexOf('cake') >= 0) {
         return walletName.indexOf('vpbank') >= 0 || walletName.indexOf('cake') >= 0;
@@ -1175,11 +1181,13 @@ function importStatementBundle(bundle) {
       let wallet = existingWallets.find(function(item) { return bankMatch(item, account); });
       const walletId = wallet && wallet.id || String(account.walletId || Utilities.getUuid()).slice(0, 120);
       const balance = Number(account.closingBalance || 0);
+      const shouldApplyClosingBalance = account.applyClosingBalance !== false;
+      const walletBalance = shouldApplyClosingBalance ? balance : Number(wallet && wallet.balance || 0);
       const walletValue = Object.assign({}, wallet || {}, {
         id: walletId,
         name: wallet && wallet.name || String(account.name || 'Tài khoản sao kê').slice(0, 160),
         type: wallet && wallet.type || String(account.type || 'Tài khoản ngân hàng').slice(0, 80),
-        balance: balance,
+        balance: walletBalance,
         currency: String(account.currency || 'VND').slice(0, 10),
         lastUpdatedAt: new Date()
       });
@@ -1188,17 +1196,37 @@ function importStatementBundle(bundle) {
         wallet = walletValue;
         existingWallets.push(walletValue);
       }
-      walletResults.push({ id: walletId, name: walletValue.name, balance: balance });
+      walletResults.push({
+        id: walletId,
+        name: walletValue.name,
+        balance: walletBalance,
+        closingBalanceApplied: shouldApplyClosingBalance
+      });
 
       account.transactions.forEach(function(item) {
         const externalId = String(item.externalId || '').trim();
         if (!externalId) { skipped++; return; }
         const dedupeId = 'statement:' + walletId + ':' + externalId;
-        if (knownIds[dedupeId]) { skipped++; return; }
+        if (knownIds[dedupeId]) {
+          const existing = knownIds[dedupeId];
+          const correctedCategory = String(item.category || '');
+          if (
+            existing.index >= 0 &&
+            ['Chuyển khoản nội bộ', 'Đối ứng thẻ'].indexOf(correctedCategory) >= 0 &&
+            String(existing.item.category || '') !== correctedCategory
+          ) {
+            correctionCategories[existing.index] = correctedCategory;
+            if (String(item.merchant || '').length > String(existing.item.merchant || '').length) {
+              correctionMerchants[existing.index] = String(item.merchant).slice(0, 2000);
+            }
+          }
+          skipped++;
+          return;
+        }
         const value = Number(item.amount || 0);
         const parsedDate = new Date(item.date);
         if (!(value > 0) || isNaN(parsedDate.getTime())) { skipped++; return; }
-        knownIds[dedupeId] = true;
+        knownIds[dedupeId] = { item: item, index: -1 };
         const record = {
           id: Utilities.getUuid(),
           date: parsedDate,
@@ -1220,11 +1248,23 @@ function importStatementBundle(bundle) {
     if (pendingRows.length) {
       expenseSheet.getRange(expenseSheet.getLastRow() + 1, 1, pendingRows.length, HEADERS.Expenses.length).setValues(pendingRows);
     }
+    const correctedIndexes = Object.keys(correctionCategories);
+    if (correctedIndexes.length && existingExpenses.length) {
+      const merchantValues = existingExpenses.map(function(item, index) {
+        return [correctionMerchants[index] || item.merchant || ''];
+      });
+      const categoryValues = existingExpenses.map(function(item, index) {
+        return [correctionCategories[index] || item.category || 'Khác'];
+      });
+      expenseSheet.getRange(2, 4, merchantValues.length, 1).setValues(merchantValues);
+      expenseSheet.getRange(2, 7, categoryValues.length, 1).setValues(categoryValues);
+    }
     CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
     return {
       ok: true,
       added: pendingRows.length,
       skipped: skipped,
+      corrected: correctedIndexes.length,
       wallets: walletResults,
       debtsChanged: 0
     };
