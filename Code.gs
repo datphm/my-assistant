@@ -1308,6 +1308,10 @@ function runBundledFinanceRecovery_() {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function applyBundledFinanceRecovery() {
+  return importStatementBundle(getBundledFinanceRecovery_());
+}
+
 function backupFinanceSheets_(ss, walletSheet, expenseSheet, recoveryKey) {
   const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyyMMdd-HHmmss');
   const suffix = String(recoveryKey || '').replace(/[^a-z0-9-]/gi, '').slice(-18);
