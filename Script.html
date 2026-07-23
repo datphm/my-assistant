@@ -1313,15 +1313,26 @@ function importStatementFile(){
   reader.onload=()=>{
     let payload;
     try{payload=JSON.parse(reader.result)}catch(error){fail('File sao kê không phải JSON hợp lệ.');return}
-    const key='statement-import';if(!beginAction(key))return;
-    google.script.run.withSuccessHandler(result=>{
-      endAction(key);input.value='';
-      const wallets=(result.wallets||[]).map(item=>`${item.name}: ${vnd(item.balance)}`).join(' · ');
-      toast(`Đã thêm ${result.added} giao dịch · bỏ qua ${result.skipped} mục trùng${wallets?' · '+wallets:''}`);
-      loadPageData('money',true);
-    }).withFailureHandler(error=>{endAction(key);fail(error)}).importStatementBundle(payload);
+    submitStatementBundle(payload,()=>{input.value=''});
   };
   reader.readAsText(file,'utf-8');
+}
+function importStatementText(){
+  const input=$('statementImportText'),raw=String(input?.value||'').trim();
+  if(!raw){fail('Hãy dán nội dung JSON sao kê trước.');return}
+  if(new Blob([raw]).size>6*1024*1024){fail('Dữ liệu sao kê quá lớn. Hãy chia thành các phần dưới 6MB.');return}
+  let payload;
+  try{payload=JSON.parse(raw)}catch(error){fail('Nội dung đã dán không phải JSON hợp lệ.');return}
+  submitStatementBundle(payload,()=>{input.value=''});
+}
+function submitStatementBundle(payload,reset){
+  const key='statement-import';if(!beginAction(key))return;
+  google.script.run.withSuccessHandler(result=>{
+    endAction(key);if(reset)reset();
+    const wallets=(result.wallets||[]).map(item=>`${item.name}: ${vnd(item.balance)}`).join(' · ');
+    toast(`Đã thêm ${result.added} giao dịch · bỏ qua ${result.skipped} mục trùng${result.corrected?` · hiệu chỉnh ${result.corrected} mục`:''}${wallets?' · '+wallets:''}`);
+    loadPageData('money',true);
+  }).withFailureHandler(error=>{endAction(key);fail(error)}).importStatementBundle(payload);
 }
 function enableBankSync(){const q=$('gmailQuery').value;const walletId=$('gmailWallet').value;google.script.run.withSuccessHandler(toast).withFailureHandler(fail).installBankSync(q,walletId)}
 function disableBankSync(){google.script.run.withSuccessHandler(toast).withFailureHandler(fail).uninstallBankSync()}
