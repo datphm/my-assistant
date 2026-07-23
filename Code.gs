@@ -1143,6 +1143,20 @@ function importStatementBundle(bundle) {
     const expenseSheet = ss.getSheetByName('Expenses');
     ensureHeaders_(walletSheet, HEADERS.Wallets);
     ensureHeaders_(expenseSheet, HEADERS.Expenses);
+    let recoveryBackup = '';
+    if (bundle.replaceExisting === true) {
+      const recoveryKey = String(bundle.recoveryKey || '').trim();
+      if (!/^finance-recovery-\d{4}-\d{2}-\d{2}[-a-z0-9]*$/i.test(recoveryKey)) {
+        throw new Error('Gói khôi phục tài chính thiếu mã xác nhận hợp lệ.');
+      }
+      recoveryBackup = backupFinanceSheets_(ss, walletSheet, expenseSheet, recoveryKey);
+      if (expenseSheet.getLastRow() > 1) {
+        expenseSheet.deleteRows(2, expenseSheet.getLastRow() - 1);
+      }
+      if (walletSheet.getLastRow() > 1) {
+        walletSheet.deleteRows(2, walletSheet.getLastRow() - 1);
+      }
+    }
     const existingWallets = readRows_(walletSheet);
     const existingExpenses = readRows_(expenseSheet);
     const knownIds = {};
@@ -1266,11 +1280,33 @@ function importStatementBundle(bundle) {
       skipped: skipped,
       corrected: correctedIndexes.length,
       wallets: walletResults,
-      debtsChanged: 0
+      debtsChanged: 0,
+      replacedExisting: bundle.replaceExisting === true,
+      recoveryBackup: recoveryBackup
     };
   } finally {
     lock.releaseLock();
   }
+}
+
+function backupFinanceSheets_(ss, walletSheet, expenseSheet, recoveryKey) {
+  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyyMMdd-HHmmss');
+  const suffix = String(recoveryKey || '').replace(/[^a-z0-9-]/gi, '').slice(-18);
+  const prefix = 'FinanceBackup_' + stamp + '_' + suffix;
+  const copySheet = function(source, name) {
+    let finalName = name.slice(0, 99);
+    let counter = 2;
+    while (ss.getSheetByName(finalName)) {
+      finalName = (name.slice(0, 94) + '_' + counter).slice(0, 99);
+      counter++;
+    }
+    const copy = source.copyTo(ss).setName(finalName);
+    copy.hideSheet();
+    return finalName;
+  };
+  const walletBackup = copySheet(walletSheet, prefix + '_Wallets');
+  const expenseBackup = copySheet(expenseSheet, prefix + '_Expenses');
+  return walletBackup + ' + ' + expenseBackup;
 }
 
 function saveProfile(item) {
