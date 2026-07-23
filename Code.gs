@@ -1293,10 +1293,8 @@ function clearSheetDataPreservingFrozenRows_(sheet) {
   const startRow = frozenRows + 1;
   const lastRow = Number(sheet.getLastRow()) || 0;
   if (lastRow < startRow) return;
-  const rowsToDelete = lastRow - frozenRows;
-  if (rowsToDelete > 0) {
-    sheet.deleteRows(startRow, rowsToDelete);
-  }
+  const lastColumn = Math.max(Number(sheet.getLastColumn()) || 1, 1);
+  sheet.getRange(startRow, 1, lastRow - frozenRows, lastColumn).clearContent();
 }
 
 function runBundledFinanceRecovery_() {
