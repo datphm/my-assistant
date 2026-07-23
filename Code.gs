@@ -1152,12 +1152,8 @@ function importStatementBundle(bundle) {
         throw new Error('Gói khôi phục tài chính thiếu mã xác nhận hợp lệ.');
       }
       recoveryBackup = backupFinanceSheets_(ss, walletSheet, expenseSheet, recoveryKey);
-      if (expenseSheet.getLastRow() > 1) {
-        expenseSheet.deleteRows(2, expenseSheet.getLastRow() - 1);
-      }
-      if (walletSheet.getLastRow() > 1) {
-        walletSheet.deleteRows(2, walletSheet.getLastRow() - 1);
-      }
+      clearSheetDataPreservingFrozenRows_(expenseSheet);
+      clearSheetDataPreservingFrozenRows_(walletSheet);
     }
     const existingWallets = readRows_(walletSheet);
     const existingExpenses = readRows_(expenseSheet);
@@ -1288,6 +1284,18 @@ function importStatementBundle(bundle) {
     };
   } finally {
     lock.releaseLock();
+  }
+}
+
+function clearSheetDataPreservingFrozenRows_(sheet) {
+  if (!sheet) return;
+  const frozenRows = Math.max(Number(sheet.getFrozenRows()) || 0, 1);
+  const startRow = frozenRows + 1;
+  const lastRow = Number(sheet.getLastRow()) || 0;
+  if (lastRow < startRow) return;
+  const rowsToDelete = lastRow - frozenRows;
+  if (rowsToDelete > 0) {
+    sheet.deleteRows(startRow, rowsToDelete);
   }
 }
 
