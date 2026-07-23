@@ -50,6 +50,7 @@
     <section id="today" class="page">
       <div class="section-head tab-heading"><div><span class="section-kicker">HÔM NAY · CHỈ VIỆC CẦN LÀM</span><h2>Việc kế tiếp</h2><p class="hint">Nhìn Kanban, chọn một bước nhỏ rồi bắt đầu. Công cụ phụ được thu gọn bên dưới.</p></div><button onclick="openForm('task')">+ Thêm việc</button></div>
       <div id="todayLaunchPad" class="today-launch-pad" aria-live="polite"></div>
+      <div id="todayGuardrail" class="command-suite compact-command-suite" aria-live="polite"></div>
       <article class="card time-anchor deadline-command" data-home-panel="clock">
         <div class="current-time-chip"><span>BÂY GIỜ</span><b id="currentClock">--:--:--</b></div>
         <div id="deadlineRing" class="deadline-ring" style="--deadline-progress:0deg"><div class="deadline-ring-core"><span>VIỆC GẦN NHẤT</span><b id="nextTaskClock">--:--:--</b><small id="nextTaskTitle">Chưa có deadline</small></div></div>
@@ -87,12 +88,14 @@
 
     <section id="assistant" class="page active">
       <div class="section-head"><div><span class="section-kicker">OPERATION CENTER</span><h2>Trung tâm điều hành cá nhân</h2><p class="hint">Một màn hình để biết việc nào cần chốt, dòng tiền đang ra sao và hệ thống nào đang lệch nhịp.</p></div><button class="outline" onclick="refreshOperationCenter()">↻ Cập nhật tất cả</button></div>
+      <div id="assistantSystemPulse" class="command-suite compact-command-suite" aria-live="polite"></div>
       <section id="assistantBrief" class="assistant-brief" aria-live="polite"></section>
     </section>
 
     <section id="profile" class="page">
       <div class="section-head tab-heading"><div><span class="section-kicker">PERSONAL VAULT</span><h2>Hồ sơ cá nhân</h2><p class="hint">Thông tin quan trọng, giấy tờ và lối tắt dùng ngay khi cần.</p></div><div class="actions"><button class="outline" onclick="toggleProfilePrivacy()">◉ Che / hiện</button><button onclick="openProfileForm()">Cập nhật</button></div></div>
       <div id="profileCommand" class="profile-command-center" aria-live="polite"></div>
+      <div id="profileReadinessCenter" class="command-suite compact-command-suite" aria-live="polite"></div>
       <section id="profileCareer" class="profile-career-zone">
         <div class="section-head subhead profile-career-head"><div><span class="section-kicker">CAREER PASSPORT</span><h2>CV & hồ sơ nghề nghiệp</h2><p class="hint">CV, định hướng nghề nghiệp và góc chiêm nghiệm nay nằm chung trong Hồ sơ cá nhân.</p></div><div class="actions"><button class="outline" onclick="openReflectionForm()">Cập nhật định hướng</button><button onclick="openForm('cv')">+ Lưu CV</button></div></div>
         <div id="cvCommandCenter" class="cv-command-center" aria-live="polite"></div>
@@ -123,6 +126,7 @@
         </div>
       </div>
       <div id="moneyControlCenter" class="money-control-center" aria-live="polite"></div>
+      <div id="monthlyBudgetCenter" class="command-suite" aria-live="polite"></div>
       <div class="segmented" aria-label="Khoảng thời gian tiền">
         <button class="active" data-money-period="week" onclick="setMoneyPeriod('week')">Tuần</button>
         <button data-money-period="month" onclick="setMoneyPeriod('month')">Tháng</button>
@@ -160,6 +164,7 @@
         <div class="actions"><button class="outline" onclick="openStudyProfileForm()">Cập nhật mục tiêu</button><button onclick="openForm('studyOption')">+ Trường / chương trình</button></div>
       </div>
       <div id="studyOverview" class="study-overview"></div>
+      <div id="studySprintCenter" class="command-suite compact-command-suite" aria-live="polite"></div>
       <div id="studyLaunchpad" class="study-launchpad"></div>
       <div id="studyApplicationCockpit" class="study-application-cockpit"></div>
       <div id="studySubmissionPipeline" class="study-submission-pipeline"></div>
@@ -180,6 +185,7 @@
         <div class="actions"><button class="outline" onclick="openHealthForm()">Cập nhật mục tiêu</button><button onclick="openForm('weightLog')">+ Cân nặng</button></div>
       </div>
       <div id="healthDailyCommand" class="health-daily-command" aria-live="polite"></div>
+      <div id="healthPlanCenter" class="command-suite compact-command-suite" aria-live="polite"></div>
       <p class="hint">Lộ trình dành cho người đang ít vận động: khởi đầu rất nhỏ, ưu tiên bài ít tác động và tăng dần. Đây không phải chẩn đoán hay phác đồ y khoa.</p>
       <div id="healthMetrics" class="insight-grid"></div>
       <div class="health-overview-grid"><div id="weightProgress" class="health-progress"></div><div id="healthWeeklyPulse" class="health-weekly-pulse"></div></div>
@@ -226,6 +232,7 @@
         <button id="stopTimeButton" class="stop-time" onclick="stopTimeLog()" disabled>Dừng & lưu</button>
       </article>
       <div id="timeDayCommand" class="time-day-command" aria-live="polite"></div>
+      <div id="timeBudgetCenter" class="command-suite compact-command-suite" aria-live="polite"></div>
       <div class="time-kinds">
         <button onclick="startTimeLog('work','Công việc')">💼 Công việc</button><button onclick="startTimeLog('dead','Thời gian chết')">🫥 Thời gian chết</button><button onclick="startTimeLog('travel','Di chuyển')">🚗 Di chuyển</button><button onclick="startTimeLog('sleep','Ngủ')">😴 Ngủ</button><button onclick="startTimeLog('play','Đi chơi')">🎉 Đi chơi</button><button onclick="startTimeLog('personal','Cá nhân')">🧍 Cá nhân</button><button onclick="startTimeLog('walk','Đi bộ')">🚶 Đi bộ</button><button onclick="startTimeLog('exercise','Thể dục')">🏃 Thể dục</button><button onclick="startTimeLog('meal','Ăn uống')">🍜 Ăn uống</button>
       </div>
@@ -260,6 +267,7 @@
         <div class="actions"><button class="outline" onclick="openForm('meritLog')">+ Ghi lại hôm nay</button><button onclick="openForm('scripture')">+ Thêm bài đọc</button></div>
       </div>
       <div id="calmDaily" class="calm-daily" aria-live="polite"></div>
+      <div id="calmPracticeCenter" class="command-suite" aria-live="polite"></div>
       <div class="calm-main-grid">
         <article class="card breath-space">
           <span class="section-kicker">CHÁNH NIỆM NHANH</span>
@@ -285,9 +293,12 @@
       <article class="card lunar-calendar-card">
         <div class="section-head compact"><div><span class="section-kicker">LỊCH NHỊP TÂM</span><h3 id="calmCalendarTitle">Lịch âm · dương</h3></div><div class="calendar-controls"><button class="outline small" onclick="moveCalmMonth(-1)">‹</button><button class="outline small" onclick="goCalmToday()">Hôm nay</button><button class="outline small" onclick="moveCalmMonth(1)">›</button></div></div>
         <div id="calmCalendar" class="calm-calendar"></div>
-        <div class="calm-calendar-legend"><span>☘ Ngày ăn chay</span><span>◌ Mùng 1 / Rằm · gợi ý đi chùa</span><span>◇ Có nhật ký</span></div>
+        <div class="calm-calendar-legend"><span>🥬 Ngày ăn chay</span><span>🛕 Mùng 1 / Rằm · gợi ý đi chùa</span><span>📝 Có nhật ký</span></div>
         <p class="hint">Lịch dùng danh sách Thập Trai phổ biến: mùng 1, 8, 14, 15, 18, 23, 24, 28, 29, 30 âm lịch. Bạn có thể chọn ngày để ghi thêm hoặc sửa theo truyền thống mình thực hành.</p>
-        <button class="outline calm-reminder-button" onclick="installCalmRemindersUi()">🔔 Thêm 90 ngày nhắc vào Google Calendar</button>
+        <div class="calm-reminder-actions">
+          <button class="outline calm-reminder-button" onclick="installCalmRemindersUi()">🔔 Đồng bộ 90 ngày nhắc Calendar</button>
+          <button class="outline calm-reminder-button" onclick="openCalmReminderManager()">⚙ Quản lý lịch nhắc</button>
+        </div>
       </article>
       <div class="section-head subhead"><div><h2>Tủ bài đọc</h2><p class="hint">Mở đúng phần bạn cần; các mục dài luôn được thu gọn để không gây quá tải.</p></div><button class="outline" onclick="openForm('scripture')">+ Bài của tôi</button></div>
       <div id="scriptureLibrary" class="scripture-library"></div>
@@ -297,6 +308,7 @@
 
     <section id="install" class="page">
       <div class="section-head"><h2>Cài đặt & điện thoại</h2><div class="actions"><button onclick="copyAppLink()">Copy link app</button><button class="outline" onclick="exportAllDataFile()">Xuất dữ liệu JSON</button></div></div>
+      <div id="settingsHealthCenter" class="command-suite compact-command-suite" aria-live="polite"></div>
       <article class="card settings-control">
         <div class="section-head compact"><div><span class="section-kicker">CÁ NHÂN HÓA</span><h3>Thiết lập ứng dụng</h3></div><button onclick="openAppSettingsForm()">Chỉnh cài đặt</button></div>
         <div id="appSettingsSummary" class="settings-summary"></div>
