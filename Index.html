@@ -88,6 +88,10 @@
 
     <section id="assistant" class="page active">
       <div class="section-head"><div><span class="section-kicker">OPERATION CENTER</span><h2>Trung tâm điều hành cá nhân</h2><p class="hint">Một màn hình để biết việc nào cần chốt, dòng tiền đang ra sao và hệ thống nào đang lệch nhịp.</p></div><button class="outline" onclick="refreshOperationCenter()">↻ Cập nhật tất cả</button></div>
+      <section class="assistant-led" aria-label="Dòng thông tin tổng hợp của Trợ lý">
+        <div class="assistant-led-label"><b>✦ LIVE</b><span>ASSISTANT</span></div>
+        <div class="assistant-led-window"><div id="assistantLedTrack" class="assistant-led-track" aria-live="polite"><span>Đang tổng hợp tín hiệu quan trọng…</span></div></div>
+      </section>
       <div id="assistantSystemPulse" class="command-suite compact-command-suite" aria-live="polite"></div>
       <section id="assistantBrief" class="assistant-brief" aria-live="polite"></section>
     </section>

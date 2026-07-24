@@ -39,6 +39,7 @@ function render(){
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
   $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
   renderTicker();
+  renderAssistantLed();
   renderLivePulse(open);
   renderTodayCoach(open);
   renderAssistantBrief();
@@ -46,6 +47,22 @@ function render(){
   renderNotifications();
   renderTimeAnchor();
   renderCurrentPage();
+}
+function renderAssistantLed(){
+  const track=$('assistantLedTrack');if(!track)return;
+  const now=Date.now(),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0],b=assistantBrief;
+  const balance=b?Number(b.finance?.balance||0):(data.wallets||[]).reduce((sum,row)=>sum+Number(row.balance||0),0),debt=b?Number(b.finance?.debt||0):(data.debts||[]).reduce((sum,row)=>sum+Number(row.remainingAmount??row.amount??0),0),net=balance-debt,flight=b?.travel,health=b?.health,study=b?.study;
+  const signals=[
+    {tone:overdue.length?'danger':'good',icon:overdue.length?'▼':'✓',label:'CÔNG VIỆC',value:overdue.length?`${overdue.length} quá hạn`:`${open.length} đang mở`},
+    {tone:activeTimeLog?'live':'flat',icon:activeTimeLog?'●':'○',label:'ĐANG LÀM',value:activeTimeLog?.label||'Chưa bật bộ đếm'},
+    {tone:net<0?'danger':'good',icon:net<0?'▼':'▲',label:'SAU KHI TRỪ NỢ',value:assistantMoney(net)},
+    {tone:health&&Number(health.waterMl||0)<Number(health.waterGoalMl||2500)*.5?'warn':'good',icon:'◆',label:'SỨC KHỎE',value:health?`${num(health.waterMl||0)} ml nước · ${num(health.walkMinutes||0)} phút đi bộ`:'Đang tổng hợp'},
+    {tone:'info',icon:'✈',label:'CHUYẾN KẾ TIẾP',value:flight?`${flight.code||'Chuyến bay'} · ${dateShort(flight.departure)}`:'Chưa có chuyến tương lai'},
+    {tone:study&&Number(study.pending||0)>0?'warn':'flat',icon:'↗',label:'DU HỌC',value:study?`${study.pending||0} bước đang mở`:'Đang tổng hợp'},
+    {tone:next&&new Date(next.dueAt)-now<86400000?'warn':'info',icon:'→',label:'MỐC KẾ TIẾP',value:next?`${next.title} · ${dateTime(next.dueAt)}`:'Lịch đang trống'}
+  ];
+  const content=signals.map(item=>`<span class="assistant-led-signal ${item.tone}"><i>${item.icon}</i><small>${item.label}</small><b>${esc(String(item.value))}</b></span>`).join('<em aria-hidden="true">◆</em>');
+  track.innerHTML=`<span class="assistant-led-loop">${content}</span><span class="assistant-led-loop" aria-hidden="true">${content}</span>`;
 }
 function renderCurrentPage(){
   const page=document.querySelector('.page.active')?.id||'today';
@@ -161,6 +178,7 @@ function updateAssistantNowClock(){
 }
 function renderAssistantBrief(){
   const box=$('assistantBrief');if(!box)return;
+  renderAssistantLed();
   if(!assistantBrief){
     box.innerHTML=`<article class="card assistant-loading"><b>${assistantBriefLoading?'Trợ lý đang tổng hợp ngày của bạn…':'Bản brief chưa tải'}</b><span>Việc vẫn dùng được ngay; tiền, sức khỏe, chuyến đi và du học đang tải nền.</span>${assistantBriefLoading?'':`<button onclick="loadAssistantBrief(true)">Tải bản brief</button>`}</article>`;return;
   }
