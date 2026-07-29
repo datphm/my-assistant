@@ -122,17 +122,27 @@ function assistantTopTask(){
   return data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a))[0]||null;
 }
 function renderTodayCoach(open){
-  const box=$('todayCoach');if(!box)return;const now=Date.now(),planned=open.reduce((s,t)=>s+Number(t.minutes||15),0),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),stale=open.filter(t=>t.startedAt&&now-new Date(t.lastProgressAt||t.startedAt)>2*3600000);
-  renderTodayLaunchPad(open);
-  const focus=assistantTopTask(),next=focus&&taskSteps(focus.id).find(s=>!truth(s.done)),session=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
-  box.innerHTML=`<article class="card adhd-command"><div class="command-metrics"><span><small>KẾ HOẠCH HÔM NAY</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM > 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>${focus?`<div class="command-focus"><span>CHỈ NHÌN VIỆC NÀY · CHẾ ĐỘ ${assistantMode==='overwhelmed'?'GIẢI CỨU':assistantMode==='low'?'ÍT NĂNG LƯỢNG':'TẬP TRUNG'}</span><h2>${esc(focus.title)}</h2><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p><div><button onclick="focusTask('${focus.id}')">Bắt đầu ${session} phút</button><button class="outline" onclick="document.getElementById('task-${escAttr(focus.id)}')?.scrollIntoView({behavior:'smooth'})">Mở checklist</button></div></div>`:'<div class="command-focus"><h2>Không có việc đang mở</h2><p>Ghi việc mới ngay khi nhận để não không phải giữ trong đầu.</p></div>'}${planned>360?'<div class="capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc xoá ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}</article>`;
+  const box=$('todayCoach');if(!box)return;
+  const launch=$('todayLaunchPad');if(launch)launch.innerHTML='';
+  const now=new Date(),nowMs=now.getTime(),start=new Date(now);start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);
+  const planned=open.reduce((sum,task)=>sum+Number(task.minutes||15),0),overdue=open.filter(task=>task.dueAt&&new Date(task.dueAt)<now),today=open.filter(task=>task.dueAt&&new Date(task.dueAt)>=start&&new Date(task.dueAt)<end),quick=open.filter(task=>Number(task.minutes||15)<=15),followups=open.filter(task=>task.followUpAt&&new Date(task.followUpAt)<=now),stale=open.filter(task=>task.startedAt&&nowMs-new Date(task.lastProgressAt||task.startedAt)>2*3600000);
+  const done=(data.tasks||[]).filter(task=>(truth(task.done)||task.status==='done')&&task.updatedAt&&localDateKey(task.updatedAt)===localDateKey(now)),plannedCount=today.length||Math.min(3,open.length),progress=plannedCount+done.length?Math.round(done.length/(plannedCount+done.length)*100):0;
+  const focus=assistantTopTask(),next=focus&&taskSteps(focus.id).find(step=>!truth(step.done)),session=assistantMode==='overwhelmed'?5:assistantMode==='low'?10:15;
+  const lane=(icon,label,items,empty,kind)=>`<button class="today-lane ${items.length?'has-items':''}" onclick="focusTodayLane('${kind}')"><span>${icon}</span><div><small>${esc(label)}</small><b>${items.length||0}</b><em>${esc(items[0]?.title||empty)}</em></div><i>→</i></button>`;
+  box.innerHTML=`<article class="today-command-center">
+    <div class="today-command-head"><div><span class="section-kicker">TODAY COMMAND CENTER</span><h2>${overdue.length?'Khép một vòng lặp đang trễ':'Giữ ngày hôm nay đủ nhỏ để hoàn thành'}</h2><p>${done.length?`Đã khép ${done.length} việc hôm nay. Tiếp tục một bước, không mở thêm năm hướng.`:'Chọn một việc có đầu ra rõ và bắt đầu trong 5–15 phút.'}</p></div><div class="today-score"><b>${progress}%</b><span>nhịp hoàn thành</span></div></div>
+    <div class="today-lanes">${lane('!','QUÁ HẠN',overdue,'Không có việc trễ','overdue')}${lane('⚡','LÀM NHANH ≤15P',quick,'Chưa có quick win','quick')}${lane('↻','FOLLOW-UP',followups,'Không có việc phải đuổi','follow')}</div>
+    <div class="today-command-focus">
+      <div class="today-focus-copy">${focus?`<span>VIỆC CẦN MẮT BẠN NGAY</span><h3>${esc(focus.title)}</h3><p>${esc(next?.title||focus.nextAction||'Mở tài liệu và làm bước đầu trong 5 phút.')}</p>`:'<span>HÀNG ĐỢI ĐANG SẠCH</span><h3>Ghi việc ngay khi nhận</h3><p>Đừng bắt não giữ nhiệm vụ. Đưa nó vào hệ thống rồi quay lại việc đang làm.</p>'}</div>
+      <div class="today-focus-actions">${focus?`<button class="primary" onclick="focusTask('${focus.id}')">▶ Làm ${session} phút</button><button onclick="openOperationTask('${focus.id}')">Mở việc</button>`:`<button class="primary" onclick="openForm('task')">＋ Ghi việc</button>`}<button onclick="rescueMe()">🛟 Gỡ đứng hình</button></div>
+    </div>
+    <div class="today-mode-row"><div><small>CHẾ ĐỘ LÚC NÀY</small><span>Trợ lý sẽ đổi độ dài phiên và cách chọn việc.</span></div><div><button class="${assistantMode==='focus'?'active':''}" onclick="setAssistantMode('focus')">Tập trung</button><button class="${assistantMode==='low'?'active':''}" onclick="setAssistantMode('low')">Ít năng lượng</button><button class="${assistantMode==='overwhelmed'?'active':''}" onclick="setAssistantMode('overwhelmed')">Quá tải</button></div></div>
+    <div class="today-command-metrics"><span><small>KHỐI LƯỢNG MỞ</small><b>${planned} phút</b></span><span><small>FOLLOW-UP ĐẾN HẠN</small><b>${followups.length}</b></span><span><small>ĐANG LÀM &gt; 2H CHƯA UPDATE</small><b>${stale.length}</b></span></div>
+    ${planned>360?'<div class="today-capacity-warning">Danh sách đang vượt 6 giờ tập trung. Hãy dời hoặc bỏ ít nhất một việc; lịch quá tải không phải là kế hoạch.</div>':''}
+  </article>`;
 }
 function renderTodayLaunchPad(open){
-  const box=$('todayLaunchPad');if(!box)return;const now=new Date(),start=new Date(now);start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);
-  const overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),today=open.filter(t=>t.dueAt&&new Date(t.dueAt)>=start&&new Date(t.dueAt)<end),quick=open.filter(t=>Number(t.minutes||15)<=15),follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),done=(data.tasks||[]).filter(t=>(truth(t.done)||t.status==='done')&&t.updatedAt&&localDateKey(t.updatedAt)===localDateKey(now));
-  const planned=today.length||Math.min(3,open.length),progress=planned+done.length?Math.round(done.length/(planned+done.length)*100):0;
-  const lane=(icon,label,items,empty,kind)=>`<button class="today-lane ${items.length?'has-items':''}" onclick="focusTodayLane('${kind}')"><span>${icon}</span><div><small>${esc(label)}</small><b>${items.length||0}</b><em>${esc(items[0]?.title||empty)}</em></div><i>→</i></button>`;
-  box.innerHTML=`<article class="today-launch"><div class="today-launch-head"><div><span class="section-kicker">DAILY LAUNCHPAD</span><h2>${overdue.length?'Đóng một vòng lặp đang trễ':'Giữ ngày hôm nay đủ nhỏ để hoàn thành'}</h2><p>${done.length?`Đã khép ${done.length} việc · tiếp tục một bước, không mở thêm năm hướng.`:'Chọn một việc có đầu ra rõ và bắt đầu trong 5–15 phút.'}</p></div><div class="today-score"><b>${progress}%</b><span>nhịp hoàn thành</span></div></div><div class="today-lanes">${lane('!','QUÁ HẠN',overdue,'Không có việc trễ','overdue')}${lane('⚡','LÀM NHANH ≤15P',quick,'Chưa có quick win','quick')}${lane('↻','FOLLOW-UP',follow,'Không có việc phải đuổi','follow')}</div></article>`;
+  const box=$('todayLaunchPad');if(box)box.innerHTML='';
 }
 function focusTodayLane(kind){const now=Date.now(),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done');let rows=kind==='overdue'?open.filter(t=>t.dueAt&&new Date(t.dueAt)<now):kind==='quick'?open.filter(t=>Number(t.minutes||15)<=15):open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now);rows=rows.sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a));if(!rows.length){toast(kind==='quick'?'Chưa có việc nhanh. Hãy giảm một việc xuống bước 10 phút.':'Không có việc trong nhóm này.');return}openOperationTask(rows[0].id)}
 function loadAssistantBrief(force=false){
@@ -188,6 +198,24 @@ function updateAssistantNowClock(){
   if(!task?.dueAt){countdown.textContent=activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline';progress.style.setProperty?.('--now-progress','0deg');return}
   const remaining=new Date(task.dueAt)-now,minutes=Math.max(0,Math.ceil(remaining/60000)),duration=Math.max(10,Number(task.minutes||15)),ratio=Math.max(0,Math.min(1,1-minutes/duration));countdown.textContent=remaining<=0?'ĐÃ ĐẾN HẠN':minutes<60?`Còn ${minutes} phút`:`Còn ${Math.floor(minutes/60)}h ${minutes%60}m`;progress.style.setProperty?.('--now-progress',`${Math.round(ratio*360)}deg`);
 }
+const assistantFortuneTopics={
+  work:{label:'Công việc',icon:'◎',messages:['Một việc được chốt rõ hôm nay có giá trị hơn năm ý tưởng còn mở.','Đừng đoán yêu cầu: hỏi một câu chốt rồi cập nhật tài liệu ngay.','Tín hiệu tốt nằm ở việc chủ động báo tiến độ trước khi bị hỏi.'],actions:['Chốt đầu ra và gửi một bản cập nhật ngắn','Gọi người đang giữ thông tin thay vì chờ','Dọn một vòng lặp tồn đọng trong 10 phút']},
+  money:{label:'Tiền bạc',icon:'↗',messages:['Sự an tâm hôm nay đến từ một con số được nhìn thẳng, không phải một khoản chi để xoa dịu.','Dòng tiền nhỏ nhưng đều sẽ mạnh hơn một quyết định bốc đồng.','Trước khi mua, hãy gọi đúng tên mục tiêu mà khoản tiền này đang cạnh tranh.'],actions:['Xem khoản chi lớn nhất tuần này','Chuyển một phần tiền sang mục tiêu ưu tiên','Hoãn một khoản chưa cần thiết trong 24 giờ']},
+  relationship:{label:'Quan hệ',icon:'♡',messages:['Một lời xác nhận cụ thể sẽ tốt hơn im lặng vì nghĩ người kia tự hiểu.','Hôm nay hợp với việc nói rõ nhu cầu bằng câu ngắn và không quy kết.','Đừng để việc chưa chốt biến thành cảm giác xa cách.'],actions:['Gửi một tin nhắn hỏi thăm có chủ đích','Chốt thời gian cho một cuộc trò chuyện','Nói rõ một điều bạn biết ơn']},
+  study:{label:'Du học',icon:'✦',messages:['Hồ sơ mạnh lên nhờ bằng chứng nhỏ được tích lũy mỗi tuần.','Đừng nghiên cứu thêm khi bước kế tiếp đã rõ: hãy tạo một đầu ra.','Một email hỏi đúng người có thể tiết kiệm nhiều ngày tự đoán.'],actions:['Viết 150 từ cho SOP hoặc CV','Chốt một chương trình vào shortlist','Gửi một câu hỏi về học bổng hoặc yêu cầu hồ sơ']},
+  health:{label:'Sức khỏe',icon:'◌',messages:['Năng lượng là hạ tầng của mọi kế hoạch; hãy chăm phần nền trước.','Cơ thể cần nhịp đều hơn một ngày hoàn hảo.','Một lần đi bộ ngắn có thể là nút khởi động lại tốt nhất lúc này.'],actions:['Uống nước và đi bộ 10 phút','Chốt giờ đi ngủ tối nay','Ghi bữa gần nhất thay vì cố nhớ']},
+};
+function assistantFortuneHash(text){let hash=0;for(let index=0;index<String(text).length;index++)hash=(hash*31+String(text).charCodeAt(index))>>>0;return hash}
+function assistantFortuneReading(){
+  const key=localStorage.getItem('my-assistant-fortune-topic-v1')||'work',topic=assistantFortuneTopics[key]||assistantFortuneTopics.work,seed=assistantFortuneHash(`${localDateKey(new Date())}:${key}`),profile=(data.reflectionprofile||[])[0]||{};
+  return {key,label:topic.label,icon:topic.icon,message:topic.messages[seed%topic.messages.length],action:topic.actions[(seed>>>3)%topic.actions.length],identity:`${profile.zodiacSign||'Kim Ngưu'} · Đường đời ${profile.lifePath||'4 (13)'}`};
+}
+function setAssistantFortuneTopic(topic){if(!assistantFortuneTopics[topic])return;localStorage.setItem('my-assistant-fortune-topic-v1',topic);renderAssistantBrief()}
+function addAssistantFortuneTask(){
+  const reading=assistantFortuneReading(),due=new Date();due.setHours(20,0,0,0);if(due.getTime()<Date.now())due.setDate(due.getDate()+1);
+  openForm('task',{title:`${reading.label}: ${reading.action}`,outcome:reading.action,nextAction:'Bắt đầu bằng một hành động trong 5–10 phút',dueAt:due.toISOString(),minutes:10,area:'Cá nhân',priority:'medium'});
+}
+function openAssistantReflection(){activatePage('profile');setTimeout(()=>$('reflectionProfile')?.scrollIntoView({behavior:'smooth',block:'start'}),120)}
 function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
   const collaboration=b.collaboration||{},forms=collaboration.forms||[],pending=collaboration.pending||[],formFor=role=>forms.find(form=>form.role===role);
   const assistantForm=formFor('assistant'),partnerForm=formFor('partner'),activeLabel=b.time?.active?.label||activeTimeLog?.label||'Chưa bật phiên';
@@ -200,12 +228,28 @@ function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
     {label:'Hộp giao việc',value:String(collaboration.pendingCount||0),detail:'nhiệm vụ đang chờ bạn duyệt',page:'assistant',tone:(collaboration.pendingCount||0)?'amber':'blue'}
   ];
   const priority=open.slice().sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a)).slice(0,4);
+  const reading=assistantFortuneReading(),blocked=open.filter(task=>task.status==='blocked'),waiting=open.filter(task=>task.status==='waiting'||task.waitingFor);
+  const control=overdue.length?{tone:'danger',label:'CẦN CHỐT NGAY',title:`Khép 1 trong ${overdue.length} việc quá hạn`,detail:'Làm một bước có thể giao, hoặc đặt lại deadline thật và báo cho người liên quan.'}:blocked.length?{tone:'amber',label:'ĐANG KẸT',title:`Mở khóa ${blocked.length} việc đang tắc`,detail:'Gọi người có quyền quyết định; ghi rõ điều kiện để tiếp tục.'}:followups.length?{tone:'amber',label:'ĐẾN LÚC FOLLOW-UP',title:`Đuổi ${followups.length} phản hồi đang chờ`,detail:'Hỏi một câu chốt và đề xuất mốc phản hồi cụ thể.'}:focus?{tone:'green',label:'ĐƯỜNG BĂNG ĐÃ RÕ',title:focus.title,detail:'Bắt đầu một phiên ngắn, cập nhật file rồi báo lại trước khi mở việc mới.'}:{tone:'green',label:'HÀNG ĐỢI ĐANG SẠCH',title:'Ghi đầu ra tiếp theo hoặc nghỉ có chủ đích',detail:'Không cần tự tạo thêm cảm giác bận rộn.'};
   const portal=(role,label,form)=>form
     ?`<div class="command-portal active"><span>${esc(label)}</span><b>Cổng đã sẵn sàng</b><div><a href="${escAttr(form.url)}" target="_blank" rel="noopener">Mở form</a><button onclick="copyTaskIntakeUrl('${encodeURIComponent(form.url)}')">Sao chép link</button></div></div>`
     :`<div class="command-portal"><span>${esc(label)}</span><b>Chưa tạo cổng giao việc</b><button onclick="createTaskIntakePortal('${role}',this)">Tạo link riêng</button></div>`;
   return `<article class="assistant-command-wall">
     <div class="command-wall-head"><div><span class="command-wall-eyebrow">MY ASSISTANT · COMMAND WALL</span><h2>Trung tâm điều hành hôm nay</h2><p>Một màn hình để thấy việc nào cần chốt, hệ thống nào đang lệch nhịp và ai vừa giao thêm việc.</p></div><span class="command-owner-badge">CHỈ CHỦ TÀI KHOẢN</span></div>
     <div class="command-wall-kpis">${kpis.map(item=>`<button class="${item.tone}" onclick="activatePage('${item.page}')"><small>${esc(item.label)}</small><b>${esc(item.value)}</b><span>${esc(item.detail)}</span></button>`).join('')}</div>
+    <div class="command-wall-feature-grid">
+      <section class="command-wall-control ${control.tone}">
+        <span>${esc(control.label)}</span><h3>${esc(control.title)}</h3><p>${esc(control.detail)}</p>
+        <div><button class="primary" onclick="assistantQuickFocus()">▶ Focus việc đầu</button><button onclick="openForm('task')">＋ Ghi việc</button><button onclick="assistantPickForMe()">⚡ Chọn giúp tôi</button><button onclick="rescueMe()">🛟 Gỡ đứng hình</button></div>
+        <footer><small>CHẾ ĐỘ</small><button class="${assistantMode==='focus'?'active':''}" onclick="setAssistantMode('focus')">Tập trung</button><button class="${assistantMode==='low'?'active':''}" onclick="setAssistantMode('low')">Ít năng lượng</button><button class="${assistantMode==='overwhelmed'?'active':''}" onclick="setAssistantMode('overwhelmed')">Quá tải</button></footer>
+      </section>
+      <section class="command-wall-fortune">
+        <div class="fortune-head"><div><span>GÓC XEM BÓI HÔM NAY · CHIÊM NGHIỆM</span><small>${esc(reading.identity)}</small></div><b>${reading.icon}</b></div>
+        <h3>${esc(reading.message)}</h3><p><strong>Hành động hợp nhịp:</strong> ${esc(reading.action)}.</p>
+        <div class="fortune-topics">${Object.entries(assistantFortuneTopics).map(([key,topic])=>`<button class="${reading.key===key?'active':''}" onclick="setAssistantFortuneTopic('${key}')">${topic.icon} ${esc(topic.label)}</button>`).join('')}</div>
+        <footer><button class="primary" onclick="addAssistantFortuneTask()">＋ Đưa hành động vào Hôm nay</button><button onclick="openAssistantReflection()">Mở chiêm nghiệm chi tiết</button></footer>
+        <small class="fortune-note">Gợi ý chiêm nghiệm, không phải dự đoán chắc chắn. Dùng để chọn một hành động thực tế.</small>
+      </section>
+    </div>
     <div class="command-wall-body">
       <section class="command-wall-queue"><div class="command-wall-subhead"><div><small>PRIORITY RADAR</small><h3>${focus?'Việc cần mắt bạn ngay':'Hàng đợi đang sạch'}</h3></div><button onclick="activatePage('today')">Mở Kanban</button></div>
         <div>${priority.length?priority.map((task,index)=>`<button class="command-queue-row" onclick="openOperationTask('${escAttr(task.id)}')"><b>${String(index+1).padStart(2,'0')}</b><span><strong>${esc(task.title)}</strong><small>${dateTime(task.dueAt)} · ${esc(taskStatusLabel(task))}</small></span><i>→</i></button>`).join(''):'<p class="command-empty">Không còn việc mở. Hãy chuẩn bị đầu ra tiếp theo hoặc nghỉ có chủ đích.</p>'}</div>
@@ -1181,8 +1225,7 @@ function renderCommandSuite(page){
 }
 function openTaskInToday(id){activatePage('today');setTimeout(()=>{const task=$(`task-${id}`);if(task)task.scrollIntoView({behavior:'smooth',block:'center'});else $('kanban')?.scrollIntoView({behavior:'smooth',block:'start'})},80)}
 function renderTodayGuardrail(){
-  const box=$('todayGuardrail');if(!box)return;const now=Date.now(),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),doing=open.filter(t=>t.status==='doing'),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0]||open[0],wip=doing.length;
-  box.innerHTML=`<article class="suite-card today-guardrail"><div><span class="section-kicker">ADHD GUARDRAIL</span><h3>${overdue.length?`${overdue.length} việc quá hạn · xử lý một việc`:(wip>2?`${wip} việc đang làm · cần giảm WIP`:'Giữ một luồng, đóng một đầu ra')}</h3><p>${next?`Bước kế tiếp: ${esc(next.title)}`:'Không có việc mở. Dành 30 giây ghi việc quan trọng nhất.'}</p></div><div class="suite-kpis"><span><small>ĐANG LÀM</small><b>${wip}</b></span><span class="${overdue.length?'danger':''}"><small>QUÁ HẠN</small><b>${overdue.length}</b></span><span><small>ĐANG CHỜ</small><b>${open.filter(t=>t.status==='waiting'||t.waitingFor).length}</b></span></div><div class="suite-actions">${next?`<button onclick="focusTask('${escAttr(next.id)}')">▶ Làm 10 phút</button><button class="outline" onclick="openTaskInToday('${escAttr(next.id)}')">Mở việc</button>`:`<button onclick="openForm('task')">+ Ghi việc</button>`}<button class="outline" onclick="rescueMe()">🛟 Gỡ đứng hình</button></div></article>`;
+  const box=$('todayGuardrail');if(box)box.innerHTML='';
 }
 function renderAssistantSystemPulse(){
   const box=$('assistantSystemPulse');if(!box)return;const today=localDateKey(new Date()),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<new Date()).length,logs=(data.healthlogs||[]).filter(x=>localDateKey(x.date)===today),water=logs.filter(x=>x.type==='water').reduce((s,x)=>s+Number(x.amount||0),0),minutes=(data.timelogs||[]).filter(x=>localDateKey(x.startAt)===today).reduce((s,x)=>s+Number(x.durationMinutes||0),0),pending=(data.studyabroadchecklist||[]).filter(x=>x.status!=='done').length;
