@@ -2193,6 +2193,9 @@ function uninstallTravelSync() {
 }
 
 function sendDueTaskReminders() {
+  try { ensureTaskIntakeEmailDelivery_(); } catch (error) {
+    console.error('Không thể tự khôi phục email nhận task trong lượt nhắc: ' + error.message);
+  }
   const ss = getBook_();
   const sheet = ss.getSheetByName('Tasks');
   const rows = readRows_(sheet);
