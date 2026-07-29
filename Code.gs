@@ -26,6 +26,7 @@ const HEADERS = {
   RoutineSettings: ['id', 'breakfastTime', 'lunchTime', 'dinnerTime', 'bedtime', 'wakeTime', 'targetSleepHours', 'sleepLatencyMinutes', 'logIntervalMinutes', 'waterReminderEnabled', 'waterStartTime', 'waterEndTime', 'waterIntervalMinutes', 'mealLogReminderEnabled', 'mealLogReminderTime', 'walkReminderEnabled', 'walkReminderTime', 'updatedAt'],
   Plans: ['id', 'name', 'type', 'targetDate', 'estimatedCost', 'savedAmount', 'priority', 'notes'],
   Notifications: ['id', 'type', 'title', 'message', 'targetType', 'targetId', 'priority', 'dedupeKey', 'createdAt', 'readAt'],
+  TaskInbox: ['id', 'title', 'deadlineText', 'notes', 'senderName', 'senderRole', 'urgency', 'status', 'createdAt', 'reviewedAt', 'taskId', 'formId'],
   Projects: ['id', 'name', 'outcome', 'status', 'deadline', 'priority', 'progress', 'nextMilestone', 'budget', 'notes', 'createdAt', 'updatedAt'],
   DailyLogs: ['id', 'date', 'phase', 'mood', 'energy', 'sleepHours', 'top1', 'top2', 'top3', 'wins', 'blockers', 'spendingNote', 'healthNote', 'tomorrowFirst', 'notes', 'updatedAt'],
   Scriptures: ['id', 'title', 'category', 'content', 'note', 'createdAt', 'updatedAt'],
@@ -34,7 +35,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-22-study-pipeline-v17';
+const SCHEMA_VERSION = '2026-07-29-private-task-inbox-v18';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -105,6 +106,157 @@ function readRowsSafe_(ss, name) {
   }
 }
 
+const TASK_INTAKE_FORMS_PROPERTY = 'TASK_INTAKE_FORMS_V1';
+const TASK_INTAKE_BOOK_PROPERTY = 'TASK_INTAKE_BOOK_ID';
+
+function taskIntakeForms_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(TASK_INTAKE_FORMS_PROPERTY);
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function taskIntakeFormsPublic_() {
+  return taskIntakeForms_().filter(function(item) { return item.active !== false; }).map(function(item) {
+    return {
+      id: item.id,
+      role: item.role,
+      label: item.label,
+      url: item.url,
+      active: item.active !== false,
+      createdAt: item.createdAt
+    };
+  });
+}
+
+function saveTaskIntakeForms_(forms) {
+  PropertiesService.getScriptProperties().setProperty(TASK_INTAKE_FORMS_PROPERTY, JSON.stringify(forms || []));
+}
+
+// Creates a write-only intake portal. Collaborators receive a Google Form URL,
+// never the owner-only Apps Script URL, so they cannot call any private data API.
+function createTaskIntakeForm(role) {
+  role = String(role || '').toLowerCase();
+  const labels = { assistant: 'Trợ lý', partner: 'Người yêu' };
+  if (!labels[role]) throw new Error('Vai trò cộng tác không hợp lệ.');
+  const forms = taskIntakeForms_();
+  const existing = forms.find(function(item) { return item.role === role && item.active !== false; });
+  if (existing) return taskIntakeFormsPublic_().find(function(item) { return item.id === existing.id; });
+
+  const form = FormApp.create('My Assistant — Giao việc cho Đạt · ' + labels[role]);
+  form.setDescription(
+    'Cổng này chỉ dùng để gửi nhiệm vụ cho Đạt. Bạn không thể xem Tiền, Hồ sơ, Sức khỏe, CV, lịch riêng hoặc dữ liệu cá nhân trong My Assistant. Nhiệm vụ chỉ vào hàng chờ và Đạt sẽ duyệt trước khi đưa vào Kanban.'
+  );
+  form.setConfirmationMessage('Đã gửi vào hàng chờ của Đạt. Bạn không cần mở ứng dụng chính.');
+  form.addTextItem().setTitle('Tên người gửi').setRequired(false);
+  form.addTextItem().setTitle('Nhiệm vụ / đầu ra cần hoàn thành').setRequired(true);
+  form.addTextItem().setTitle('Deadline').setHelpText('Ví dụ: 19h00 ngày 01/08/2026. Có thể để trống nếu chưa chốt.').setRequired(false);
+  form.addParagraphTextItem().setTitle('Bối cảnh, tài liệu hoặc điều cần báo lại').setRequired(false);
+  form.addMultipleChoiceItem().setTitle('Mức độ').setChoiceValues(['Gấp', 'Sớm', 'Bình thường']).setRequired(true);
+
+  const record = {
+    id: form.getId(),
+    role: role,
+    label: labels[role],
+    url: form.getPublishedUrl(),
+    editUrl: form.getEditUrl(),
+    active: true,
+    createdAt: new Date().toISOString()
+  };
+  forms.push(record);
+  saveTaskIntakeForms_(forms);
+  const ss = getBook_();
+  PropertiesService.getScriptProperties().setProperty(TASK_INTAKE_BOOK_PROPERTY, ss.getId());
+  ScriptApp.newTrigger('onTaskIntakeFormSubmit_').forForm(form).onFormSubmit().create();
+  CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+  return taskIntakeFormsPublic_().find(function(item) { return item.id === record.id; });
+}
+
+function onTaskIntakeFormSubmit_(event) {
+  if (!event || !event.response || !event.source) return;
+  const formId = event.source.getId();
+  const formMeta = taskIntakeForms_().find(function(item) { return item.id === formId; }) || {};
+  const answers = {};
+  event.response.getItemResponses().forEach(function(response) {
+    answers[response.getItem().getTitle()] = response.getResponse();
+  });
+  const bookId = PropertiesService.getScriptProperties().getProperty(TASK_INTAKE_BOOK_PROPERTY);
+  if (!bookId) throw new Error('Chưa liên kết sổ dữ liệu nhận việc.');
+  const ss = SpreadsheetApp.openById(bookId);
+  let sheet = ss.getSheetByName('TaskInbox');
+  if (!sheet) {
+    sheet = ss.insertSheet('TaskInbox');
+    ensureHeaders_(sheet, HEADERS.TaskInbox);
+    sheet.setFrozenRows(1);
+  }
+  const item = {
+    id: Utilities.getUuid(),
+    title: String(answers['Nhiệm vụ / đầu ra cần hoàn thành'] || '').trim(),
+    deadlineText: String(answers.Deadline || '').trim(),
+    notes: String(answers['Bối cảnh, tài liệu hoặc điều cần báo lại'] || '').trim(),
+    senderName: String(answers['Tên người gửi'] || formMeta.label || 'Người cộng tác').trim(),
+    senderRole: formMeta.role || 'collaborator',
+    urgency: String(answers['Mức độ'] || 'Bình thường'),
+    status: 'pending',
+    createdAt: new Date(),
+    reviewedAt: '',
+    taskId: '',
+    formId: formId
+  };
+  sheet.appendRow(HEADERS.TaskInbox.map(function(key) { return item[key] === undefined ? '' : item[key]; }));
+  CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+}
+
+function reviewTaskInbox(id, action) {
+  id = String(id || '');
+  action = String(action || '').toLowerCase();
+  if (!id || ['approve', 'reject'].indexOf(action) < 0) throw new Error('Yêu cầu duyệt không hợp lệ.');
+  const lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getBook_();
+    const sheet = ss.getSheetByName('TaskInbox');
+    const inbox = readRows_(sheet).find(function(item) { return item.id === id; });
+    if (!inbox) throw new Error('Không tìm thấy nhiệm vụ trong hàng chờ.');
+    if (inbox.status !== 'pending') throw new Error('Nhiệm vụ này đã được xử lý.');
+    if (action === 'reject') {
+      upsertRow_(sheet, Object.assign({}, inbox, { status: 'rejected', reviewedAt: new Date() }));
+      CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+      return { ok: true, action: 'rejected', id: id };
+    }
+
+    const parsed = parseTaskMessage_([inbox.title, inbox.deadlineText].filter(Boolean).join(' '));
+    const task = Object.assign({}, parsed, {
+      id: Utilities.getUuid(),
+      title: inbox.title || parsed.title,
+      dueAt: inbox.deadlineText ? parsed.dueAt : '',
+      priority: inbox.urgency === 'Gấp' ? 'high' : inbox.urgency === 'Sớm' ? 'medium' : 'normal',
+      definitionOfDone: inbox.notes
+        ? 'Hoàn thành đầu ra; xử lý bối cảnh: ' + inbox.notes + '; cập nhật tài liệu và báo lại ' + (inbox.senderName || 'người giao việc') + '.'
+        : 'Đã hoàn thành đầu ra, cập nhật tài liệu và báo lại ' + (inbox.senderName || 'người giao việc') + '.',
+      waitingFor: '',
+      lastProgressAt: new Date()
+    });
+    addItem('Tasks', task);
+    upsertRow_(sheet, Object.assign({}, inbox, {
+      status: 'approved',
+      reviewedAt: new Date(),
+      taskId: task.id
+    }));
+    CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+    return { ok: true, action: 'approved', id: id, task: Object.assign({}, task, {
+      dueAt: task.dueAt instanceof Date ? task.dueAt.toISOString() : task.dueAt,
+      lastProgressAt: task.lastProgressAt.toISOString()
+    }) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // Load only the sheets needed by the selected tab. The previous implementation
 // read every sheet before showing any secondary page, which made a simple tab
 // switch feel frozen on larger personal databases.
@@ -167,6 +319,8 @@ function getAssistantBrief(forceRefresh) {
     return log.startAt && Utilities.formatDate(new Date(log.startAt), timezone, 'yyyy-MM-dd') === todayKey;
   });
   const active = readRows_(ss.getSheetByName('TimeState'))[0] || null;
+  const taskInbox = readRowsSafe_(ss, 'TaskInbox').filter(function(item) { return item.status === 'pending'; })
+    .sort(function(a, b) { return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); });
   const todayHealth = healthLogs.filter(function(log) {
     return log.date && Utilities.formatDate(new Date(log.date), timezone, 'yyyy-MM-dd') === todayKey;
   });
@@ -213,6 +367,11 @@ function getAssistantBrief(forceRefresh) {
     study: {
       pending: studyItems.length,
       next: datedStudy[0] || null
+    },
+    collaboration: {
+      pendingCount: taskInbox.length,
+      pending: taskInbox.slice(0, 8),
+      forms: taskIntakeFormsPublic_()
     }
   };
   try { cache.put(cacheKey, JSON.stringify(result), 300); } catch (error) {}

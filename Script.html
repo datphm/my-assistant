@@ -1,5 +1,5 @@
 <script>
-let data={tasks:[],tasksteps:[],taskupdates:[],debts:[],meals:[],healthprofile:[],weightlogs:[],healthlogs:[],flights:[],hotels:[],appointments:[],expenses:[],wallets:[],allocations:[],cvs:[],jobapplications:[],reflectionprofile:[],studyabroadprofile:[],studyabroadoptions:[],studyabroadchecklist:[],appsettings:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[],scriptures:[],meritlogs:[]};
+let data={tasks:[],tasksteps:[],taskupdates:[],debts:[],meals:[],healthprofile:[],weightlogs:[],healthlogs:[],flights:[],hotels:[],appointments:[],expenses:[],wallets:[],allocations:[],cvs:[],jobapplications:[],reflectionprofile:[],studyabroadprofile:[],studyabroadoptions:[],studyabroadchecklist:[],appsettings:[],dailyguidance:{},profile:[],timelogs:[],timestate:[],routinesettings:[],plans:[],notifications:[],taskinbox:[],scriptures:[],meritlogs:[]};
 let currentType='', editingId='', moneyPeriod='month', flightLimit=20;
 let viewingCvId='';
 let initialPageApplied=false;
@@ -188,6 +188,64 @@ function updateAssistantNowClock(){
   if(!task?.dueAt){countdown.textContent=activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline';progress.style.setProperty?.('--now-progress','0deg');return}
   const remaining=new Date(task.dueAt)-now,minutes=Math.max(0,Math.ceil(remaining/60000)),duration=Math.max(10,Number(task.minutes||15)),ratio=Math.max(0,Math.min(1,1-minutes/duration));countdown.textContent=remaining<=0?'ĐÃ ĐẾN HẠN':minutes<60?`Còn ${minutes} phút`:`Còn ${Math.floor(minutes/60)}h ${minutes%60}m`;progress.style.setProperty?.('--now-progress',`${Math.round(ratio*360)}deg`);
 }
+function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
+  const collaboration=b.collaboration||{},forms=collaboration.forms||[],pending=collaboration.pending||[],formFor=role=>forms.find(form=>form.role===role);
+  const assistantForm=formFor('assistant'),partnerForm=formFor('partner'),activeLabel=b.time?.active?.label||activeTimeLog?.label||'Chưa bật phiên';
+  const kpis=[
+    {label:'Việc mở',value:String(open.length),detail:`${overdue.length} quá hạn · ${followups.length} follow-up`,page:'today',tone:overdue.length?'danger':'blue'},
+    {label:'Đang làm',value:activeLabel,detail:`${minutesText(Number(b.time?.loggedMinutes||0))} đã log hôm nay`,page:'time',tone:'green'},
+    {label:'Sau khi trừ nợ',value:assistantMoney(net),detail:`${b.finance?.walletCount||0} tài khoản đang theo dõi`,page:'money',tone:net<0?'danger':'green'},
+    {label:'Sức khỏe',value:`${num(b.health?.waterMl||0)} ml`,detail:`Đi bộ ${num(b.health?.walkMinutes||0)} phút`,page:'food',tone:'aqua'},
+    {label:'Chuyến kế tiếp',value:flight?.code||'Chưa có',detail:flight?`${flight.fromCode||''} → ${flight.toCode||flight.destination||''} · ${dateShort(flight.departure)}`:'Không có chuyến tương lai',page:'travel',tone:'violet'},
+    {label:'Hộp giao việc',value:String(collaboration.pendingCount||0),detail:'nhiệm vụ đang chờ bạn duyệt',page:'assistant',tone:(collaboration.pendingCount||0)?'amber':'blue'}
+  ];
+  const priority=open.slice().sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a)).slice(0,4);
+  const portal=(role,label,form)=>form
+    ?`<div class="command-portal active"><span>${esc(label)}</span><b>Cổng đã sẵn sàng</b><div><a href="${escAttr(form.url)}" target="_blank" rel="noopener">Mở form</a><button onclick="copyTaskIntakeUrl('${encodeURIComponent(form.url)}')">Sao chép link</button></div></div>`
+    :`<div class="command-portal"><span>${esc(label)}</span><b>Chưa tạo cổng giao việc</b><button onclick="createTaskIntakePortal('${role}',this)">Tạo link riêng</button></div>`;
+  return `<article class="assistant-command-wall">
+    <div class="command-wall-head"><div><span class="command-wall-eyebrow">MY ASSISTANT · COMMAND WALL</span><h2>Trung tâm điều hành hôm nay</h2><p>Một màn hình để thấy việc nào cần chốt, hệ thống nào đang lệch nhịp và ai vừa giao thêm việc.</p></div><span class="command-owner-badge">CHỈ CHỦ TÀI KHOẢN</span></div>
+    <div class="command-wall-kpis">${kpis.map(item=>`<button class="${item.tone}" onclick="activatePage('${item.page}')"><small>${esc(item.label)}</small><b>${esc(item.value)}</b><span>${esc(item.detail)}</span></button>`).join('')}</div>
+    <div class="command-wall-body">
+      <section class="command-wall-queue"><div class="command-wall-subhead"><div><small>PRIORITY RADAR</small><h3>${focus?'Việc cần mắt bạn ngay':'Hàng đợi đang sạch'}</h3></div><button onclick="activatePage('today')">Mở Kanban</button></div>
+        <div>${priority.length?priority.map((task,index)=>`<button class="command-queue-row" onclick="openOperationTask('${escAttr(task.id)}')"><b>${String(index+1).padStart(2,'0')}</b><span><strong>${esc(task.title)}</strong><small>${dateTime(task.dueAt)} · ${esc(taskStatusLabel(task))}</small></span><i>→</i></button>`).join(''):'<p class="command-empty">Không còn việc mở. Hãy chuẩn bị đầu ra tiếp theo hoặc nghỉ có chủ đích.</p>'}</div>
+      </section>
+      <section class="command-wall-share"><div class="command-wall-subhead"><div><small>PRIVATE COLLABORATION</small><h3>Nhận việc mà không lộ dữ liệu riêng</h3></div><span>${collaboration.pendingCount||0} chờ duyệt</span></div>
+        <p class="command-privacy-note">Không gửi link app chính. Chỉ gửi link Form: người nhận không xem được Tiền, Hồ sơ, Sức khỏe, CV hay lịch riêng.</p>
+        <div class="command-portals">${portal('assistant','Trợ lý',assistantForm)}${portal('partner','Người yêu',partnerForm)}</div>
+        <div class="command-inbox">${pending.length?pending.slice(0,5).map(item=>`<article><div><span>${esc(item.senderName||item.senderRole||'Người cộng tác')} · ${esc(item.urgency||'Bình thường')}</span><b>${esc(item.title||'Nhiệm vụ chưa đặt tên')}</b><small>${item.deadlineText?`Hạn: ${esc(item.deadlineText)}`:'Chưa chốt deadline'}${item.notes?` · ${esc(item.notes)}`:''}</small></div><div><button class="approve" onclick="reviewTaskIntake('${escAttr(item.id)}','approve',this)">Duyệt vào Kanban</button><button class="reject" onclick="reviewTaskIntake('${escAttr(item.id)}','reject',this)">Bỏ</button></div></article>`).join(''):'<p class="command-empty">Chưa có nhiệm vụ mới từ người cộng tác.</p>'}</div>
+      </section>
+    </div>
+  </article>`;
+}
+function createTaskIntakePortal(role,button){
+  if(button?.disabled)return;
+  if(button){button.disabled=true;button.textContent='Đang tạo…'}
+  google.script.run.withSuccessHandler(form=>{
+    if(button)button.disabled=false;
+    toast(`Đã tạo cổng riêng cho ${form.label}. Hãy sao chép link để gửi.`);
+    loadAssistantBrief(true);
+  }).withFailureHandler(error=>{if(button){button.disabled=false;button.textContent='Tạo link riêng'}fail(error)}).createTaskIntakeForm(role);
+}
+function copyTaskIntakeUrl(encodedUrl){
+  const url=decodeURIComponent(encodedUrl||'');
+  if(!url)return;
+  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(url).then(()=>toast('Đã sao chép link giao việc riêng')).catch(()=>prompt('Sao chép link này:',url));
+  else prompt('Sao chép link này:',url);
+}
+function reviewTaskIntake(id,action,button){
+  const key=`task-inbox-${id}`;
+  if(pendingActions.has(key))return;
+  pendingActions.add(key);
+  if(button)button.disabled=true;
+  google.script.run.withSuccessHandler(result=>{
+    pendingActions.delete(key);
+    if(result.task&&!(data.tasks||[]).some(task=>task.id===result.task.id))data.tasks.push(result.task);
+    toast(action==='approve'?'Đã đưa nhiệm vụ vào Kanban':'Đã bỏ nhiệm vụ khỏi hàng chờ');
+    loadAssistantBrief(true);
+    render();
+  }).withFailureHandler(error=>{pendingActions.delete(key);if(button)button.disabled=false;fail(error)}).reviewTaskInbox(id,action);
+}
 function renderAssistantBrief(){
   const box=$('assistantBrief');if(!box)return;
   renderAssistantLed();
@@ -209,7 +267,7 @@ function renderAssistantBrief(){
   const monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);const monthTx=(data.expenses||[]).filter(item=>item.date&&new Date(item.date)>=monthStart&&isRealCashflow(item)),monthIncome=monthTx.filter(item=>item.direction==='income').reduce((sum,item)=>sum+Number(item.amount||0),0),monthExpense=monthTx.filter(item=>item.direction!=='income').reduce((sum,item)=>sum+Number(item.amount||0),0);
   const operationAdvice=overdue.length?`Khoanh đúng 1 việc quá hạn, đặt lại deadline thật hoặc hoàn thành bước giao được trong 10 phút.`:blocked.length?`Có ${blocked.length} việc đang kẹt. Gọi người có quyền quyết định và ghi rõ điều kiện để mở khoá.`:waiting.length?`Có ${waiting.length} việc đang chờ. Gửi follow-up có câu hỏi chốt và một mốc phản hồi cụ thể.`:plannedMinutes>360?'Khối lượng dự kiến vượt 6 giờ. Dời ít nhất một việc để lịch hôm nay có thể thực hiện được.':focus?`Bắt đầu “${focus.title}” trong 10 phút, cập nhật file rồi báo lại trước khi mở việc mới.`:'Chốt tối đa 3 đầu ra đo được cho hôm nay.';
   const financeAdvice=Number(b.finance.debt||0)>Number(b.finance.balance||0)?`Dư nợ cao hơn số dư ${assistantMoney(Math.abs(net))}. Giữ đủ khoản tối thiểu đến hạn, sau đó dồn phần dư vào khoản lãi cao nhất.`:monthExpense>monthIncome&&monthExpense?`Chi tháng này đang vượt thu ${assistantMoney(monthExpense-monthIncome)}. Hoãn một khoản không cấp thiết và cập nhật lại ngân sách tuần.`:b.finance.nextPlan?`Kế hoạch gần nhất là “${b.finance.nextPlan.name||'khoản chi lớn'}”. Tách tiền dành riêng trước khi chi tiêu linh hoạt.`:'Dòng tiền chưa có cảnh báo lớn. Tiếp tục cập nhật số dư và dành tiền cho nợ/mục tiêu trước khi chi linh hoạt.';
-  box.innerHTML=`<article class="card assistant-now">
+  box.innerHTML=`${assistantCommandWall(b,open,overdue,followups,focus,net,flight)}<article class="card assistant-now">
     <div class="assistant-now-main"><div class="assistant-now-ring" id="assistantNowProgress"><span id="assistantNowClock">${timeOnly(new Date(),true)}</span><b id="assistantNowCountdown">${focus?.dueAt?'Đang tính thời gian…':activeTimeLog?'Đang trong phiên tập trung':'Chưa có deadline'}</b></div><div class="assistant-now-copy"><span class="section-kicker">${activeTimeLog?'ĐANG LÀM':'BÂY GIỜ · MỘT VIỆC DUY NHẤT'}</span><h2>${esc(focus?.title||'Chọn một việc để bắt đầu')}</h2><p>${esc(focusStep?.title||focus?.nextAction||'Đừng lập thêm kế hoạch. Chọn một bước có thể làm trong 5–10 phút.')}</p>${focus?.outcome?`<small>Đầu ra cần giao: ${esc(focus.outcome)}</small>`:''}</div></div>
     <div class="assistant-now-actions">${focus?`<button class="primary" onclick="focusTask('${focus.id}')">▶ Bắt đầu ${focusMinutes} phút</button><button onclick="openTaskUpdate('${focus.id}')">↻ Cập nhật</button><button onclick="assistantQuickBlocked('${focus.id}')">Tôi đang kẹt</button><button onclick="complete('${focus.id}')">✓ Đóng việc</button>`:`<button class="primary" onclick="openForm('task')">+ Ghi việc đầu tiên</button>`}<button class="rescue" onclick="rescueMe()">🛟 Cứu tôi</button></div>
     <div class="assistant-day-strip">${dayEvents.length?dayEvents.map(item=>`<button onclick="activatePage('${item.page}')"><span>${timeOnly(item.at)}</span><b>${item.icon}</b><small>${esc(item.label)}</small></button>`).join(''):'<p>Hôm nay chưa có mốc giờ cố định. Hãy chặn một phiên tập trung ngắn.</p>'}</div>
