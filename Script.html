@@ -237,7 +237,7 @@ function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
         <button class="violet" onclick="activatePage('travel')"><small>CHUYẾN KẾ TIẾP</small><b>${esc(flight?.code||'—')}</b><em>${flight?`${esc(flight.fromCode||'')} → ${esc(flight.toCode||flight.destination||'')}`:'Chưa có chuyến gần'}</em></button>
         <button class="amber" onclick="activatePage('study')"><small>DU HỌC</small><b>${study}</b><em>Bước hồ sơ đang mở</em></button>
       </div>
-      <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Focus</button><button onclick="openForm('task')">＋ Ghi việc</button><button onclick="assistantPickForMe()">⚡ Chọn giúp tôi</button><button onclick="quickHealthLog('water')">💧 +250 ml</button></div>
+      <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Làm việc cần nhất</button><button onclick="openForm('task')">＋ Ghi nhanh một việc</button><button onclick="assistantPickForMe()">⚡ Chọn bước tiếp theo</button></div>
     </section>
     <details class="command-wall-share-details" ${(collaboration.pendingCount||0)?'open':''}>
       <summary><span><b>Hộp giao việc riêng tư</b><small>Người khác chỉ gửi việc, không xem dữ liệu cá nhân</small></span><i>${collaboration.pendingCount||0} chờ duyệt</i></summary>
