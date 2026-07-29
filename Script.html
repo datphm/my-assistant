@@ -25,6 +25,44 @@ const vnd=n=>new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maxi
 const num=n=>new Intl.NumberFormat('vi-VN').format(Number(n||0));
 const colors=['#203a66','#245647','#87aa99','#e5b44f','#e55d6f','#5795d0'];
 const periodLabels={week:'tuần này',month:'tháng này',year:'năm nay',twoYears:'2 năm gần đây'};
+const inactiveTaskStatuses=new Set(['done','deleted','rejected','declined','cancelled','canceled','archived','discarded','denied']);
+function isOpenTask(task){
+  if(!task)return false;
+  const status=String(task.status||'').trim().toLowerCase();
+  return !truth(task.done)&&!truth(task.deleted)&&!truth(task.isDeleted)&&!inactiveTaskStatuses.has(status);
+}
+function openTasks(){return (data.tasks||[]).filter(isOpenTask)}
+function pendingInboxItems(){
+  const localById=new Map((data.taskinbox||[]).map(item=>[String(item.id||''),item]));
+  const rows=[...(data.taskinbox||[]),...(assistantBrief?.collaboration?.pending||[])],seen=new Set();
+  return rows.filter(item=>{
+    const id=String(item?.id||''),authoritative=id&&localById.has(id)?localById.get(id):item,pending=String(authoritative?.status||'pending').trim().toLowerCase()==='pending';
+    if(!pending||(id&&seen.has(id)))return false;
+    if(id)seen.add(id);
+    return true;
+  });
+}
+function isCurrentNotification(notification){
+  if(!notification||notification.readAt||truth(notification.deleted)||truth(notification.dismissed))return false;
+  const type=String(notification.targetType||'').trim().toLowerCase().replace(/-/g,'_'),targetId=String(notification.targetId||''),messageText=`${notification.title||''} ${notification.message||''}`;
+  const matchedTask=targetId?(data.tasks||[]).find(task=>String(task.id)===targetId):null,matchedInbox=targetId?(data.taskinbox||[]).find(item=>String(item.id)===targetId):null;
+  if(matchedTask&&!isOpenTask(matchedTask))return false;
+  if(matchedInbox&&String(matchedInbox.status||'pending').trim().toLowerCase()!=='pending')return false;
+  if(staleTickerMessage(messageText))return false;
+  if(type==='task'&&targetId&&!openTasks().some(task=>String(task.id)===targetId))return false;
+  if(type==='task_inbox'&&targetId&&!pendingInboxItems().some(item=>String(item.id)===targetId))return false;
+  return true;
+}
+function staleTickerMessage(message){
+  const text=String(message||'').trim().toLowerCase();
+  if(!text)return false;
+  const inactiveInbox=(data.taskinbox||[]).filter(item=>String(item.status||'pending').trim().toLowerCase()!=='pending');
+  const inactiveTasks=(data.tasks||[]).filter(task=>!isOpenTask(task));
+  return [...inactiveInbox,...inactiveTasks].some(item=>{
+    const title=String(item.title||'').trim().toLowerCase();
+    return title.length>=3&&text.includes(title);
+  });
+}
 
 function applyServerData(d){data=Object.assign(data,d);applyAppSettings();const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1')}
 function load(){const page=document.querySelector('.page.active')?.id||'today';if(page==='today'||!fullDataLoaded)refreshToday();else refreshFullData(page)}
@@ -35,7 +73,7 @@ function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&
 function rememberUiFold(key,details){uiFoldState[key]=details.open;localStorage.setItem('my-assistant-ui-fold-v1',JSON.stringify(uiFoldState))}
 function restoreUiFolds(){document.querySelectorAll('details[data-ui-fold]').forEach(details=>{details.open=uiFoldState[details.dataset.uiFold]===true})}
 function render(){
-  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  const open=openTasks().sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   $('summary').innerHTML=`<small>HÔM NAY</small><b>${open.length?open.length+' việc đang mở':'Không còn việc mở'}</b><span>${open.length?'Chọn một việc nhỏ và bắt đầu.':'Bạn có thể nghỉ một chút.'}</span>`;
   $('tasks').innerHTML=open.length?open.slice(0,8).map(t=>taskCard(t)).join(''):'<div class="empty">Chưa có việc nào. Một việc nhỏ là đủ.</div>';
   renderTicker();
@@ -50,7 +88,7 @@ function render(){
 }
 function renderAssistantLed(){
   const track=$('assistantLedTrack');if(!track)return;
-  const now=Date.now(),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0],top=assistantTopTask(),b=assistantBrief;
+  const now=Date.now(),open=openTasks(),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0],top=assistantTopTask(),b=assistantBrief;
   const balance=b?Number(b.finance?.balance||0):(data.wallets||[]).reduce((sum,row)=>sum+Number(row.balance||0),0),debt=b?Number(b.finance?.debt||0):(data.debts||[]).reduce((sum,row)=>sum+Number(row.remainingAmount??row.amount??0),0),net=balance-debt,flight=b?.travel,health=b?.health,study=b?.study,signals=[];
   const dueMs=next?.dueAt?new Date(next.dueAt)-now:null,dueText=dueMs===null?'':dueMs<=0?'đã quá hạn':dueMs<3600000?`còn ${Math.max(1,Math.ceil(dueMs/60000))} phút`:dueMs<86400000?`còn ${Math.ceil(dueMs/3600000)} giờ`:`hạn ${dateShort(next.dueAt)}`;
   if(activeTimeLog)signals.push({tone:'live',icon:'▶',label:'TIẾP TỤC NGAY',value:`${activeTimeLog.label||'Phiên đang chạy'} — đừng đổi việc`});
@@ -92,14 +130,14 @@ function renderCurrentPage(){
 function renderTicker(){
   const shell=$('reminderTicker'),track=$('tickerTrack'),toggle=$('tickerToggle');if(!shell||!track||!toggle)return;
   shell.classList.toggle('ticker-hidden',tickerHidden);toggle.textContent=tickerHidden?'Hiện bảng tin':'Ẩn';if(tickerHidden)return;
-  const now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0],notices=(data.notifications||[]).filter(n=>!n.readAt).slice(-3).reverse();
-  const messages=[];if(tickerCustomMessage)messages.push(tickerCustomMessage);if(activeTimeLog)messages.push(`Đang tập trung: ${activeTimeLog.label}`);if(overdue.length)messages.push(`${overdue.length} việc đã quá hạn — chọn một bước nhỏ và xử lý ngay`);if(next)messages.push(`Kế tiếp: ${next.title} · ${dateTime(next.dueAt)}`);notices.forEach(n=>messages.push(`${n.title}: ${n.message||''}`));if(!messages.length)messages.push('Không có cảnh báo gấp · hãy chọn một đầu ra quan trọng nhất cho hôm nay');
+  const now=Date.now(),open=openTasks(),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),next=open.filter(t=>t.dueAt).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt))[0],notices=(data.notifications||[]).filter(isCurrentNotification).slice(-3).reverse();
+  const messages=[];if(tickerCustomMessage&&!staleTickerMessage(tickerCustomMessage))messages.push(tickerCustomMessage);if(activeTimeLog)messages.push(`Đang tập trung: ${activeTimeLog.label}`);if(overdue.length)messages.push(`${overdue.length} việc đã quá hạn — chọn một bước nhỏ và xử lý ngay`);if(next)messages.push(`Kế tiếp: ${next.title} · ${dateTime(next.dueAt)}`);notices.forEach(n=>messages.push(`${n.title}: ${n.message||''}`));if(!messages.length)messages.push('Không có cảnh báo gấp · hãy chọn một đầu ra quan trọng nhất cho hôm nay');
   const line=messages.map(esc).join('<span aria-hidden="true">◆</span>');track.innerHTML=`<span>${line}</span><span aria-hidden="true">${line}</span>`;
 }
 function toggleTickerVisibility(){tickerHidden=!tickerHidden;localStorage.setItem('my-assistant-ticker-hidden-v1',tickerHidden?'yes':'no');renderTicker()}
 function editTickerMessage(){const value=prompt('Thông điệp riêng muốn ghim lên bảng tin (để trống để xoá):',tickerCustomMessage);if(value===null)return;tickerCustomMessage=value.trim().slice(0,220);if(tickerCustomMessage)localStorage.setItem('my-assistant-ticker-message-v1',tickerCustomMessage);else localStorage.removeItem('my-assistant-ticker-message-v1');renderTicker();toast(tickerCustomMessage?'Đã ghim thông điệp lên bảng tin':'Đã bỏ thông điệp riêng')}
 function renderLivePulse(open){
-  const box=$('livePulse');if(!box)return;const now=Date.now(),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now).length,follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now).length,unread=(data.notifications||[]).filter(n=>!n.readAt).length,totalBalance=(data.wallets||[]).reduce((s,w)=>s+Number(w.balance||0),0);
+  const box=$('livePulse');if(!box)return;const now=Date.now(),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now).length,follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now).length,unread=(data.notifications||[]).filter(isCurrentNotification).length,totalBalance=(data.wallets||[]).reduce((s,w)=>s+Number(w.balance||0),0);
   const balanceLabel=appSettings().hideFinancialAmounts==='yes'?'••••':fullDataLoaded?vnd(totalBalance):'Mở tab Tiền';box.innerHTML=`<button onclick="activatePage('today')"><small>VIỆC MỞ</small><b>${open.length}</b></button><button class="${overdue?'attention':''}" onclick="activatePage('today')"><small>QUÁ HẠN</small><b>${overdue}</b></button><button onclick="activatePage('today')"><small>FOLLOW-UP</small><b>${follow}</b></button><button onclick="activatePage('time')"><small>ĐANG LOG</small><b>${activeTimeLog?esc(activeTimeLog.label):'Chưa bật'}</b></button><button onclick="activatePage('money')"><small>SỐ DƯ</small><b>${balanceLabel}</b></button><button onclick="activatePage('today')"><small>THÔNG BÁO</small><b>${unread}</b></button>`;
 }
 function taskCard(t){
@@ -109,7 +147,7 @@ function taskCard(t){
   return `<article class="card task-workspace ${t.chaseMode==='urgent'?'chasing':''}" id="task-${escAttr(t.id)}"><div class="card-top"><div><div class="task-badges"><span class="status-badge ${t.priority==='high'?'danger':t.status==='waiting'?'warning':'ok'}">${esc(taskStatusLabel(t))}</span>${t.waitingFor?`<span class="pill">CHỜ ${esc(t.waitingFor)}</span>`:''}${t.calendarEventId?'<span class="pill calendar-linked">CALENDAR ✓</span>':''}</div><h3>${t.chaseMode==='urgent'?'🚨 ':''}${esc(t.title)}</h3><p class="meta">${dateTime(t.dueAt)} · ${t.minutes||10} phút · ${esc(t.area||'Cá nhân')}${t.followUpAt?' · follow-up '+dateTime(t.followUpAt):''}</p></div><button class="done" onclick="complete('${t.id}')" aria-label="Hoàn thành">✓</button></div><details class="task-body" ${collapsed?'':'open'} ontoggle="rememberTaskFold('${t.id}',this)"><summary><span class="task-fold-label"></span><b>${steps.length?`${doneSteps}/${steps.length} bước · ${progress}%`:'Chưa có checklist'}</b></summary><div class="task-details"><div class="task-next"><small>BƯỚC DUY NHẤT LÚC NÀY</small><b>${esc(next?.title||t.nextAction||'Chọn một bước nhỏ trong 5–10 phút')}</b>${t.outcome?`<span>Đầu ra: ${esc(t.outcome)}</span>`:''}</div>${steps.length?`<div class="task-progress"><i><em style="width:${progress}%"></em></i><b>${doneSteps}/${steps.length} bước · ${progress}%</b></div>`:''}${checklist}<div class="task-actions-primary"><button onclick="focusTask('${t.id}')">▶ Focus 10 phút</button><button class="task-calendar-button" onclick="syncCalendar('${t.id}')">${t.calendarEventId?'↻ Cập nhật lịch':'◫ Thêm vào lịch'}</button><button class="outline" onclick="openTaskUpdate('${t.id}')">↻ Follow-up</button></div><details class="task-more"><summary>Thêm bước · sửa · bám đuổi · xoá</summary><div class="task-actions-secondary"><button onclick="addTaskStepUi('${t.id}')">+ Bước</button>${steps.length?'':`<button onclick="generateChecklistUi('${t.id}')">Checklist mẫu</button>`}<button onclick="editItem('task','${t.id}')">Sửa</button><button class="${t.chaseMode==='urgent'?'danger':''}" onclick="toggleChase('${t.id}')">${t.chaseMode==='urgent'?'Tắt bám':'Bám đuổi'}</button><button class="danger" onclick="removeItem('Tasks','${t.id}')">Xoá</button></div></details>${updates.length?`<details class="task-updates"><summary>${updates.length} cập nhật gần đây</summary>${updates.slice(0,3).map(u=>`<p><b>${dateTime(u.createdAt)}</b><span>${esc(u.note)}</span></p>`).join('')}</details>`:''}</div></details></article>`;
 }
 function rememberTaskFold(id,details){taskFoldState[id]=!details.open;localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState))}
-function setAllTaskFolds(collapsed){data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').forEach(t=>taskFoldState[t.id]=collapsed);localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));render();toast(collapsed?'Đã thu gọn các việc':'Đã mở chi tiết các việc')}
+function setAllTaskFolds(collapsed){openTasks().forEach(t=>taskFoldState[t.id]=collapsed);localStorage.setItem('my-assistant-task-fold-v1',JSON.stringify(taskFoldState));render();toast(collapsed?'Đã thu gọn các việc':'Đã mở chi tiết các việc')}
 function taskSteps(taskId){return (data.tasksteps||[]).filter(s=>s.taskId===taskId).sort((a,b)=>Number(a.position||0)-Number(b.position||0))}
 function taskUpdates(taskId){return (data.taskupdates||[]).filter(u=>u.taskId===taskId).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))}
 function taskStatusLabel(t){return t.status==='waiting'?'Đang chờ follow-up':t.status==='blocked'?'Đang kẹt':t.status==='doing'?'Đang làm':t.priority==='high'?'Ưu tiên cao':'Cần làm'}
@@ -119,7 +157,7 @@ function taskAttentionScore(t,now=Date.now()){
   return deadlineScore+(t.status==='doing'?700:0)+(t.status==='blocked'?350:0)+(t.priority==='high'?420:0)+(follow?480:0)+(assistantMode==='low'&&t.energy==='low'?380:0)+(assistantMode==='overwhelmed'&&Number(t.minutes||15)<=10?420:0);
 }
 function assistantTopTask(){
-  return data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a))[0]||null;
+  return openTasks().sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a))[0]||null;
 }
 function renderTodayCoach(open){
   const box=$('todayCoach');if(!box)return;
@@ -144,13 +182,13 @@ function renderTodayCoach(open){
 function renderTodayLaunchPad(open){
   const box=$('todayLaunchPad');if(box)box.innerHTML='';
 }
-function focusTodayLane(kind){const now=Date.now(),open=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done');let rows=kind==='overdue'?open.filter(t=>t.dueAt&&new Date(t.dueAt)<now):kind==='quick'?open.filter(t=>Number(t.minutes||15)<=15):open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now);rows=rows.sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a));if(!rows.length){toast(kind==='quick'?'Chưa có việc nhanh. Hãy giảm một việc xuống bước 10 phút.':'Không có việc trong nhóm này.');return}openOperationTask(rows[0].id)}
+function focusTodayLane(kind){const now=Date.now(),open=openTasks();let rows=kind==='overdue'?open.filter(t=>t.dueAt&&new Date(t.dueAt)<now):kind==='quick'?open.filter(t=>Number(t.minutes||15)<=15):open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now);rows=rows.sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a));if(!rows.length){toast(kind==='quick'?'Chưa có việc nhanh. Hãy giảm một việc xuống bước 10 phút.':'Không có việc trong nhóm này.');return}openOperationTask(rows[0].id)}
 function loadAssistantBrief(force=false){
   if(assistantBriefLoading)return;assistantBriefLoading=true;renderAssistantBrief();
   google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief()}).withFailureHandler(e=>{assistantBriefLoading=false;renderAssistantBrief();fail(e)}).getAssistantBrief(force);
 }
 function refreshOperationCenter(){assistantBrief=null;loadAssistantBrief(true);refreshFullData()}
-function setAssistantMode(mode){assistantMode=mode;localStorage.setItem('my-assistant-mode-v1',mode);renderTodayCoach(data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'));renderAssistantBrief()}
+function setAssistantMode(mode){assistantMode=mode;localStorage.setItem('my-assistant-mode-v1',mode);renderTodayCoach(openTasks());renderAssistantBrief()}
 function assistantMoney(value){return appSettings().hideFinancialAmounts==='yes'?'••••':vnd(value)}
 function assistantCheckKey(){return `my-assistant-day-check-v1:${localDateKey(new Date())}`}
 function assistantChecks(){try{return JSON.parse(localStorage.getItem(assistantCheckKey())||'{}')}catch(e){return {}}}
@@ -182,7 +220,7 @@ function assistantQuickBlocked(id){
 function assistantDayEvents(){
   const start=new Date();start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);
   const rows=[];
-  (data.tasks||[]).filter(task=>!truth(task.done)&&task.status!=='done'&&task.dueAt).forEach(task=>{const at=new Date(task.dueAt);if(at>=start&&at<end)rows.push({at,icon:'✓',label:task.title,page:'today'})});
+  openTasks().filter(task=>task.dueAt).forEach(task=>{const at=new Date(task.dueAt);if(at>=start&&at<end)rows.push({at,icon:'✓',label:task.title,page:'today'})});
   (data.appointments||[]).filter(item=>item.startAt).forEach(item=>{const at=new Date(item.startAt);if(at>=start&&at<end)rows.push({at,icon:appointmentIcon(item.type),label:item.title||'Cuộc hẹn',page:'time'})});
   (data.flights||[]).filter(item=>item.departure).forEach(item=>{const at=new Date(item.departure);if(at>=start&&at<end)rows.push({at,icon:'✈',label:item.code||'Chuyến bay',page:'travel'})});
   return rows.sort((a,b)=>a.at-b.at).slice(0,5);
@@ -217,8 +255,11 @@ function addAssistantFortuneTask(){
 }
 function openAssistantReflection(){activatePage('profile');setTimeout(()=>$('reflectionProfile')?.scrollIntoView({behavior:'smooth',block:'start'}),120)}
 function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
-  const collaboration=b.collaboration||{},forms=collaboration.forms||[],pending=collaboration.pending||[],formFor=role=>forms.find(form=>form.role===role);
-  const assistantForm=formFor('assistant'),partnerForm=formFor('partner'),water=Number(b.health.waterMl||0),logged=Number(b.time.loggedMinutes||0),study=Number(b.study.pending||0);
+  const collaboration=b.collaboration||{},forms=collaboration.forms||[],pending=pendingInboxItems(),formFor=role=>forms.find(form=>form.role===role);
+  const assistantForm=formFor('assistant'),partnerForm=formFor('partner'),health=b.health||{},time=b.time||{},studyInfo=b.study||{},water=Number(health.waterMl||0),walk=Number(health.walkMinutes||0),logged=Number(time.loggedMinutes||0),study=Number(studyInfo.pending||0),now=Date.now();
+  const dated=open.filter(task=>task.dueAt&&!Number.isNaN(new Date(task.dueAt).getTime())).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt)),nextDue=dated[0]||null,noDeadline=open.filter(task=>!task.dueAt).length;
+  const staleDoing=open.filter(task=>{if(task.status!=='doing')return false;const last=new Date(task.lastProgressAt||task.updatedAt||task.startedAt||task.createdAt||0).getTime();return last&&now-last>2*3600000}).length;
+  const pendingCount=pending.length,milestoneTitle=nextDue?.title||(flight?`${flight.code||'Chuyến bay'} · ${flight.fromCode||''} → ${flight.toCode||flight.destination||''}`:studyInfo.next?.title)||'Chưa có mốc gấp',milestoneMeta=nextDue?.dueAt?dateTime(nextDue.dueAt):flight?.departure?dateTime(flight.departure):studyInfo.next?.dueAt?dateTime(studyInfo.next.dueAt):'Thêm deadline để trợ lý bám việc';
   const portal=(role,label,form)=>form
     ?`<div class="command-portal active"><span>${esc(label)}</span><b>Cổng đã sẵn sàng</b><div><a href="${escAttr(form.url)}" target="_blank" rel="noopener">Mở form</a><button onclick="copyTaskIntakeUrl('${encodeURIComponent(form.url)}')">Sao chép link</button></div></div>`
     :`<div class="command-portal"><span>${esc(label)}</span><b>Chưa tạo cổng giao việc</b><button onclick="createTaskIntakePortal('${role}',this)">Tạo link riêng</button></div>`;
@@ -230,17 +271,26 @@ function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
         <button onclick="${focus?`focusTask('${focus.id}')`:`openForm('task')`}">${focus?'▶ Bắt đầu 10 phút':'＋ Ghi việc'}</button>
       </div>
       <div class="assistant-overview-kpis">
-        <button class="${overdue.length?'danger':''}" onclick="activatePage('today')"><small>VIỆC MỞ</small><b>${open.length}</b><em>${overdue.length} quá hạn · ${followups.length} follow-up</em></button>
-        <button class="${net<0?'danger':'green'}" onclick="activatePage('money')"><small>SAU KHI TRỪ NỢ</small><b>${assistantMoney(net)}</b><em>Dòng tiền khả dụng</em></button>
-        <button class="aqua" onclick="activatePage('food')"><small>SỨC KHỎE</small><b>${num(water)} ml</b><em>Nước hôm nay</em></button>
-        <button class="green" onclick="activatePage('time')"><small>THỜI GIAN</small><b>${minutesText(logged)}</b><em>Đã log hôm nay</em></button>
-        <button class="violet" onclick="activatePage('travel')"><small>CHUYẾN KẾ TIẾP</small><b>${esc(flight?.code||'—')}</b><em>${flight?`${esc(flight.fromCode||'')} → ${esc(flight.toCode||flight.destination||'')}`:'Chưa có chuyến gần'}</em></button>
-        <button class="amber" onclick="activatePage('study')"><small>DU HỌC</small><b>${study}</b><em>Bước hồ sơ đang mở</em></button>
+        <button class="${overdue.length?'danger':''}" onclick="activatePage('today')"><small>CÔNG VIỆC</small><b>${open.length} việc mở</b><em>${overdue.length} quá hạn · ${followups.length} follow-up</em></button>
+        <button class="${net<0?'danger':'green'}" onclick="activatePage('money')"><small>DÒNG TIỀN KHẢ DỤNG</small><b>${assistantMoney(net)}</b><em>Số dư sau khi trừ nợ</em></button>
+        <button class="aqua" onclick="activatePage('time')"><small>NHỊP HÔM NAY</small><b>${minutesText(logged)}</b><em>${activeTimeLog?`Đang làm: ${esc(activeTimeLog.label||'Phiên tập trung')}`:'Chưa bật phiên tập trung'}</em></button>
+        <button class="amber" onclick="activatePage('today')"><small>MỐC TIẾP THEO</small><b>${esc(milestoneTitle)}</b><em>${esc(milestoneMeta)}</em></button>
       </div>
-      <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Làm việc cần nhất</button><button onclick="openForm('task')">＋ Ghi nhanh một việc</button><button onclick="assistantPickForMe()">⚡ Chọn bước tiếp theo</button></div>
+      <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Làm việc cần nhất</button><button onclick="openForm('task')">＋ Ghi nhanh</button><button onclick="assistantPickForMe()">⚡ Chọn giúp tôi</button></div>
+      <details class="assistant-system-brief" data-ui-fold="assistant-system-brief">
+        <summary><span><b>Toàn cảnh hệ thống</b><small>Sức khỏe, chuyến đi, du học và các điểm dễ bị bỏ sót</small></span><i>Mở 6 tín hiệu</i></summary>
+        <div class="assistant-system-grid">
+          <button onclick="activatePage('food')"><span>SỨC KHỎE</span><b>${num(water)} ml nước</b><small>Đi bộ ${num(walk)} phút</small></button>
+          <button onclick="activatePage('travel')"><span>CHUYẾN KẾ TIẾP</span><b>${esc(flight?.code||'Chưa có')}</b><small>${flight?`${esc(flight.fromCode||'')} → ${esc(flight.toCode||flight.destination||'')}`:'Chưa có chuyến gần'}</small></button>
+          <button onclick="activatePage('study')"><span>DU HỌC</span><b>${study} bước mở</b><small>${esc(studyInfo.next?.title||'Chưa có mốc hồ sơ gần')}</small></button>
+          <button onclick="document.querySelector('.command-wall-share-details')?.setAttribute('open','')"><span>HỘP GIAO VIỆC</span><b>${pendingCount} chờ duyệt</b><small>Chỉ chủ tài khoản được xem</small></button>
+          <button onclick="activatePage('today')"><span>CHƯA CÓ DEADLINE</span><b>${noDeadline} việc</b><small>Bổ sung mốc để không trôi việc</small></button>
+          <button onclick="activatePage('today')"><span>ĐANG LÀM QUÁ LÂU</span><b>${staleDoing} việc</b><small>Hơn 2 giờ chưa cập nhật</small></button>
+        </div>
+      </details>
     </section>
-    <details class="command-wall-share-details" ${(collaboration.pendingCount||0)?'open':''}>
-      <summary><span><b>Hộp giao việc riêng tư</b><small>Người khác chỉ gửi việc, không xem dữ liệu cá nhân</small></span><i>${collaboration.pendingCount||0} chờ duyệt</i></summary>
+    <details class="command-wall-share-details" ${pendingCount?'open':''}>
+      <summary><span><b>Hộp giao việc riêng tư</b><small>Người khác chỉ gửi việc, không xem dữ liệu cá nhân</small></span><i>${pendingCount} chờ duyệt</i></summary>
       <section class="command-wall-share">
         <div class="command-wall-subhead"><div><small>PRIVATE COLLABORATION</small><h3>Cổng giao việc</h3></div><span>CHỈ CHỦ TÀI KHOẢN</span></div>
         <p class="command-privacy-note">Không gửi link app chính. Chỉ gửi link Form: người nhận không xem được Tiền, Hồ sơ, Sức khỏe, CV hay lịch riêng.</p>
@@ -272,6 +322,10 @@ function reviewTaskIntake(id,action,button){
   if(button)button.disabled=true;
   google.script.run.withSuccessHandler(result=>{
     pendingActions.delete(key);
+    const inboxItem=(data.taskinbox||[]).find(item=>String(item.id)===String(id));
+    if(inboxItem)inboxItem.status=action==='approve'?'approved':'rejected';
+    (data.notifications||[]).forEach(notification=>{const type=String(notification.targetType||'').toLowerCase().replace(/-/g,'_');if(type==='task_inbox'&&String(notification.targetId)===String(id))notification.readAt=new Date().toISOString()});
+    if(action==='reject'&&inboxItem?.title&&String(tickerCustomMessage||'').toLowerCase().includes(String(inboxItem.title).trim().toLowerCase())){tickerCustomMessage='';localStorage.removeItem('my-assistant-ticker-message-v1')}
     if(result.task&&!(data.tasks||[]).some(task=>task.id===result.task.id))data.tasks.push(result.task);
     toast(action==='approve'?'Đã đưa nhiệm vụ vào Kanban':'Đã bỏ nhiệm vụ khỏi hàng chờ');
     loadAssistantBrief(true);
@@ -284,7 +338,7 @@ function renderAssistantBrief(){
   if(!assistantBrief){
     box.innerHTML=`<article class="card assistant-loading"><b>${assistantBriefLoading?'Trợ lý đang tổng hợp ngày của bạn…':'Bản brief chưa tải'}</b><span>Việc vẫn dùng được ngay; tiền, sức khỏe, chuyến đi và du học đang tải nền.</span>${assistantBriefLoading?'':`<button onclick="loadAssistantBrief(true)">Tải bản brief</button>`}</article>`;return;
   }
-  const b=assistantBrief,now=Date.now(),open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),focus=assistantNowTask();
+  const b=assistantBrief,now=Date.now(),open=openTasks(),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now),followups=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),focus=assistantNowTask();
   const net=Number(b.finance.balance||0)-Number(b.finance.debt||0),flight=b.travel,checkinDue=flight&&new Date(flight.checkinAt)<=now,studyNext=b.study.next,studyDays=studyNext?.dueAt?Math.ceil((new Date(studyNext.dueAt)-now)/86400000):null;
   const alerts=[];
   if(overdue.length)alerts.push({tone:'danger',kind:'overdue',title:`${overdue.length} việc đã quá hạn`,detail:'Chọn một việc để xử lý hoặc đặt lại deadline thật.',page:'today'});
@@ -334,7 +388,7 @@ function jumpAssistantSection(id){$(id)?.scrollIntoView({behavior:'smooth',block
 
 function renderOperationCenter(b){
   const taskChart=$('opsTaskChart'),moneyChart=$('opsMoneyChart'),timeChart=$('opsTimeChart'),lifeChart=$('opsLifeChart'),queue=$('opsPriorityQueue');if(!taskChart||!moneyChart||!timeChart||!lifeChart||!queue)return;
-  const now=Date.now(),tasks=data.tasks||[],open=tasks.filter(t=>!truth(t.done)&&t.status!=='done'),done=tasks.filter(t=>truth(t.done)||t.status==='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),totalBalance=Number(b.finance.balance||0),totalDebt=Number(b.finance.debt||0),logged=Number(b.time.loggedMinutes||0);
+  const now=Date.now(),tasks=data.tasks||[],open=openTasks(),done=tasks.filter(t=>truth(t.done)||t.status==='done'),overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<now),follow=open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now),totalBalance=Number(b.finance.balance||0),totalDebt=Number(b.finance.debt||0),logged=Number(b.time.loggedMinutes||0);
   const taskGroups=[['Đang làm',open.filter(t=>t.status==='doing').length,'#5478a6'],['Cần làm',open.filter(t=>!['doing','waiting','blocked'].includes(t.status)).length,'#4f806d'],['Chờ',open.filter(t=>t.status==='waiting'||t.waitingFor).length,'#d79b36'],['Kẹt / quá hạn',new Set([...open.filter(t=>t.status==='blocked'),...overdue]).size,'#d95068'],['Đã xong gần đây',done.length,'#8eb5a6']],taskTotal=Math.max(1,taskGroups.reduce((sum,row)=>sum+row[1],0));let cursor=0;const taskSegments=taskGroups.map(row=>{const start=cursor,end=cursor+row[1]/taskTotal*100;cursor=end;return `${row[2]} ${start}% ${end}%`});taskChart.innerHTML=`<div class="chart-wrap"><div class="donut ops-donut" style="background:conic-gradient(${taskSegments.join(',')})"><div><b>${open.length}</b><span>đang mở</span></div></div><div class="legend">${taskGroups.map(row=>`<div><i style="background:${row[2]}"></i><span>${row[0]}</span><b>${row[1]}</b></div>`).join('')}</div></div>`;
   const months=[];for(let offset=5;offset>=0;offset--){const from=new Date();from.setDate(1);from.setHours(0,0,0,0);from.setMonth(from.getMonth()-offset);const to=new Date(from);to.setMonth(to.getMonth()+1);const rows=(data.expenses||[]).filter(x=>x.date&&new Date(x.date)>=from&&new Date(x.date)<to&&isRealCashflow(x));months.push({label:`T${from.getMonth()+1}`,income:rows.filter(x=>x.direction==='income').reduce((s,x)=>s+Number(x.amount||0),0),expense:rows.filter(x=>x.direction!=='income').reduce((s,x)=>s+Number(x.amount||0),0)})}const moneyMax=Math.max(1,...months.flatMap(m=>[m.income,m.expense]));moneyChart.innerHTML=fullDataLoaded?`<div class="flow-bars ops-flow">${months.map(m=>`<div class="flow-bucket"><div class="flow-values"><i class="income" style="height:${m.income?Math.max(4,m.income/moneyMax*100):0}%"></i><i class="expense" style="height:${m.expense?Math.max(4,m.expense/moneyMax*100):0}%"></i></div><span>${m.label}</span></div>`).join('')}</div><div class="chart-legend"><span><i class="income"></i>Tiền vào</span><span><i class="expense"></i>Tiền ra</span></div>`:'<div class="empty-chart">Đang tải lịch sử tài chính…</div>';
   const days=[];for(let offset=6;offset>=0;offset--){const date=new Date();date.setHours(12,0,0,0);date.setDate(date.getDate()-offset);const logs=(data.timelogs||[]).filter(log=>log.startAt&&localDateKey(log.startAt)===localDateKey(date));days.push({date,total:logs.reduce((s,x)=>s+Number(x.durationMinutes||0),0),work:logs.filter(x=>x.kind==='work').reduce((s,x)=>s+Number(x.durationMinutes||0),0),life:logs.filter(x=>x.kind!=='work').reduce((s,x)=>s+Number(x.durationMinutes||0),0)})}const timeMax=Math.max(1,...days.map(d=>d.total));timeChart.innerHTML=fullDataLoaded?`<div class="weekly-bars ops-weekly">${days.map(d=>`<div class="time-day"><b>${d.total?minutesText(d.total):'—'}</b><div class="time-day-column" style="height:${d.total?Math.max(7,d.total/timeMax*100):2}%"><i style="height:${d.total?d.work/d.total*100:0}%;background:#5478a6"></i><i style="height:${d.total?d.life/d.total*100:0}%;background:#4f806d"></i></div><span>${d.date.toLocaleDateString('vi-VN',{weekday:'short'})}</span></div>`).join('')}</div><div class="chart-legend"><span><i style="background:#5478a6"></i>Công việc</span><span><i style="background:#4f806d"></i>Đời sống</span></div>`:'<div class="empty-chart">Đang tải nhật ký thời gian…</div>';
@@ -361,7 +415,7 @@ function appointmentIcon(type){return {coffee:'☕',friend:'🎉',meeting:'🤝'
 function renderMiniCalendar(){
   const box=$('miniCalendar'),title=$('miniCalendarTitle');if(!box||!title)return;const year=miniCalendarCursor.getFullYear(),month=miniCalendarCursor.getMonth(),first=new Date(year,month,1),start=new Date(year,month,1-first.getDay()),today=localDateKey(new Date()),events={};
   const add=(value,icon,label,kind)=>{if(!value)return;const key=localDateKey(value);if(!key)return;(events[key]||(events[key]=[])).push({icon,label,kind})};
-  (data.tasks||[]).filter(task=>!truth(task.done)&&task.status!=='done').forEach(task=>add(task.dueAt,'✓',task.title,'deadline'));
+  openTasks().forEach(task=>add(task.dueAt,'✓',task.title,'deadline'));
   (data.flights||[]).filter(f=>f.status!=='cancelled').forEach(f=>add(f.departure,'✈️',`${f.code||'Bay'} ${f.fromCode||''}→${f.toCode||f.destination||''}`,'flight'));
   (data.hotels||[]).forEach(h=>add(h.checkIn,'🛏️',h.name||'Khách sạn','hotel'));
   (data.appointments||[]).forEach(a=>add(a.startAt,appointmentIcon(a.type),a.title||'Cuộc hẹn','appointment'));
@@ -383,7 +437,7 @@ function openAssistantAction(page,kind){
 }
 function renderTimeAnchor(){
   const now=new Date(); const clock=$('currentClock'); if(clock)clock.textContent=timeOnly(now,true);
-  const dated=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done'&&t.dueAt&&!isNaN(new Date(t.dueAt))).map(t=>({task:t,due:new Date(t.dueAt)}));
+  const dated=openTasks().filter(t=>t.dueAt&&!isNaN(new Date(t.dueAt))).map(t=>({task:t,due:new Date(t.dueAt)}));
   const overdue=dated.filter(x=>x.due<=now).sort((a,b)=>b.due-a.due),upcoming=dated.filter(x=>x.due>now).sort((a,b)=>a.due-b.due);
   const primary=upcoming[0]||overdue[0],countdown=$('nextTaskClock'),title=$('nextTaskTitle'),ring=$('deadlineRing'),queue=$('deadlineQueue'); if(!countdown||!title||!ring||!queue)return;
   ring.classList.remove('overdue','urgent','soon');
@@ -502,7 +556,7 @@ function openManualSleepLog(){const end=new Date(),start=new Date(end.getTime()-
 function renderKanban(){
   document.querySelectorAll('.kanban-list[data-kanban-key]').forEach(list=>kanbanScrollPositions[list.dataset.kanbanKey]=list.scrollTop);
   const now=new Date();
-  const open=data.tasks.filter(t=>!truth(t.done)&&t.status!=='done').sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
+  const open=openTasks().sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt));
   const overdue=open.filter(t=>t.dueAt&&new Date(t.dueAt)<=now);
   const upcoming=open.filter(t=>!t.dueAt||new Date(t.dueAt)>now);
   const done=data.tasks.filter(t=>truth(t.done)||t.status==='done').slice(-12).reverse();
@@ -524,8 +578,8 @@ function toggleKanbanColumn(key){kanbanCollapsed[key]=!kanbanCollapsed[key];loca
 function renderNotifications(){
   const box=$('notificationCenter');if(!box)return;
   const unread=(data.notifications||[]).filter(n=>{
-    if(n.readAt)return false;
-    if(n.targetType==='task'){const task=data.tasks.find(t=>t.id===n.targetId);return task&&!truth(task.done)&&task.status!=='done'}
+    if(!isCurrentNotification(n))return false;
+    if(n.targetType==='task'){const task=openTasks().find(t=>t.id===n.targetId);return Boolean(task)}
     if(n.targetType==='flight'){if(!fullDataLoaded)return true;const flight=data.flights.find(f=>f.id===n.targetId);return flight&&flight.status!=='cancelled'&&new Date(flight.departure)>new Date()}
     return true;
   }).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
@@ -749,7 +803,7 @@ function careerCvStats(){
   const cvs=(data.cvs||[]).slice().sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0)),latest=cvs[0]||null,content=String(latest?.content||''),words=content.trim()?content.trim().split(/\s+/).length:0,proof=(content.match(/\b\d+(?:[.,]\d+)?(?:%|\+|k|m|x)?\b/gi)||[]).length,profile=(data.profile||[])[0]||{},guidance=data.dailyguidance||{};
   const signals=[cvs.length>0,content.length>500,Boolean(latest?.targetRole),Boolean(latest?.driveUrl||latest?.fileName),Boolean(profile.email),Boolean(profile.phone),Boolean((guidance.careerFits||[]).length)],score=Math.round(signals.filter(Boolean).length/signals.length*100),missing=[];
   if(!cvs.length)missing.push('lưu CV đầu tiên');else{if(content.length<500)missing.push('bổ sung nội dung CV');if(!latest.targetRole)missing.push('chốt vai trò mục tiêu');if(!proof)missing.push('thêm kết quả có con số');if(!latest.driveUrl&&!latest.fileName)missing.push('gắn file hoặc Drive')}
-  const careerTasks=(data.tasks||[]).filter(t=>!truth(t.done)&&t.status!=='done'&&/(cv|hồ sơ|ứng tuyển|phỏng vấn|portfolio|linkedin)/i.test(t.title||'')).sort((a,b)=>new Date(a.dueAt||8640000000000000)-new Date(b.dueAt||8640000000000000));
+  const careerTasks=openTasks().filter(t=>/(cv|hồ sơ|ứng tuyển|phỏng vấn|portfolio|linkedin)/i.test(t.title||'')).sort((a,b)=>new Date(a.dueAt||8640000000000000)-new Date(b.dueAt||8640000000000000));
   return {cvs,latest,words,proof,score,missing,careerTask:careerTasks[0]||null,guidance};
 }
 function renderCareerCommandCenter(){
