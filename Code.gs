@@ -108,6 +108,7 @@ function readRowsSafe_(ss, name) {
 
 const TASK_INTAKE_FORMS_PROPERTY = 'TASK_INTAKE_FORMS_V1';
 const TASK_INTAKE_BOOK_PROPERTY = 'TASK_INTAKE_BOOK_ID';
+const TASK_INTAKE_NOTIFY_EMAIL_PROPERTY = 'TASK_INTAKE_NOTIFY_EMAIL';
 
 function taskIntakeForms_() {
   const raw = PropertiesService.getScriptProperties().getProperty(TASK_INTAKE_FORMS_PROPERTY);
@@ -145,7 +146,15 @@ function createTaskIntakeForm(role) {
   if (!labels[role]) throw new Error('Vai trò cộng tác không hợp lệ.');
   const forms = taskIntakeForms_();
   const existing = forms.find(function(item) { return item.role === role && item.active !== false; });
-  if (existing) return taskIntakeFormsPublic_().find(function(item) { return item.id === existing.id; });
+  const ownerEmail = String(Session.getEffectiveUser().getEmail() || '').trim();
+  if (ownerEmail) PropertiesService.getScriptProperties().setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, ownerEmail);
+  if (existing) {
+    if (!existing.notifyEmail && ownerEmail) {
+      existing.notifyEmail = ownerEmail;
+      saveTaskIntakeForms_(forms);
+    }
+    return taskIntakeFormsPublic_().find(function(item) { return item.id === existing.id; });
+  }
 
   const form = FormApp.create('My Assistant — Giao việc cho Đạt · ' + labels[role]);
   form.setDescription(
@@ -164,6 +173,7 @@ function createTaskIntakeForm(role) {
     label: labels[role],
     url: form.getPublishedUrl(),
     editUrl: form.getEditUrl(),
+    notifyEmail: ownerEmail,
     active: true,
     createdAt: new Date().toISOString()
   };
@@ -180,6 +190,8 @@ function onTaskIntakeFormSubmit_(event) {
   if (!event || !event.response || !event.source) return;
   const formId = event.source.getId();
   const formMeta = taskIntakeForms_().find(function(item) { return item.id === formId; }) || {};
+  const responseId = typeof event.response.getId === 'function' ? String(event.response.getId() || '') : '';
+  const inboxId = responseId ? 'form-' + formId + '-' + responseId : Utilities.getUuid();
   const answers = {};
   event.response.getItemResponses().forEach(function(response) {
     answers[response.getItem().getTitle()] = response.getResponse();
@@ -187,14 +199,8 @@ function onTaskIntakeFormSubmit_(event) {
   const bookId = PropertiesService.getScriptProperties().getProperty(TASK_INTAKE_BOOK_PROPERTY);
   if (!bookId) throw new Error('Chưa liên kết sổ dữ liệu nhận việc.');
   const ss = SpreadsheetApp.openById(bookId);
-  let sheet = ss.getSheetByName('TaskInbox');
-  if (!sheet) {
-    sheet = ss.insertSheet('TaskInbox');
-    ensureHeaders_(sheet, HEADERS.TaskInbox);
-    sheet.setFrozenRows(1);
-  }
   const item = {
-    id: Utilities.getUuid(),
+    id: inboxId,
     title: String(answers['Nhiệm vụ / đầu ra cần hoàn thành'] || '').trim(),
     deadlineText: String(answers.Deadline || '').trim(),
     notes: String(answers['Bối cảnh, tài liệu hoặc điều cần báo lại'] || '').trim(),
@@ -207,8 +213,96 @@ function onTaskIntakeFormSubmit_(event) {
     taskId: '',
     formId: formId
   };
-  sheet.appendRow(HEADERS.TaskInbox.map(function(key) { return item[key] === undefined ? '' : item[key]; }));
+
+  // A Form trigger can occasionally be retried by Google. The stable response
+  // id keeps both the inbox row and the email notification idempotent.
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    let sheet = ss.getSheetByName('TaskInbox');
+    if (!sheet) {
+      sheet = ss.insertSheet('TaskInbox');
+      ensureHeaders_(sheet, HEADERS.TaskInbox);
+      sheet.setFrozenRows(1);
+    }
+    const alreadySaved = readRows_(sheet).some(function(row) { return String(row.id || '') === inboxId; });
+    if (alreadySaved) return;
+    sheet.appendRow(HEADERS.TaskInbox.map(function(key) { return item[key] === undefined ? '' : item[key]; }));
+    appendTaskIntakeNotification_(ss, item);
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    sendTaskIntakeEmail_(item, formMeta);
+  } catch (error) {
+    // The task must remain safely stored even if Gmail is temporarily
+    // unavailable or the trigger needs its MailApp permission refreshed.
+    console.error('Không gửi được email báo task mới: ' + error.message);
+  }
   CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+}
+
+function appendTaskIntakeNotification_(ss, item) {
+  let sheet = ss.getSheetByName('Notifications');
+  if (!sheet) {
+    sheet = ss.insertSheet('Notifications');
+    ensureHeaders_(sheet, HEADERS.Notifications);
+    sheet.setFrozenRows(1);
+  }
+  const dedupeKey = 'task-intake:' + item.id;
+  const existing = readRows_(sheet).some(function(row) { return String(row.dedupeKey || '') === dedupeKey; });
+  if (existing) return false;
+  const sender = item.senderName || 'Người cộng tác';
+  const message = sender + ' vừa gửi: ' + item.title + (item.deadlineText ? ' · Hạn ' + item.deadlineText : '');
+  const value = {
+    id: Utilities.getUuid(),
+    type: 'task_intake',
+    title: 'Bạn có một task mới qua email',
+    message: message,
+    targetType: 'task_inbox',
+    targetId: item.id,
+    priority: item.urgency === 'Gấp' ? 'high' : 'normal',
+    dedupeKey: dedupeKey,
+    createdAt: new Date(),
+    readAt: ''
+  };
+  sheet.appendRow(HEADERS.Notifications.map(function(key) { return value[key] === undefined ? '' : value[key]; }));
+  return true;
+}
+
+function sendTaskIntakeEmail_(item, formMeta) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const recipient = String(
+    formMeta.notifyEmail ||
+    scriptProperties.getProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY) ||
+    Session.getEffectiveUser().getEmail() ||
+    ''
+  ).trim();
+  if (!recipient) throw new Error('Chưa xác định được email nhận thông báo.');
+
+  const roleLabels = { assistant: 'Trợ lý', partner: 'Người yêu', collaborator: 'Người cộng tác' };
+  const appUrl = ScriptApp.getService().getUrl();
+  const lines = [
+    'Bạn vừa nhận một task mới qua cổng My Assistant.',
+    '',
+    'Người gửi: ' + (item.senderName || 'Người cộng tác'),
+    'Vai trò: ' + (roleLabels[item.senderRole] || 'Người cộng tác'),
+    'Mức độ: ' + (item.urgency || 'Bình thường'),
+    'Task: ' + item.title,
+    'Deadline: ' + (item.deadlineText || 'Chưa chốt'),
+    'Bối cảnh: ' + (item.notes || 'Không có'),
+    '',
+    'Task đang ở Hàng đợi điều hành và chưa tự động vào Kanban.'
+  ];
+  if (appUrl) lines.push('Mở My Assistant để duyệt: ' + appUrl);
+
+  MailApp.sendEmail({
+    to: recipient,
+    subject: 'Bạn có một task mới qua email',
+    body: lines.join('\n'),
+    name: 'My Assistant'
+  });
 }
 
 function reviewTaskInbox(id, action) {
