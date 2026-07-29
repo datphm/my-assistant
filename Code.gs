@@ -40,15 +40,12 @@ const SCHEMA_VERSION = '2026-07-29-private-task-inbox-v18';
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
   const repairFinance = e && e.parameter && e.parameter.repairFinance;
-  const repairTaskEmail = e && e.parameter && e.parameter.repairTaskEmail;
   if (download === 'ios-profile') return buildIosProfile_();
   if (download === 'android-apk') return buildAndroidApkNote_();
   if (download === 'json') return buildJsonExport_();
   if (repairFinance === '1') return runBundledFinanceRecovery_();
-  if (repairTaskEmail === '1') {
-    return repairTaskIntakeEmail_(
-      e && e.parameter ? e.parameter.notifyEmail : ''
-    );
+  try { ensureTaskIntakeEmailDelivery_(); } catch (error) {
+    console.error('Không thể tự khôi phục email nhận task: ' + error.message);
   }
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('My Assistant')
@@ -113,6 +110,8 @@ function readRowsSafe_(ss, name) {
 }
 
 const TASK_INTAKE_FORMS_PROPERTY = 'TASK_INTAKE_FORMS_V1';
+const TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY = 'TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION';
+const TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION = '2026-07-30-v2';
 const TASK_INTAKE_BOOK_PROPERTY = 'TASK_INTAKE_BOOK_ID';
 const TASK_INTAKE_NOTIFY_EMAIL_PROPERTY = 'TASK_INTAKE_NOTIFY_EMAIL';
 
@@ -232,21 +231,46 @@ function onTaskIntakeFormSubmit_(event) {
       sheet.setFrozenRows(1);
     }
     const alreadySaved = readRows_(sheet).some(function(row) { return String(row.id || '') === inboxId; });
-    if (alreadySaved) return;
-    sheet.appendRow(HEADERS.TaskInbox.map(function(key) { return item[key] === undefined ? '' : item[key]; }));
-    appendTaskIntakeNotification_(ss, item);
+    if (!alreadySaved) {
+      sheet.appendRow(HEADERS.TaskInbox.map(function(key) { return item[key] === undefined ? '' : item[key]; }));
+      appendTaskIntakeNotification_(ss, item);
+    }
   } finally {
     lock.releaseLock();
   }
 
   try {
-    sendTaskIntakeEmail_(item, formMeta);
+    sendTaskIntakeEmailOnce_(item, formMeta);
   } catch (error) {
     // The task must remain safely stored even if Gmail is temporarily
     // unavailable or the trigger needs its MailApp permission refreshed.
     console.error('Không gửi được email báo task mới: ' + error.message);
   }
   CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+}
+
+function taskIntakeEmailSentKey_(itemId) {
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(itemId || ''),
+    Utilities.Charset.UTF_8
+  );
+  return 'TASK_INTAKE_EMAIL_SENT_' + Utilities.base64EncodeWebSafe(digest).slice(0, 32);
+}
+
+function sendTaskIntakeEmailOnce_(item, formMeta) {
+  const properties = PropertiesService.getScriptProperties();
+  const sentKey = taskIntakeEmailSentKey_(item.id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (properties.getProperty(sentKey)) return false;
+    sendTaskIntakeEmail_(item, formMeta);
+    properties.setProperty(sentKey, new Date().toISOString());
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function appendTaskIntakeNotification_(ss, item) {
@@ -311,31 +335,31 @@ function sendTaskIntakeEmail_(item, formMeta) {
   });
 }
 
-/**
- * One-time recovery for task-intake email alerts.
- * It stores the owner address outside source control, repairs missing triggers
- * on forms that already exist, then replays the newest pending task as a test.
- * The public recovery route is removed immediately after it has been run.
- */
-function repairTaskIntakeEmail_(notifyEmail) {
-  const email = String(notifyEmail || '').trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return taskIntakeRepairOutput_({
-      ok: false,
-      message: 'Địa chỉ email nhận thông báo không hợp lệ.'
-    });
-  }
+// Runs only once per deployed bootstrap version. It repairs missing Form
+// triggers and replays the newest Form response, including responses that
+// never reached TaskInbox because their original trigger was absent.
+function ensureTaskIntakeEmailDelivery_() {
+  const properties = PropertiesService.getScriptProperties();
+  if (properties.getProperty(TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY) === TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION) return;
 
   const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(1000)) return;
+  let latest = null;
   try {
-    const scriptProperties = PropertiesService.getScriptProperties();
-    scriptProperties.setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, email);
-
     const forms = taskIntakeForms_();
-    forms.forEach(function(form) {
-      form.notifyEmail = email;
-    });
+    if (!forms.length) {
+      properties.setProperty(TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY, TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION);
+      return;
+    }
+
+    const email = String(
+      properties.getProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY) ||
+      Session.getEffectiveUser().getEmail() ||
+      ''
+    ).trim();
+    if (!email) throw new Error('Chưa xác định được email chủ ứng dụng.');
+    properties.setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, email);
+    forms.forEach(function(meta) { meta.notifyEmail = email; });
     saveTaskIntakeForms_(forms);
 
     const existingTriggerIds = {};
@@ -347,73 +371,26 @@ function repairTaskIntakeEmail_(notifyEmail) {
       if (sourceId) existingTriggerIds[sourceId] = true;
     });
 
-    let triggersCreated = 0;
-    const triggerErrors = [];
-    forms.filter(function(form) { return form.active !== false; }).forEach(function(form) {
-      if (!form.id || existingTriggerIds[String(form.id)]) return;
-      try {
-        ScriptApp.newTrigger('onTaskIntakeFormSubmit_')
-          .forForm(FormApp.openById(form.id))
-          .onFormSubmit()
-          .create();
-        existingTriggerIds[String(form.id)] = true;
-        triggersCreated++;
-      } catch (error) {
-        triggerErrors.push(String(form.label || form.id) + ': ' + error.message);
+    forms.filter(function(meta) { return meta.active !== false; }).forEach(function(meta) {
+      const form = FormApp.openById(meta.id);
+      if (!existingTriggerIds[String(meta.id)]) {
+        ScriptApp.newTrigger('onTaskIntakeFormSubmit_').forForm(form).onFormSubmit().create();
+        existingTriggerIds[String(meta.id)] = true;
       }
-    });
-
-    const bookId = scriptProperties.getProperty(TASK_INTAKE_BOOK_PROPERTY);
-    let replayedTask = '';
-    if (bookId) {
-      const ss = SpreadsheetApp.openById(bookId);
-      const inboxSheet = ss.getSheetByName('TaskInbox');
-      const pending = inboxSheet
-        ? readRows_(inboxSheet).filter(function(item) { return item.status === 'pending'; })
-        : [];
-      if (pending.length) {
-        const latest = pending[pending.length - 1];
-        const meta = forms.find(function(form) { return String(form.id) === String(latest.formId); }) || {
-          notifyEmail: email
-        };
-        sendTaskIntakeEmail_(latest, meta);
-        replayedTask = latest.title || 'Task mới nhất';
+      const responses = form.getResponses();
+      if (!responses.length) return;
+      const response = responses[responses.length - 1];
+      const timestamp = response.getTimestamp().getTime();
+      if (!latest || timestamp > latest.timestamp) {
+        latest = { source: form, response: response, timestamp: timestamp };
       }
-    }
-
-    if (!replayedTask) {
-      MailApp.sendEmail({
-        to: email,
-        subject: 'My Assistant · Email báo task đã hoạt động',
-        body: 'Hệ thống đã khôi phục email báo task mới và kiểm tra lại trigger của các form cộng tác.',
-        name: 'My Assistant'
-      });
-    }
-
-    return taskIntakeRepairOutput_({
-      ok: true,
-      message: replayedTask
-        ? 'Đã gửi lại email cho task test mới nhất.'
-        : 'Đã gửi email kiểm tra.',
-      forms: forms.length,
-      triggersCreated: triggersCreated,
-      triggerErrors: triggerErrors,
-      replayedTask: replayedTask
-    });
-  } catch (error) {
-    return taskIntakeRepairOutput_({
-      ok: false,
-      message: error.message
     });
   } finally {
     lock.releaseLock();
   }
-}
 
-function taskIntakeRepairOutput_(value) {
-  return ContentService
-    .createTextOutput(JSON.stringify(value, null, 2))
-    .setMimeType(ContentService.MimeType.JSON);
+  if (latest) onTaskIntakeFormSubmit_({ source: latest.source, response: latest.response });
+  properties.setProperty(TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY, TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION);
 }
 
 function reviewTaskInbox(id, action) {
