@@ -117,7 +117,7 @@ function readRowsSafe_(ss, name) {
 
 const TASK_INTAKE_FORMS_PROPERTY = 'TASK_INTAKE_FORMS_V1';
 const TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY = 'TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION';
-const TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION = '2026-07-30-v3';
+const TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION = '2026-07-30-v4';
 const TASK_INTAKE_BOOK_PROPERTY = 'TASK_INTAKE_BOOK_ID';
 const TASK_INTAKE_NOTIFY_EMAIL_PROPERTY = 'TASK_INTAKE_NOTIFY_EMAIL';
 const TASK_INTAKE_DEFAULT_NOTIFY_EMAIL = 'datphm03@gmail.com';
@@ -372,7 +372,12 @@ function ensureTaskIntakeEmailDelivery_() {
     saveTaskIntakeForms_(forms);
 
     const existingTriggerIds = {};
+    let hasBacklogTrigger = false;
     ScriptApp.getProjectTriggers().forEach(function(trigger) {
+      if (trigger.getHandlerFunction() === 'processTaskIntakeBacklog_') {
+        hasBacklogTrigger = true;
+        return;
+      }
       if (trigger.getHandlerFunction() !== 'onTaskIntakeFormSubmit_') return;
       const sourceId = typeof trigger.getTriggerSourceId === 'function'
         ? String(trigger.getTriggerSourceId() || '')
@@ -394,12 +399,38 @@ function ensureTaskIntakeEmailDelivery_() {
         latest = { source: form, response: response, timestamp: timestamp };
       }
     });
+    // Google Form installable triggers are normally immediate, but can be
+    // delayed or removed after a deployment. This lightweight one-minute
+    // safety net replays only unsent recent responses and keeps delivery
+    // idempotent through TASK_INTAKE_EMAIL_SENT_* properties.
+    if (!hasBacklogTrigger) {
+      ScriptApp.newTrigger('processTaskIntakeBacklog_').timeBased().everyMinutes(1).create();
+    }
   } finally {
     lock.releaseLock();
   }
 
   if (latest) onTaskIntakeFormSubmit_({ source: latest.source, response: latest.response });
   properties.setProperty(TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY, TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION);
+}
+
+function processTaskIntakeBacklog_() {
+  const forms = taskIntakeForms_().filter(function(meta) { return meta.active !== false; });
+  forms.forEach(function(meta) {
+    try {
+      const form = FormApp.openById(meta.id);
+      const responses = form.getResponses();
+      responses.slice(Math.max(0, responses.length - 30)).forEach(function(response) {
+        const responseId = typeof response.getId === 'function' ? String(response.getId() || '') : '';
+        if (!responseId) return;
+        const inboxId = 'form-' + form.getId() + '-' + responseId;
+        if (PropertiesService.getScriptProperties().getProperty(taskIntakeEmailSentKey_(inboxId))) return;
+        onTaskIntakeFormSubmit_({ source: form, response: response });
+      });
+    } catch (error) {
+      console.error('Không thể rà hàng đợi form ' + meta.id + ': ' + error.message);
+    }
+  });
 }
 
 function repairTaskIntakeEmailDelivery(notifyEmail) {

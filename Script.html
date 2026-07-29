@@ -224,16 +224,20 @@ function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
     :`<div class="command-portal"><span>${esc(label)}</span><b>Chưa tạo cổng giao việc</b><button onclick="createTaskIntakePortal('${role}',this)">Tạo link riêng</button></div>`;
   return `<article class="assistant-command-wall assistant-command-wall-compact">
     <section class="assistant-overview-wall">
-      <header><div><span>MY ASSISTANT · OPERATION CENTER</span><h2>${overdue.length?'Có việc cần bạn chốt ngay':'Hệ thống đang trong tầm kiểm soát'}</h2><p>${focus?`Bước tiếp theo: ${esc(focus.nextAction||focus.title)}`:'Ghi việc ngay khi nhận để não không phải giữ.'}</p></div><button onclick="loadAssistantBrief(true)">↻ Cập nhật</button></header>
-      <div class="assistant-overview-kpis">
-        <button onclick="activatePage('today')"><small>VIỆC MỞ</small><b>${open.length}</b><em>${overdue.length} quá hạn · ${followups.length} follow-up</em></button>
-        <button onclick="activatePage('money')"><small>SAU KHI TRỪ NỢ</small><b>${assistantMoney(net)}</b><em>Mở kế hoạch dòng tiền</em></button>
-        <button onclick="activatePage('food')"><small>SỨC KHỎE</small><b>${num(water)} ml</b><em>Nước hôm nay</em></button>
-        <button onclick="activatePage('time')"><small>THỜI GIAN</small><b>${minutesText(logged)}</b><em>Đã log hôm nay</em></button>
-        <button onclick="activatePage('travel')"><small>CHUYẾN KẾ TIẾP</small><b>${esc(flight?.code||'—')}</b><em>${flight?`${esc(flight.fromCode||'')} → ${esc(flight.toCode||flight.destination||'')}`:'Chưa có chuyến gần'}</em></button>
-        <button onclick="activatePage('study')"><small>DU HỌC</small><b>${study}</b><em>Bước hồ sơ đang mở</em></button>
+      <header class="assistant-overview-head"><div><span>MY ASSISTANT · COMMAND CENTER</span><h2>${overdue.length?'Có việc cần bạn chốt ngay':'Hệ thống đang trong tầm kiểm soát'}</h2><p>Một màn hình để chốt việc, giữ nhịp sống và không bỏ sót tín hiệu quan trọng.</p></div><button onclick="loadAssistantBrief(true)">↻ Làm mới</button></header>
+      <div class="assistant-focus-hero ${overdue.length?'danger':''}">
+        <div><small>${overdue.length?'ƯU TIÊN KHẨN':'VIỆC NÊN LÀM NGAY'}</small><h3>${esc(focus?.title||'Ghi việc vừa nhận vào hệ thống')}</h3><p>${esc(focus?.nextAction||'Chọn một bước có thể hoàn thành trong 5–10 phút, rồi báo lại.')}</p></div>
+        <button onclick="${focus?`focusTask('${focus.id}')`:`openForm('task')`}">${focus?'▶ Bắt đầu 10 phút':'＋ Ghi việc'}</button>
       </div>
-      <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Làm việc cần nhất</button><button onclick="openForm('task')">＋ Ghi việc</button><button onclick="assistantPickForMe()">⚡ Chọn giúp tôi</button><button onclick="quickHealthLog('water')">💧 +250 ml</button></div>
+      <div class="assistant-overview-kpis">
+        <button class="${overdue.length?'danger':''}" onclick="activatePage('today')"><small>VIỆC MỞ</small><b>${open.length}</b><em>${overdue.length} quá hạn · ${followups.length} follow-up</em></button>
+        <button class="${net<0?'danger':'green'}" onclick="activatePage('money')"><small>SAU KHI TRỪ NỢ</small><b>${assistantMoney(net)}</b><em>Dòng tiền khả dụng</em></button>
+        <button class="aqua" onclick="activatePage('food')"><small>SỨC KHỎE</small><b>${num(water)} ml</b><em>Nước hôm nay</em></button>
+        <button class="green" onclick="activatePage('time')"><small>THỜI GIAN</small><b>${minutesText(logged)}</b><em>Đã log hôm nay</em></button>
+        <button class="violet" onclick="activatePage('travel')"><small>CHUYẾN KẾ TIẾP</small><b>${esc(flight?.code||'—')}</b><em>${flight?`${esc(flight.fromCode||'')} → ${esc(flight.toCode||flight.destination||'')}`:'Chưa có chuyến gần'}</em></button>
+        <button class="amber" onclick="activatePage('study')"><small>DU HỌC</small><b>${study}</b><em>Bước hồ sơ đang mở</em></button>
+      </div>
+      <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Focus</button><button onclick="openForm('task')">＋ Ghi việc</button><button onclick="assistantPickForMe()">⚡ Chọn giúp tôi</button><button onclick="quickHealthLog('water')">💧 +250 ml</button></div>
     </section>
     <details class="command-wall-share-details" ${(collaboration.pendingCount||0)?'open':''}>
       <summary><span><b>Hộp giao việc riêng tư</b><small>Người khác chỉ gửi việc, không xem dữ liệu cá nhân</small></span><i>${collaboration.pendingCount||0} chờ duyệt</i></summary>
