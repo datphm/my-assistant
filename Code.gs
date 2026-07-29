@@ -7,7 +7,7 @@ const HEADERS = {
   HealthProfile: ['id', 'heightCm', 'startWeightKg', 'currentWeightKg', 'goal1Kg', 'goal2Kg', 'targetDate', 'activityLevel', 'exerciseTime', 'walkingGoalMinutes', 'waterGoalMl', 'calorieDeficitTarget', 'dailyCalorieTarget', 'limitations', 'updatedAt'],
   WeightLogs: ['id', 'date', 'weightKg', 'note'],
   HealthLogs: ['id', 'date', 'type', 'amount', 'durationMinutes', 'steps', 'label', 'source', 'note', 'createdAt'],
-  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'gate', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt'],
+  Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'gate', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt', 'departureTimeZone', 'arrival', 'arrivalTimeZone'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Appointments: ['id', 'title', 'type', 'startAt', 'endAt', 'location', 'withWhom', 'transport', 'notes', 'calendarEventId', 'createdAt'],
   Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
@@ -35,7 +35,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-29-private-task-inbox-v18';
+const SCHEMA_VERSION = '2026-07-30-flight-timezones-v19';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -489,7 +489,7 @@ function getAssistantBrief(forceRefresh) {
   const flights = readRows_(ss.getSheetByName('Flights')).filter(function(flight) {
     if (!flight.departure || flight.status === 'cancelled') return false;
     const departure = new Date(flight.departure);
-    return flightArrivalDate_(departure, flight.arrTime) > now;
+    return flightArrivalDate_(departure, flight.arrTime, flight) > now;
   }).sort(function(a, b) {
     const aDeparture = new Date(a.departure), bDeparture = new Date(b.departure);
     const aInFlight = aDeparture <= now, bInFlight = bDeparture <= now;
@@ -2075,7 +2075,7 @@ function syncFlightToCalendar_(id) {
   const flight = readRows_(sheet).find(function(row) { return row.id === id; });
   if (!flight || !flight.departure) throw new Error('Chuyến bay chưa có giờ khởi hành.');
   const departure = new Date(flight.departure);
-  const arrival = flightArrivalDate_(departure, flight.arrTime);
+  const arrival = flightArrivalDate_(departure, flight.arrTime, flight);
   const cal = CalendarApp.getDefaultCalendar();
   let event = null;
   if (flight.calendarEventId) {
@@ -2168,7 +2168,11 @@ function airlineCheckinUrl_(code) {
   return urls[prefix] || '';
 }
 
-function flightArrivalDate_(departure, arrTime) {
+function flightArrivalDate_(departure, arrTime, flight) {
+  if (flight && flight.arrival) {
+    const storedArrival = new Date(flight.arrival);
+    if (!isNaN(storedArrival) && storedArrival > departure) return storedArrival;
+  }
   const arrival = new Date(departure);
   const parts = String(arrTime || '').match(/(\d{1,2}):(\d{2})/);
   if (!parts) return new Date(departure.getTime() + 2 * 60 * 60 * 1000);
