@@ -35,15 +35,21 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-30-flight-timezones-v19';
+const SCHEMA_VERSION = '2026-07-30-flight-gmt-offsets-v20';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
   const repairFinance = e && e.parameter && e.parameter.repairFinance;
+  const repairTaskEmail = e && e.parameter && e.parameter.repairTaskEmail;
   if (download === 'ios-profile') return buildIosProfile_();
   if (download === 'android-apk') return buildAndroidApkNote_();
   if (download === 'json') return buildJsonExport_();
   if (repairFinance === '1') return runBundledFinanceRecovery_();
+  if (repairTaskEmail === '1') {
+    const notifyEmail = e && e.parameter && e.parameter.notifyEmail;
+    return ContentService.createTextOutput(JSON.stringify(repairTaskIntakeEmailDelivery(notifyEmail)))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   try { ensureTaskIntakeEmailDelivery_(); } catch (error) {
     console.error('Không thể tự khôi phục email nhận task: ' + error.message);
   }
@@ -111,9 +117,17 @@ function readRowsSafe_(ss, name) {
 
 const TASK_INTAKE_FORMS_PROPERTY = 'TASK_INTAKE_FORMS_V1';
 const TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY = 'TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION';
-const TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION = '2026-07-30-v2';
+const TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION = '2026-07-30-v3';
 const TASK_INTAKE_BOOK_PROPERTY = 'TASK_INTAKE_BOOK_ID';
 const TASK_INTAKE_NOTIFY_EMAIL_PROPERTY = 'TASK_INTAKE_NOTIFY_EMAIL';
+const TASK_INTAKE_DEFAULT_NOTIFY_EMAIL = 'datphm03@gmail.com';
+
+function taskIntakeNotifyEmail_() {
+  return String(
+    PropertiesService.getScriptProperties().getProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY) ||
+    TASK_INTAKE_DEFAULT_NOTIFY_EMAIL
+  ).trim();
+}
 
 function taskIntakeForms_() {
   const raw = PropertiesService.getScriptProperties().getProperty(TASK_INTAKE_FORMS_PROPERTY);
@@ -151,7 +165,7 @@ function createTaskIntakeForm(role) {
   if (!labels[role]) throw new Error('Vai trò cộng tác không hợp lệ.');
   const forms = taskIntakeForms_();
   const existing = forms.find(function(item) { return item.role === role && item.active !== false; });
-  const ownerEmail = String(Session.getEffectiveUser().getEmail() || '').trim();
+  const ownerEmail = taskIntakeNotifyEmail_();
   if (ownerEmail) PropertiesService.getScriptProperties().setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, ownerEmail);
   if (existing) {
     if (!existing.notifyEmail && ownerEmail) {
@@ -306,8 +320,7 @@ function sendTaskIntakeEmail_(item, formMeta) {
   const recipient = String(
     formMeta.notifyEmail ||
     scriptProperties.getProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY) ||
-    Session.getEffectiveUser().getEmail() ||
-    ''
+    TASK_INTAKE_DEFAULT_NOTIFY_EMAIL
   ).trim();
   if (!recipient) throw new Error('Chưa xác định được email nhận thông báo.');
 
@@ -352,11 +365,7 @@ function ensureTaskIntakeEmailDelivery_() {
       return;
     }
 
-    const email = String(
-      properties.getProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY) ||
-      Session.getEffectiveUser().getEmail() ||
-      ''
-    ).trim();
+    const email = taskIntakeNotifyEmail_();
     if (!email) throw new Error('Chưa xác định được email chủ ứng dụng.');
     properties.setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, email);
     forms.forEach(function(meta) { meta.notifyEmail = email; });
@@ -391,6 +400,24 @@ function ensureTaskIntakeEmailDelivery_() {
 
   if (latest) onTaskIntakeFormSubmit_({ source: latest.source, response: latest.response });
   properties.setProperty(TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY, TASK_INTAKE_EMAIL_BOOTSTRAP_VERSION);
+}
+
+function repairTaskIntakeEmailDelivery(notifyEmail) {
+  const properties = PropertiesService.getScriptProperties();
+  const email = String(notifyEmail || taskIntakeNotifyEmail_()).trim();
+  if (!email || email.indexOf('@') < 1) throw new Error('Email nhận thông báo không hợp lệ.');
+  properties.setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, email);
+  properties.deleteProperty(TASK_INTAKE_EMAIL_BOOTSTRAP_PROPERTY);
+  const forms = taskIntakeForms_();
+  forms.forEach(function(meta) { meta.notifyEmail = email; });
+  saveTaskIntakeForms_(forms);
+  ensureTaskIntakeEmailDelivery_();
+  return {
+    ok: true,
+    notifyEmail: email,
+    activeForms: forms.filter(function(meta) { return meta.active !== false; }).length,
+    message: 'Đã sửa trigger và khôi phục email task mới.'
+  };
 }
 
 function reviewTaskInbox(id, action) {
@@ -2208,7 +2235,7 @@ function sendDueTaskReminders() {
   const props = PropertiesService.getUserProperties();
   const emailEnabled = props.getProperty('APP_EMAIL_REMINDERS') !== 'no';
   const quiet = isQuietHours_(now, props.getProperty('APP_QUIET_START'), props.getProperty('APP_QUIET_END'));
-  const recipient = Session.getEffectiveUser().getEmail();
+  const recipient = taskIntakeNotifyEmail_();
   if (!recipient) throw new Error('Hãy triển khai app trong tài khoản Google Workspace của bạn để gửi email nhắc việc.');
   rows.forEach((task, i) => {
     if (!task.dueAt || task.done || task.status === 'done') return;

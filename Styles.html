@@ -800,12 +800,50 @@ html[data-theme=dark] .assistant-command-wall,html[data-theme=dark] .today-comma
 /* 2026-07-30: assistant tab — one clear decision surface, deeper data on demand. */
 .assistant-command-wall-compact{
   display:grid;
-  grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);
+  grid-template-columns:1fr;
   gap:12px;
   padding:14px!important;
 }
 .assistant-command-wall-compact::after{display:none}
 .assistant-command-wall-compact .command-wall-fortune{padding:14px;border-radius:17px;box-shadow:none}
+.assistant-overview-wall{
+  display:grid;
+  gap:13px;
+  padding:18px;
+  border:1px solid #bad9d2;
+  border-left:6px solid #5795c4;
+  border-radius:22px;
+  background:linear-gradient(125deg,#f5f9ff 0%,#effaf7 58%,#f8fff9 100%);
+  box-shadow:0 16px 34px rgba(54,91,103,.11);
+}
+.assistant-overview-wall .command-wall-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.assistant-overview-wall .command-wall-head>div{min-width:0}
+.assistant-overview-wall .command-wall-head small{color:#4f9b83;font-size:9px;font-weight:900;letter-spacing:.14em}
+.assistant-overview-wall .command-wall-head h2{margin:5px 0 2px;color:#24453f;font-size:25px;line-height:1.08}
+.assistant-overview-wall .command-wall-head p{margin:0;color:#657e78;font-size:11px}
+.assistant-overview-wall .command-wall-head>strong{max-width:42%;color:#2e6457;font-size:12px;line-height:1.35;text-align:right}
+.assistant-overview-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.assistant-overview-kpis>button{
+  display:grid;
+  align-content:center;
+  gap:4px;
+  min-width:0;
+  min-height:78px;
+  padding:11px!important;
+  border:1px solid #cce1dc!important;
+  border-radius:15px!important;
+  background:#ffffffd9!important;
+  color:#274b44!important;
+  text-align:left;
+  box-shadow:none!important;
+}
+.assistant-overview-kpis span{overflow:hidden;color:#6c847e;font-size:8px;font-weight:850;letter-spacing:.07em;text-overflow:ellipsis;white-space:nowrap}
+.assistant-overview-kpis b{overflow:hidden;color:#24453f;font-size:17px;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}
+.assistant-overview-kpis small{overflow:hidden;color:#78908b;font-size:8px;text-overflow:ellipsis;white-space:nowrap}
+.assistant-overview-actions{display:grid;grid-template-columns:1.35fr repeat(3,1fr);gap:8px}
+.assistant-overview-actions button{min-height:42px;border-radius:12px!important}
+.assistant-command-wall-compact + .assistant-now,
+.assistant-command-wall-compact + .assistant-now + .assistant-signal-strip{display:none!important}
 .command-wall-share-details{
   min-width:0;
   align-self:start;
@@ -890,6 +928,11 @@ html[data-theme=dark] .assistant-command-wall,html[data-theme=dark] .today-comma
 .assistant-day-loop-compact{margin:0}
 @media(max-width:760px){
   .assistant-command-wall-compact{grid-template-columns:1fr;padding:10px!important}
+  .assistant-overview-wall{padding:13px;border-radius:18px}
+  .assistant-overview-wall .command-wall-head{display:grid}
+  .assistant-overview-wall .command-wall-head>strong{max-width:none;text-align:left}
+  .assistant-overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .assistant-overview-actions{grid-template-columns:1fr 1fr}
   .assistant-command-wall-compact .command-wall-fortune{padding:12px}
   .command-wall-share-details>summary{padding:12px}
   .assistant-compact-modes{display:grid;grid-template-columns:1fr 1fr}
