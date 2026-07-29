@@ -40,10 +40,16 @@ const SCHEMA_VERSION = '2026-07-29-private-task-inbox-v18';
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
   const repairFinance = e && e.parameter && e.parameter.repairFinance;
+  const repairTaskEmail = e && e.parameter && e.parameter.repairTaskEmail;
   if (download === 'ios-profile') return buildIosProfile_();
   if (download === 'android-apk') return buildAndroidApkNote_();
   if (download === 'json') return buildJsonExport_();
   if (repairFinance === '1') return runBundledFinanceRecovery_();
+  if (repairTaskEmail === '1') {
+    return repairTaskIntakeEmail_(
+      e && e.parameter ? e.parameter.notifyEmail : ''
+    );
+  }
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('My Assistant')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -303,6 +309,111 @@ function sendTaskIntakeEmail_(item, formMeta) {
     body: lines.join('\n'),
     name: 'My Assistant'
   });
+}
+
+/**
+ * One-time recovery for task-intake email alerts.
+ * It stores the owner address outside source control, repairs missing triggers
+ * on forms that already exist, then replays the newest pending task as a test.
+ * The public recovery route is removed immediately after it has been run.
+ */
+function repairTaskIntakeEmail_(notifyEmail) {
+  const email = String(notifyEmail || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return taskIntakeRepairOutput_({
+      ok: false,
+      message: 'Địa chỉ email nhận thông báo không hợp lệ.'
+    });
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    scriptProperties.setProperty(TASK_INTAKE_NOTIFY_EMAIL_PROPERTY, email);
+
+    const forms = taskIntakeForms_();
+    forms.forEach(function(form) {
+      form.notifyEmail = email;
+    });
+    saveTaskIntakeForms_(forms);
+
+    const existingTriggerIds = {};
+    ScriptApp.getProjectTriggers().forEach(function(trigger) {
+      if (trigger.getHandlerFunction() !== 'onTaskIntakeFormSubmit_') return;
+      const sourceId = typeof trigger.getTriggerSourceId === 'function'
+        ? String(trigger.getTriggerSourceId() || '')
+        : '';
+      if (sourceId) existingTriggerIds[sourceId] = true;
+    });
+
+    let triggersCreated = 0;
+    const triggerErrors = [];
+    forms.filter(function(form) { return form.active !== false; }).forEach(function(form) {
+      if (!form.id || existingTriggerIds[String(form.id)]) return;
+      try {
+        ScriptApp.newTrigger('onTaskIntakeFormSubmit_')
+          .forForm(FormApp.openById(form.id))
+          .onFormSubmit()
+          .create();
+        existingTriggerIds[String(form.id)] = true;
+        triggersCreated++;
+      } catch (error) {
+        triggerErrors.push(String(form.label || form.id) + ': ' + error.message);
+      }
+    });
+
+    const bookId = scriptProperties.getProperty(TASK_INTAKE_BOOK_PROPERTY);
+    let replayedTask = '';
+    if (bookId) {
+      const ss = SpreadsheetApp.openById(bookId);
+      const inboxSheet = ss.getSheetByName('TaskInbox');
+      const pending = inboxSheet
+        ? readRows_(inboxSheet).filter(function(item) { return item.status === 'pending'; })
+        : [];
+      if (pending.length) {
+        const latest = pending[pending.length - 1];
+        const meta = forms.find(function(form) { return String(form.id) === String(latest.formId); }) || {
+          notifyEmail: email
+        };
+        sendTaskIntakeEmail_(latest, meta);
+        replayedTask = latest.title || 'Task mới nhất';
+      }
+    }
+
+    if (!replayedTask) {
+      MailApp.sendEmail({
+        to: email,
+        subject: 'My Assistant · Email báo task đã hoạt động',
+        body: 'Hệ thống đã khôi phục email báo task mới và kiểm tra lại trigger của các form cộng tác.',
+        name: 'My Assistant'
+      });
+    }
+
+    return taskIntakeRepairOutput_({
+      ok: true,
+      message: replayedTask
+        ? 'Đã gửi lại email cho task test mới nhất.'
+        : 'Đã gửi email kiểm tra.',
+      forms: forms.length,
+      triggersCreated: triggersCreated,
+      triggerErrors: triggerErrors,
+      replayedTask: replayedTask
+    });
+  } catch (error) {
+    return taskIntakeRepairOutput_({
+      ok: false,
+      message: error.message
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function taskIntakeRepairOutput_(value) {
+  return ContentService
+    .createTextOutput(JSON.stringify(value, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function reviewTaskInbox(id, action) {
