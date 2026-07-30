@@ -2259,55 +2259,105 @@ function sendDueTaskReminders() {
     console.error('Không thể tự khôi phục email nhận task trong lượt nhắc: ' + error.message);
   }
   const ss = getBook_();
-  const sheet = ss.getSheetByName('Tasks');
-  const rows = readRows_(sheet);
+  const rows = readRows_(ss.getSheetByName('Tasks'));
   const taskSteps = readRows_(ss.getSheetByName('TaskSteps'));
   const now = new Date();
   const props = PropertiesService.getUserProperties();
-  const emailEnabled = props.getProperty('APP_EMAIL_REMINDERS') !== 'no';
-  const quiet = isQuietHours_(now, props.getProperty('APP_QUIET_START'), props.getProperty('APP_QUIET_END'));
   const recipient = taskIntakeNotifyEmail_();
-  if (!recipient) throw new Error('Hãy triển khai app trong tài khoản Google Workspace của bạn để gửi email nhắc việc.');
-  rows.forEach((task, i) => {
-    if (!task.dueAt || task.done || task.status === 'done') return;
-    const due = new Date(task.dueAt);
-    const last = task.lastEmailedAt ? new Date(task.lastEmailedAt) : null;
+  rows.forEach(function(task) {
+    if (!isOpenReminderTask_(task)) return;
+    const due = task.dueAt ? new Date(task.dueAt) : null;
     const snoozed = task.snoozedUntil && new Date(task.snoozedUntil) > now;
     if (snoozed) return;
-    const delta = due - now;
-    const overdue = delta <= 0;
-    const dueSoon = delta > 0 && delta <= 30 * 60 * 1000;
-    const forgotten = delta <= -24 * 60 * 60 * 1000 && !task.startedAt;
+    const delta = due && !isNaN(due.getTime()) ? due - now : null;
+    const overdue = delta !== null && delta <= 0;
+    const dueSoon = delta !== null && delta > 0 && delta <= 30 * 60 * 1000;
+    const forgotten = delta !== null && delta <= -24 * 60 * 60 * 1000 && !task.startedAt;
     const steps = taskSteps.filter(function(step) { return step.taskId === task.id; });
-    const completedSteps = steps.filter(function(step) { return step.done === true || step.done === 'TRUE'; }).length;
     const nextStep = steps.filter(function(step) { return !(step.done === true || step.done === 'TRUE'); }).sort(function(a, b) { return Number(a.position || 0) - Number(b.position || 0); })[0];
     const followUpDue = task.followUpAt && new Date(task.followUpAt) <= now;
-    const lastFollowUp = task.lastFollowUpEmailedAt ? new Date(task.lastFollowUpEmailedAt) : null;
-    const canFollowUp = !lastFollowUp || now - lastFollowUp >= 2 * 60 * 60 * 1000;
     if (followUpDue) createNotification_('task_follow_up', 'Đến giờ follow-up', task.title + (task.waitingFor ? ' · đang chờ ' + task.waitingFor : ''), 'task', task.id, 'high', 'follow-up:' + task.id + ':' + Math.floor(now.getTime() / (2 * 60 * 60 * 1000)));
-    if (followUpDue && canFollowUp && emailEnabled && !quiet) {
-      MailApp.sendEmail(recipient, 'FOLLOW-UP · My Assistant: ' + task.title, 'Đến mốc follow-up của việc này.' + (task.waitingFor ? '\nĐang chờ: ' + task.waitingFor : '') + '\n\nBước tiếp theo: ' + (nextStep ? nextStep.title : task.nextAction || 'Cập nhật tình hình và chốt bước kế tiếp') + '\nChecklist: ' + completedSteps + '/' + steps.length + '\n\nSau khi xử lý, bấm “Cập nhật” để đặt mốc follow-up mới.');
-      upsertRow_(sheet, Object.assign({}, task, { lastFollowUpEmailedAt: now }));
-    }
     const progressBase = task.lastProgressAt || task.startedAt;
     const staleInProgress = task.startedAt && progressBase && now - new Date(progressBase) >= 2 * 60 * 60 * 1000;
     if (staleInProgress) createNotification_('progress_check', 'Bạn vẫn đang làm việc này?', (nextStep ? 'Bước kế: ' + nextStep.title : task.title) + ' · cập nhật tiến độ hoặc đặt follow-up.', 'task', task.id, 'normal', 'progress-check:' + task.id + ':' + Math.floor(now.getTime() / (2 * 60 * 60 * 1000)));
     if (dueSoon) createNotification_('due_30m', 'Còn dưới 30 phút', task.title, 'task', task.id, 'high', 'due30:' + task.id);
     if (overdue) createNotification_(forgotten ? 'forgotten_task' : 'overdue', forgotten ? 'Việc có nguy cơ bị quên' : 'Việc đã quá hạn', task.title, 'task', task.id, forgotten ? 'critical' : 'high', (forgotten ? 'forgotten:' : 'overdue:') + task.id);
-    const interval = task.chaseMode === 'urgent' ? 15 * 60 * 1000 : 2 * 60 * 60 * 1000;
-    const canRepeat = !last || (now - last) >= interval;
-    if (((!overdue && !dueSoon) && !staleInProgress) || !canRepeat || !emailEnabled || quiet) return;
-    const urgent = task.chaseMode === 'urgent';
-    const prefix = forgotten ? 'VIỆC BỊ QUÊN · ' : urgent ? 'KHẨN · ' : dueSoon ? 'CÒN 30 PHÚT · ' : '';
-    MailApp.sendEmail(recipient, `${staleInProgress ? 'CHECK-IN · ' : prefix}My Assistant: ${task.title}`, `${staleInProgress ? 'Bạn đã bắt đầu nhưng chưa cập nhật tiến độ.' : dueSoon ? 'Sắp đến hạn' : 'Đến giờ'}: ${task.title}\n\nBước duy nhất lúc này: ${nextStep ? nextStep.title : task.nextAction || 'mở việc và làm ' + (task.minutes || 10) + ' phút'}.\nChecklist: ${completedSteps}/${steps.length}.\n\nBấm “Cập nhật” để ghi đã chốt gì, còn kẹt gì và đặt mốc follow-up; tick ✓ chỉ sau khi cập nhật tài liệu và báo lại.`);
-    sheet.getRange(i + 2, 7).setValue(now);
   });
+  if (!recipient) return;
   if (props.getProperty('APP_FLIGHT_REMINDERS') !== 'no') sendFlightReminders_(recipient, now);
-  if (props.getProperty('APP_ROUTINE_REMINDERS') !== 'no') sendRoutineReminders_(recipient, now);
-  sendLifeAdminReminders_(recipient, now, emailEnabled && !quiet);
+  sendMorningDigest_(recipient, now);
+}
+
+function isOpenReminderTask_(task) {
+  const status = String(task.status || '').toLowerCase();
+  return !(task.done === true || task.done === 'TRUE') &&
+    ['done', 'completed', 'cancelled', 'canceled', 'rejected', 'deleted', 'dismissed'].indexOf(status) < 0;
+}
+
+function sendMorningDigest_(recipient, now) {
+  const props = PropertiesService.getUserProperties();
+  if (props.getProperty('APP_EMAIL_REMINDERS') === 'no') return;
+  const ss = getBook_();
+  const timezone = getConfiguredTimeZone_();
+  const dateKey = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
+  if (props.getProperty('MORNING_DIGEST_SENT') === dateKey) return;
+  const hhmm = Utilities.formatDate(now, timezone, 'HH:mm');
+  const appSettings = readRows_(ss.getSheetByName('AppSettings'))[0] || defaultAppSettings_();
+  const morningTime = String(appSettings.dailyLogMorningTime || '07:45').slice(0, 5);
+  if (hhmm < morningTime || hhmm >= '12:00') return;
+
+  ensureDefaultRoutine_(ss);
+  ensureDefaultHealth_(ss);
+  const routine = readRows_(ss.getSheetByName('RoutineSettings'))[0] || {};
+  const health = readRows_(ss.getSheetByName('HealthProfile'))[0] || {};
+  const tasks = readRows_(ss.getSheetByName('Tasks')).filter(isOpenReminderTask_).sort(function(a, b) {
+    const ad = a.dueAt ? new Date(a.dueAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const bd = b.dueAt ? new Date(b.dueAt).getTime() : Number.MAX_SAFE_INTEGER;
+    return ad - bd;
+  });
+  const overdueCount = tasks.filter(function(task) {
+    return task.dueAt && new Date(task.dueAt) < now;
+  }).length;
+  const taskLines = tasks.length ? tasks.map(function(task, index) {
+    let dueText = 'chưa có deadline';
+    if (task.dueAt && !isNaN(new Date(task.dueAt).getTime())) {
+      const due = new Date(task.dueAt);
+      dueText = Utilities.formatDate(due, timezone, 'dd/MM HH:mm');
+      if (due < now) dueText = 'QUÁ HẠN · ' + dueText;
+    }
+    const next = task.nextAction ? ' — bước kế: ' + task.nextAction : '';
+    return (index + 1) + '. ' + task.title + ' [' + dueText + ']' + next;
+  }) : ['Không có việc đang chờ.'];
+  const anchors = [
+    'Ăn sáng ' + String(routine.breakfastTime || '08:00').slice(0, 5),
+    'ăn trưa ' + String(routine.lunchTime || '12:30').slice(0, 5),
+    'ăn tối ' + String(routine.dinnerTime || '19:00').slice(0, 5),
+    'đi ngủ ' + String(routine.bedtime || '23:30').slice(0, 5),
+    'nước ' + Math.max(250, Number(health.waterGoalMl || 2500)) + ' ml',
+    'đi bộ ' + Math.max(5, Number(health.walkGoalMinutes || 20)) + ' phút'
+  ];
+  const subject = 'My Assistant · ' + tasks.length + ' việc đang chờ' + (overdueCount ? ' · ' + overdueCount + ' quá hạn' : '');
+  const body = [
+    'CHÀO BUỔI SÁNG',
+    '',
+    'Hôm nay chỉ cần chọn một việc quan trọng nhất và bắt đầu 10 phút.',
+    '',
+    'CÔNG VIỆC ĐANG PENDING:',
+    taskLines.join('\n'),
+    '',
+    'NHỊP SINH HOẠT:',
+    anchors.join(' · '),
+    '',
+    'Mở My Assistant để cập nhật, dời deadline hoặc đánh dấu hoàn thành.'
+  ].join('\n');
+  MailApp.sendEmail(recipient, subject, body);
+  props.setProperty('MORNING_DIGEST_SENT', dateKey);
 }
 
 function sendLifeAdminReminders_(recipient, now, canEmail) {
+  // Email policy: financial, study and life-admin signals stay inside the app.
+  // Keep this guard so any legacy trigger that still points here cannot send mail.
+  return;
   const ss = getBook_();
   const timezone = getConfiguredTimeZone_();
   const dateKey = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
@@ -2409,7 +2459,6 @@ function sendFlightReminders_(recipient, now) {
       const travel = Number(flight.airportTravelMinutes || 45);
       const airportLead = type === 'international' ? 180 : 120;
       const leaveAt = new Date(departure.getTime() - (travel + airportLead) * 60000);
-      MailApp.sendEmail(recipient, 'SẮP RA SÂN BAY · ' + (flight.code || 'Chuyến bay'), 'Giờ nên rời đi: ' + formatDateTime_(leaveAt) + '\nGiờ bay: ' + formatDateTime_(departure) + '\n\nKiểm tra: giấy tờ, hành lý, nhà ga, phương tiện di chuyển và tình trạng chuyến bay.');
       createNotification_('flight_leave', 'Chuẩn bị ra sân bay', 'Nên rời đi lúc ' + formatDateTime_(leaveAt), 'flight', flight.id, 'critical', 'flight-leave:' + key);
       sent[key + ':leave'] = now.getTime();
     }
@@ -2418,6 +2467,9 @@ function sendFlightReminders_(recipient, now) {
 }
 
 function sendRoutineReminders_(recipient, now) {
+  // Email policy: routine prompts are consolidated into the single morning digest.
+  // Keep this guard so any legacy trigger that still points here cannot send mail.
+  return;
   const ss = getBook_();
   ensureDefaultRoutine_(ss);
   ensureDefaultHealth_(ss);
@@ -2600,16 +2652,21 @@ function nextDateAt_(hhmm) {
 }
 
 function installReminderTrigger() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('sendDueTaskReminders').timeBased().everyMinutes(15).create();
-  return 'Đã bật nhắc chủ động: việc thường mỗi 2 giờ, việc Bám đuổi mỗi 15 phút.';
+  const legacyEmailHandlers = ['sendDueTaskReminders', 'sendLifeAdminReminders_', 'sendRoutineReminders_'];
+  ScriptApp.getProjectTriggers().filter(function(trigger) {
+    return legacyEmailHandlers.indexOf(trigger.getHandlerFunction()) >= 0;
+  }).forEach(function(trigger) {
+    ScriptApp.deleteTrigger(trigger);
+  });
+  ScriptApp.newTrigger('sendDueTaskReminders').timeBased().everyHours(1).create();
+  return 'Đã bật: một email tổng hợp buổi sáng và email check-in trước chuyến bay 24 giờ. Email giao việc qua form vẫn gửi ngay.';
 }
 
 function authorizeReminderServices() {
   const calendarName = CalendarApp.getDefaultCalendar().getName();
   const quota = MailApp.getRemainingDailyQuota();
   installReminderTrigger();
-  return `Đã kết nối Calendar “${calendarName}” và bật nhắc chủ động. Hạn mức email còn lại hôm nay: ${quota}.`;
+  return `Đã kết nối Calendar “${calendarName}”. Email chỉ gồm giao việc qua form, tổng hợp buổi sáng và check-in 24 giờ. Hạn mức còn lại hôm nay: ${quota}.`;
 }
 
 function enableSmartReminders() {
@@ -2618,7 +2675,7 @@ function enableSmartReminders() {
   installRoutineCalendar();
   installHealthCalendar();
   const flights = syncFutureFlightsToCalendar_();
-  return `Đã bật hệ thống nhắc thông minh qua Calendar “${calendarName}” + email: deadline, việc bị quên, nhật ký sáng/tối, sinh hoạt, vận động hằng ngày và ${flights} chuyến bay tương lai.`;
+  return `Đã bật Calendar “${calendarName}” cho nhắc nền và ${flights} chuyến bay tương lai. Email được giới hạn còn giao việc qua form, tổng hợp buổi sáng và check-in 24 giờ.`;
 }
 
 /** Adds a bounded, deduplicated set of lunar-practice reminders generated by the client. */
@@ -2647,7 +2704,12 @@ function installCalmCalendarReminders(events) {
 }
 
 function uninstallReminderTrigger() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sendDueTaskReminders').forEach(t => ScriptApp.deleteTrigger(t));
+  const reminderHandlers = ['sendDueTaskReminders', 'sendLifeAdminReminders_', 'sendRoutineReminders_'];
+  ScriptApp.getProjectTriggers().filter(function(trigger) {
+    return reminderHandlers.indexOf(trigger.getHandlerFunction()) >= 0;
+  }).forEach(function(trigger) {
+    ScriptApp.deleteTrigger(trigger);
+  });
   return 'Đã tắt email nhắc việc.';
 }
 
