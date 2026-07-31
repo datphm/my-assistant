@@ -257,9 +257,17 @@ function openAssistantReflection(){activatePage('profile');setTimeout(()=>$('ref
 function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
   const collaboration=b.collaboration||{},forms=collaboration.forms||[],pending=pendingInboxItems(),formFor=role=>forms.find(form=>form.role===role);
   const assistantForm=formFor('assistant'),partnerForm=formFor('partner'),health=b.health||{},time=b.time||{},studyInfo=b.study||{},water=Number(health.waterMl||0),walk=Number(health.walkMinutes||0),logged=Number(time.loggedMinutes||0),study=Number(studyInfo.pending||0),now=Date.now();
+  const countdownTo=value=>{
+    const target=new Date(value||0).getTime();
+    if(!target||Number.isNaN(target))return {text:'Chưa có thời gian',short:'—',late:false};
+    const late=target<now,total=Math.max(0,Math.abs(target-now)),days=Math.floor(total/86400000),hours=Math.floor(total%86400000/3600000),minutes=Math.floor(total%3600000/60000);
+    return {text:`${late?'Đã qua':'Còn'} ${days} ngày ${hours} giờ ${minutes} phút`,short:`${days}n ${hours}g ${minutes}p`,late};
+  };
   const dated=open.filter(task=>task.dueAt&&!Number.isNaN(new Date(task.dueAt).getTime())).sort((a,b)=>new Date(a.dueAt)-new Date(b.dueAt)),nextDue=dated[0]||null,noDeadline=open.filter(task=>!task.dueAt).length;
   const staleDoing=open.filter(task=>{if(task.status!=='doing')return false;const last=new Date(task.lastProgressAt||task.updatedAt||task.startedAt||task.createdAt||0).getTime();return last&&now-last>2*3600000}).length;
-  const pendingCount=pending.length,milestoneTitle=nextDue?.title||(flight?`${flight.code||'Chuyến bay'} · ${flight.fromCode||''} → ${flight.toCode||flight.destination||''}`:studyInfo.next?.title)||'Chưa có mốc gấp',milestoneMeta=nextDue?.dueAt?dateTime(nextDue.dueAt):flight?.departure?dateTime(flight.departure):studyInfo.next?.dueAt?dateTime(studyInfo.next.dueAt):'Thêm deadline để trợ lý bám việc';
+  const flightCountdown=countdownTo(flight?.departure),taskCountdown=countdownTo(nextDue?.dueAt),studyCountdown=countdownTo(studyInfo.next?.dueAt);
+  const pendingCount=pending.length,milestoneTitle=nextDue?.title||(flight?`${flight.code||'Chuyến bay'} · ${flight.fromCode||''} → ${flight.toCode||flight.destination||''}`:studyInfo.next?.title)||'Chưa có mốc gấp',milestoneMeta=nextDue?.dueAt?taskCountdown.text:flight?.departure?flightCountdown.text:studyInfo.next?.dueAt?studyCountdown.text:'Thêm deadline để trợ lý bám việc';
+  const waterPercent=Math.max(0,Math.min(100,Math.round(water/2500*100))),flightRoute=flight?`${flight.fromCode||'—'} → ${flight.toCode||flight.destination||'—'}`:'Chưa có hành trình';
   const portal=(role,label,form)=>form
     ?`<div class="command-portal active"><span>${esc(label)}</span><b>Cổng đã sẵn sàng</b><div><a href="${escAttr(form.url)}" target="_blank" rel="noopener">Mở form</a><button onclick="copyTaskIntakeUrl('${encodeURIComponent(form.url)}')">Sao chép link</button></div></div>`
     :`<div class="command-portal"><span>${esc(label)}</span><b>Chưa tạo cổng giao việc</b><button onclick="createTaskIntakePortal('${role}',this)">Tạo link riêng</button></div>`;
@@ -277,15 +285,17 @@ function assistantCommandWall(b,open,overdue,followups,focus,net,flight){
         <button class="amber" onclick="activatePage('today')"><small>MỐC TIẾP THEO</small><b>${esc(milestoneTitle)}</b><em>${esc(milestoneMeta)}</em></button>
       </div>
       <div class="assistant-overview-actions"><button class="primary" onclick="assistantQuickFocus()">▶ Làm việc cần nhất</button><button onclick="openForm('task')">＋ Ghi nhanh</button><button onclick="assistantPickForMe()">⚡ Chọn giúp tôi</button></div>
-      <details class="assistant-system-brief" data-ui-fold="assistant-system-brief">
-        <summary><span><b>Toàn cảnh hệ thống</b><small>Sức khỏe, chuyến đi, du học và các điểm dễ bị bỏ sót</small></span><i>Mở 6 tín hiệu</i></summary>
+      <details class="assistant-system-brief" data-ui-fold="assistant-system-brief" open>
+        <summary><span><b>Toàn cảnh hệ thống</b><small>Nhìn một lần: việc, tiền, sức khỏe, chuyến đi và hồ sơ</small></span><i>8 tín hiệu</i></summary>
         <div class="assistant-system-grid">
-          <button onclick="activatePage('food')"><span>SỨC KHỎE</span><b>${num(water)} ml nước</b><small>Đi bộ ${num(walk)} phút</small></button>
-          <button onclick="activatePage('travel')"><span>CHUYẾN KẾ TIẾP</span><b>${esc(flight?.code||'Chưa có')}</b><small>${flight?`${esc(flight.fromCode||'')} → ${esc(flight.toCode||flight.destination||'')}`:'Chưa có chuyến gần'}</small></button>
-          <button onclick="activatePage('study')"><span>DU HỌC</span><b>${study} bước mở</b><small>${esc(studyInfo.next?.title||'Chưa có mốc hồ sơ gần')}</small></button>
-          <button onclick="document.querySelector('.command-wall-share-details')?.setAttribute('open','')"><span>HỘP GIAO VIỆC</span><b>${pendingCount} chờ duyệt</b><small>Chỉ chủ tài khoản được xem</small></button>
-          <button onclick="activatePage('today')"><span>CHƯA CÓ DEADLINE</span><b>${noDeadline} việc</b><small>Bổ sung mốc để không trôi việc</small></button>
-          <button onclick="activatePage('today')"><span>ĐANG LÀM QUÁ LÂU</span><b>${staleDoing} việc</b><small>Hơn 2 giờ chưa cập nhật</small></button>
+          <button class="system-signal work" onclick="activatePage('today')"><span>CÔNG VIỆC KẾ TIẾP</span><b>${esc(nextDue?.title||'Chưa có deadline gần')}</b><small>${nextDue?taskCountdown.text:'Thêm deadline để trợ lý ưu tiên đúng'}</small></button>
+          <button class="system-signal flight" onclick="activatePage('travel')"><span>CHUYẾN KẾ TIẾP · ${esc(flight?.code||'—')}</span><b>${esc(flightRoute)}</b><strong>${flight?flightCountdown.text:'Chưa có chuyến gần'}</strong><small>${flight?.departure?dateTime(flight.departure):'Thêm chuyến để bắt đầu đếm ngược'}</small></button>
+          <button class="system-signal money" onclick="activatePage('money')"><span>TÀI CHÍNH SAU KHI TRỪ NỢ</span><b>${assistantMoney(net)}</b><small>${net<0?'Cần mở kế hoạch trả nợ':'Dòng tiền khả dụng đang dương'}</small></button>
+          <button class="system-signal health" onclick="activatePage('food')"><span>SỨC KHỎE HÔM NAY</span><b>${num(water)} / 2.500 ml</b><div class="system-meter"><i style="width:${waterPercent}%"></i></div><small>${waterPercent}% nước · đi bộ ${num(walk)} phút</small></button>
+          <button class="system-signal study" onclick="activatePage('study')"><span>DU HỌC</span><b>${study} bước đang mở</b><small>${esc(studyInfo.next?.title||'Chưa có mốc hồ sơ gần')}${studyInfo.next?.dueAt?` · ${studyCountdown.short}`:''}</small></button>
+          <button class="system-signal inbox" onclick="document.querySelector('.command-wall-share-details')?.setAttribute('open','')"><span>HỘP GIAO VIỆC</span><b>${pendingCount} việc chờ duyệt</b><small>${pendingCount?'Mở để duyệt hoặc bỏ':'Không có việc mới từ form'}</small></button>
+          <button class="system-signal risk ${noDeadline?'warn':''}" onclick="activatePage('today')"><span>RỦI RO TRÔI VIỆC</span><b>${noDeadline} việc chưa có deadline</b><small>${noDeadline?'Chốt mốc thời gian ngay':'Tất cả việc mở đã có mốc'}</small></button>
+          <button class="system-signal risk ${staleDoing?'warn':''}" onclick="activatePage('today')"><span>PHIÊN ĐANG MẮC</span><b>${staleDoing} việc quá 2 giờ</b><small>${staleDoing?'Cập nhật, chia nhỏ hoặc dời việc':'Không có việc bị đứng quá lâu'}</small></button>
         </div>
       </details>
     </section>

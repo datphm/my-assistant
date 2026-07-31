@@ -1002,4 +1002,86 @@ html[data-theme=dark] .assistant-command-wall,html[data-theme=dark] .today-comma
   .assistant-system-grid{grid-template-columns:1fr}
 }
 
+/* 2026-07-31: readable Today alerts + a denser, decision-first Command Center. */
+.assistant-overview-wall{
+  background-color:#f7fbfa;
+  background-image:
+    linear-gradient(rgba(83,139,123,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(83,139,123,.055) 1px,transparent 1px),
+    linear-gradient(128deg,#fcfefd 0%,#eef7fb 52%,#eef9f3 100%);
+  background-size:34px 34px,34px 34px,100% 100%;
+}
+.assistant-system-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px}
+.assistant-system-grid button.system-signal{
+  position:relative;
+  align-content:start;
+  min-height:112px;
+  padding:14px!important;
+  overflow:hidden;
+  border-color:#c8ddd8!important;
+  background:linear-gradient(145deg,#fff,#f8fcfb)!important;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.assistant-system-grid button.system-signal:hover{transform:translateY(-2px);border-color:#8fc4b3!important;box-shadow:0 9px 22px rgba(62,108,94,.1)!important}
+.assistant-system-grid .system-signal.work,.assistant-system-grid .system-signal.flight{grid-column:span 2}
+.assistant-system-grid .system-signal.work{border-left:4px solid #5a91bd!important}
+.assistant-system-grid .system-signal.flight{border-left:4px solid #7568bd!important;background:linear-gradient(135deg,#f8f7ff,#eef7ff)!important}
+.assistant-system-grid .system-signal.money{border-top:3px solid #df687c!important}
+.assistant-system-grid .system-signal.health{border-top:3px solid #58a37f!important}
+.assistant-system-grid .system-signal.study{border-top:3px solid #8370c5!important}
+.assistant-system-grid .system-signal.inbox{border-top:3px solid #d5a23e!important}
+.assistant-system-grid .system-signal.risk{border-top:3px solid #8fb7ad!important}
+.assistant-system-grid .system-signal.risk.warn{border-color:#efb0ba!important;background:#fff7f8!important}
+.assistant-system-grid .system-signal span{font-size:8px;letter-spacing:.1em}
+.assistant-system-grid .system-signal b{display:-webkit-box;overflow:hidden;color:#25463f;font-size:15px;line-height:1.28;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.assistant-system-grid .system-signal.flight b{font-size:20px;letter-spacing:.02em}
+.assistant-system-grid .system-signal strong{color:#6555a6;font-size:13px;line-height:1.3}
+.assistant-system-grid .system-signal small{margin-top:auto;color:#6f8781;font-size:10px}
+.system-meter{height:7px;margin:5px 0 1px;overflow:hidden;border-radius:999px;background:#deebe7}
+.system-meter i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#5b94be,#57a681)}
+
+.compact-section[data-ui-fold="today-notifications"]{border-color:#c7ddd7;background:#f9fcfb;box-shadow:0 10px 25px rgba(51,91,80,.06)}
+.compact-section[data-ui-fold="today-notifications"]>summary{background:linear-gradient(90deg,#fbfefd,#eef8f4)}
+.compact-section[data-ui-fold="today-notifications"]>summary b{color:#274b43}
+.compact-section[data-ui-fold="today-notifications"] .notification-center,
+html[data-theme=pastel] .compact-section[data-ui-fold="today-notifications"] .notification-center{
+  padding:18px;
+  color:#24453f;
+  background:
+    linear-gradient(135deg,rgba(221,237,255,.74),rgba(224,244,235,.82)),
+    #f7fbfa;
+  box-shadow:none;
+}
+.compact-section[data-ui-fold="today-notifications"] .notification-head h2,
+html[data-theme=pastel] .compact-section[data-ui-fold="today-notifications"] .notification-head h2{color:#24453f}
+.compact-section[data-ui-fold="today-notifications"] .notification-head .pill{background:#d9eee7;color:#397563}
+.compact-section[data-ui-fold="today-notifications"] .notification-list{gap:10px}
+.compact-section[data-ui-fold="today-notifications"] .notice{
+  grid-template-columns:minmax(0,1fr) 46px;
+  gap:10px;
+  padding:10px;
+  border:1px solid #c5dad5;
+  border-left:4px solid #70a997;
+  background:rgba(255,255,255,.88);
+  box-shadow:0 5px 14px rgba(60,99,88,.055);
+}
+.compact-section[data-ui-fold="today-notifications"] .notice.high,
+.compact-section[data-ui-fold="today-notifications"] .notice.critical{border-color:#eaa7b1;border-left-color:#d9576e;background:#fff7f8}
+.compact-section[data-ui-fold="today-notifications"] .notice-main{gap:5px;color:#24453f!important}
+.compact-section[data-ui-fold="today-notifications"] .notice-main b{color:#24453f;font-size:14px;line-height:1.3}
+.compact-section[data-ui-fold="today-notifications"] .notice-main span{color:#5f7772!important;font-size:12px;line-height:1.45}
+.compact-section[data-ui-fold="today-notifications"] .notice-main small{color:#81938f!important;font-size:9px}
+.compact-section[data-ui-fold="today-notifications"] .notice-done{min-height:46px;border-color:#aad1c4;background:#eaf7f2;color:#3c7b68;font-size:18px}
+
+@media(max-width:760px){
+  .assistant-system-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .assistant-system-grid .system-signal.work,.assistant-system-grid .system-signal.flight{grid-column:1/-1}
+}
+@media(max-width:420px){
+  .assistant-system-grid{grid-template-columns:1fr}
+  .assistant-system-grid .system-signal.work,.assistant-system-grid .system-signal.flight{grid-column:auto}
+  .assistant-system-grid button.system-signal{min-height:104px}
+  .compact-section[data-ui-fold="today-notifications"] .notification-center{padding:12px}
+}
+
 </style>
