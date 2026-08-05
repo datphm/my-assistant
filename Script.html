@@ -4,6 +4,8 @@ let currentType='', editingId='', moneyPeriod='month', flightLimit=20, expenseLe
 let viewingCvId='';
 let initialPageApplied=false;
 let fullDataLoaded=false,todayLoading=false,fullLoading=false,formSaving=false;
+let todayRequestId=0,fullRequestId=0,assistantBriefRequestId=0;
+let todayWatchdog=null,fullWatchdog=null,assistantBriefWatchdog=null;
 const pendingActions=new Set();
 const defaultKanbanFold={overdue:false,upcoming:false,done:true};
 let kanbanCollapsed=(()=>{try{return Object.assign({},defaultKanbanFold,JSON.parse(localStorage.getItem('my-assistant-kanban-fold-v1')||'{}'))}catch(e){return Object.assign({},defaultKanbanFold)}})();
@@ -66,8 +68,56 @@ function staleTickerMessage(message){
 
 function applyServerData(d){data=Object.assign(data,d);applyAppSettings();const serverActive=(data.timestate||[])[0];activeTimeLog=serverActive?{kind:serverActive.kind,label:serverActive.label,startAt:serverActive.startAt}:null;if(activeTimeLog)localStorage.setItem('my-assistant-active-time-v1',JSON.stringify(activeTimeLog));else localStorage.removeItem('my-assistant-active-time-v1')}
 function load(){const page=document.querySelector('.page.active')?.id||'today';if(page==='today'||!fullDataLoaded)refreshToday();else refreshFullData(page)}
-function refreshToday(silent=false){if(todayLoading)return;todayLoading=true;if(!silent)document.body.classList.add('today-loading');google.script.run.withSuccessHandler(d=>{todayLoading=false;document.body.classList.remove('today-loading');applyServerData(d);render();if(!assistantBrief&&!assistantBriefLoading)loadAssistantBrief();if(!initialPageApplied){initialPageApplied=true;activatePage(location.hash.replace('#','')||appSettings().startupPage||'assistant')}}).withFailureHandler(e=>{todayLoading=false;document.body.classList.remove('today-loading');fail(e)}).getTodayData()}
-function refreshFullData(){if(fullLoading)return;fullLoading=true;document.body.classList.add('full-loading');google.script.run.withSuccessHandler(d=>{fullLoading=false;fullDataLoaded=true;document.body.classList.remove('full-loading');applyServerData(d);render()}).withFailureHandler(e=>{fullLoading=false;document.body.classList.remove('full-loading');fail(e)}).getData()}
+function applyInitialPage(){
+  if(initialPageApplied)return;
+  initialPageApplied=true;
+  activatePage(location.hash.replace('#','')||appSettings().startupPage||'assistant');
+}
+function renderBootShell(message){
+  document.body.classList.remove('today-loading','full-loading');
+  try{applyAppSettings();render();applyInitialPage()}catch(error){console.error('My Assistant boot fallback',error)}
+  if(message)toast(message);
+}
+function refreshToday(silent=false){
+  if(todayLoading)return;
+  todayLoading=true;
+  const requestId=++todayRequestId;
+  if(!silent)document.body.classList.add('today-loading');
+  clearTimeout(todayWatchdog);
+  todayWatchdog=setTimeout(()=>{
+    if(requestId!==todayRequestId||!todayLoading)return;
+    todayLoading=false;
+    renderBootShell('Google đang trả dữ liệu chậm. App vẫn dùng được; bấm Làm mới để thử lại.');
+  },10000);
+  google.script.run.withSuccessHandler(d=>{
+    if(requestId!==todayRequestId)return;
+    clearTimeout(todayWatchdog);todayLoading=false;document.body.classList.remove('today-loading');
+    applyServerData(d);render();applyInitialPage();
+    if(!assistantBrief&&!assistantBriefLoading)loadAssistantBrief();
+  }).withFailureHandler(e=>{
+    if(requestId!==todayRequestId)return;
+    clearTimeout(todayWatchdog);todayLoading=false;renderBootShell('Không tải được dữ liệu mới. App đang hiển thị chế độ an toàn.');fail(e);
+  }).getTodayData();
+}
+function refreshFullData(){
+  if(fullLoading)return;
+  fullLoading=true;
+  const requestId=++fullRequestId;
+  document.body.classList.add('full-loading');
+  clearTimeout(fullWatchdog);
+  fullWatchdog=setTimeout(()=>{
+    if(requestId!==fullRequestId||!fullLoading)return;
+    fullLoading=false;document.body.classList.remove('full-loading');
+    toast('Tab này tải lâu hơn bình thường. Bạn vẫn có thể chuyển tab hoặc thử lại.');
+  },15000);
+  google.script.run.withSuccessHandler(d=>{
+    if(requestId!==fullRequestId)return;
+    clearTimeout(fullWatchdog);fullLoading=false;fullDataLoaded=true;document.body.classList.remove('full-loading');applyServerData(d);render();
+  }).withFailureHandler(e=>{
+    if(requestId!==fullRequestId)return;
+    clearTimeout(fullWatchdog);fullLoading=false;document.body.classList.remove('full-loading');fail(e);
+  }).getData();
+}
 function appSettings(){return (data.appsettings||[])[0]||{timezone:'Asia/Ho_Chi_Minh',locale:'vi-VN',startupPage:'assistant',theme:'pastel',fontScale:'100',reducedMotion:'no',compactMode:'no',hideFinancialAmounts:'no',defaultTaskMinutes:15,defaultChaseMode:'normal',confirmBeforeDelete:'yes'}}
 function applyAppSettings(){const s=appSettings(),systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=s.theme==='system'?(systemDark?'dark':'light'):(s.theme||'dark');document.documentElement.style.fontSize=`${Number(s.fontScale||100)}%`;document.body.classList.toggle('reduce-motion',s.reducedMotion==='yes');document.body.classList.toggle('compact-ui',s.compactMode==='yes');document.body.classList.toggle('hide-finance',s.hideFinancialAmounts==='yes')}
 function rememberUiFold(key,details){uiFoldState[key]=details.open;localStorage.setItem('my-assistant-ui-fold-v1',JSON.stringify(uiFoldState))}
@@ -184,8 +234,22 @@ function renderTodayLaunchPad(open){
 }
 function focusTodayLane(kind){const now=Date.now(),open=openTasks();let rows=kind==='overdue'?open.filter(t=>t.dueAt&&new Date(t.dueAt)<now):kind==='quick'?open.filter(t=>Number(t.minutes||15)<=15):open.filter(t=>t.followUpAt&&new Date(t.followUpAt)<=now);rows=rows.sort((a,b)=>taskAttentionScore(b)-taskAttentionScore(a));if(!rows.length){toast(kind==='quick'?'Chưa có việc nhanh. Hãy giảm một việc xuống bước 10 phút.':'Không có việc trong nhóm này.');return}openOperationTask(rows[0].id)}
 function loadAssistantBrief(force=false){
-  if(assistantBriefLoading)return;assistantBriefLoading=true;renderAssistantBrief();
-  google.script.run.withSuccessHandler(brief=>{assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief()}).withFailureHandler(e=>{assistantBriefLoading=false;renderAssistantBrief();fail(e)}).getAssistantBrief(force);
+  if(assistantBriefLoading)return;
+  assistantBriefLoading=true;
+  const requestId=++assistantBriefRequestId;
+  renderAssistantBrief();
+  clearTimeout(assistantBriefWatchdog);
+  assistantBriefWatchdog=setTimeout(()=>{
+    if(requestId!==assistantBriefRequestId||!assistantBriefLoading)return;
+    assistantBriefLoading=false;renderAssistantBrief();
+  },12000);
+  google.script.run.withSuccessHandler(brief=>{
+    if(requestId!==assistantBriefRequestId)return;
+    clearTimeout(assistantBriefWatchdog);assistantBriefLoading=false;assistantBrief=brief;renderAssistantBrief();
+  }).withFailureHandler(e=>{
+    if(requestId!==assistantBriefRequestId)return;
+    clearTimeout(assistantBriefWatchdog);assistantBriefLoading=false;renderAssistantBrief();fail(e);
+  }).getAssistantBrief(force);
 }
 function refreshOperationCenter(){assistantBrief=null;loadAssistantBrief(true);refreshFullData()}
 function setAssistantMode(mode){assistantMode=mode;localStorage.setItem('my-assistant-mode-v1',mode);renderTodayCoach(openTasks());renderAssistantBrief()}
@@ -1679,12 +1743,17 @@ function activatePage(page){
   if(!btn||!section)return;
   document.querySelectorAll('nav button,.page').forEach(x=>x.classList.remove('active'));
   btn.classList.add('active'); section.classList.add('active');
-  if(page!=='today'&&!fullDataLoaded){refreshFullData(page);return}
+  // Assistant uses the lightweight task snapshot plus its own background brief.
+  // It must never wait for the full workbook before becoming interactive.
+  if(page!=='today'&&page!=='assistant'&&!fullDataLoaded){refreshFullData(page);return}
   renderCurrentPage();
 }
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
 function fail(e){toast(e.message||String(e))}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>activatePage(b.dataset.page));
 restoreUiFolds();
+// Paint an interactive shell immediately. Server data enhances it afterwards;
+// a slow Apps Script call must not freeze navigation or leave a blank page.
+renderBootShell();
 load();
 </script>

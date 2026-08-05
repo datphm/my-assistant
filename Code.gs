@@ -92,12 +92,12 @@ function getTodayData() {
     partial: true,
     tasks: tasks,
     tasksteps: readRowsSafe_(ss, 'TaskSteps').filter(function(step) { return taskIds.has(step.taskId); }),
-    taskupdates: readRowsSafe_(ss, 'TaskUpdates').slice(-180).filter(function(update) { return taskIds.has(update.taskId); }),
-    notifications: readRowsSafe_(ss, 'Notifications').slice(-120),
+    taskupdates: readRecentRowsSafe_(ss, 'TaskUpdates', 180).filter(function(update) { return taskIds.has(update.taskId); }),
+    notifications: readRecentRowsSafe_(ss, 'Notifications', 120),
     timestate: readRowsSafe_(ss, 'TimeState'),
     appsettings: readRowsSafe_(ss, 'AppSettings'),
     projects: readRowsSafe_(ss, 'Projects'),
-    dailylogs: readRowsSafe_(ss, 'DailyLogs').slice(-21),
+    dailylogs: readRecentRowsSafe_(ss, 'DailyLogs', 21),
     recovered: true
   };
 }
@@ -110,6 +110,19 @@ function readRowsSafe_(ss, name) {
       ensureHeaders_(sheet, HEADERS[name]);
     }
     return sheet ? readRows_(sheet) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function readRecentRowsSafe_(ss, name, maxRows) {
+  try {
+    let sheet = ss.getSheetByName(name);
+    if (!sheet && HEADERS[name]) {
+      sheet = ss.insertSheet(name);
+      ensureHeaders_(sheet, HEADERS[name]);
+    }
+    return sheet ? readRecentRows_(sheet, maxRows) : [];
   } catch (error) {
     return [];
   }
