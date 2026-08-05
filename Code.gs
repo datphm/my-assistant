@@ -45,6 +45,11 @@ function doGet(e) {
   if (download === 'android-apk') return buildAndroidApkNote_();
   if (download === 'json') return buildJsonExport_();
   if (repairFinance === '1') return runBundledFinanceRecovery_();
+  if (repairFinance === 'dedupe-preview' || repairFinance === 'dedupe-apply') {
+    return ContentService.createTextOutput(JSON.stringify(
+      deduplicateFinanceExpenses_(repairFinance === 'dedupe-apply'), null, 2
+    )).setMimeType(ContentService.MimeType.JSON);
+  }
   if (repairTaskEmail === '1') {
     const notifyEmail = e && e.parameter && e.parameter.notifyEmail;
     return ContentService.createTextOutput(JSON.stringify(repairTaskIntakeEmailDelivery(notifyEmail)))
@@ -1707,6 +1712,97 @@ function runBundledFinanceRecovery_() {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/**
+ * Removes repeated imported transactions without loading the ledger in the UI.
+ * Strong external IDs are always safe to collapse. Rows without an external ID
+ * are only compared when their source clearly identifies an import.
+ */
+function deduplicateFinanceExpenses_(applyChanges) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(30000);
+  try {
+    const ss = getBook_();
+    const expenseSheet = ss.getSheetByName('Expenses');
+    const walletSheet = ss.getSheetByName('Wallets');
+    ensureHeaders_(expenseSheet, HEADERS.Expenses);
+    const values = expenseSheet.getDataRange().getValues();
+    if (values.length <= 1) return { ok: true, applied: false, rowsBefore: 0, rowsAfter: 0, removed: 0 };
+
+    const headers = values[0];
+    const column = {};
+    headers.forEach(function(name, index) { column[String(name)] = index; });
+    const get = function(row, name) { return column[name] === undefined ? '' : row[column[name]]; };
+    const textKey = function(value) {
+      return String(value || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+    };
+    const dateKey = function(value) {
+      const date = value instanceof Date ? value : new Date(value);
+      if (isNaN(date.getTime())) return textKey(value);
+      return Utilities.formatDate(date, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', "yyyy-MM-dd'T'HH:mm:ss");
+    };
+    const isImported = function(source) {
+      return /(gmail|email|statement|sao kê|sao ke|xlsx|excel|pdf|nhập|import|bank)/i.test(String(source || ''));
+    };
+    const seen = {};
+    const kept = [];
+    const duplicateGroups = {};
+    let incomeBefore = 0;
+    let expenseBefore = 0;
+    let incomeRemoved = 0;
+    let expenseRemoved = 0;
+
+    values.slice(1).forEach(function(row) {
+      const amount = Math.abs(Number(get(row, 'amount')) || 0);
+      const direction = String(get(row, 'direction')) === 'income' ? 'income' : 'expense';
+      if (direction === 'income') incomeBefore += amount; else expenseBefore += amount;
+      const externalId = textKey(get(row, 'gmailMessageId'));
+      const source = get(row, 'source');
+      let key = '';
+      if (externalId) {
+        key = 'external:' + externalId;
+      } else if (isImported(source)) {
+        key = [
+          'import', dateKey(get(row, 'date')), amount.toFixed(2), direction,
+          textKey(get(row, 'walletId')), textKey(get(row, 'merchant')), textKey(source)
+        ].join('|');
+      }
+      if (key && seen[key]) {
+        duplicateGroups[key] = (duplicateGroups[key] || 1) + 1;
+        if (direction === 'income') incomeRemoved += amount; else expenseRemoved += amount;
+        return;
+      }
+      if (key) seen[key] = true;
+      kept.push(row);
+    });
+
+    const removed = values.length - 1 - kept.length;
+    let backup = '';
+    if (applyChanges && removed > 0) {
+      backup = backupFinanceSheets_(ss, walletSheet, expenseSheet, 'finance-dedupe-' + Utilities.formatDate(new Date(), 'GMT', 'yyyy-MM-dd-HHmmss'));
+      clearSheetDataPreservingFrozenRows_(expenseSheet);
+      if (kept.length) expenseSheet.getRange(2, 1, kept.length, headers.length).setValues(kept);
+      CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
+    }
+    return {
+      ok: true,
+      applied: Boolean(applyChanges),
+      rowsBefore: values.length - 1,
+      rowsAfter: kept.length,
+      removed: removed,
+      duplicateGroups: Object.keys(duplicateGroups).length,
+      incomeBefore: incomeBefore,
+      expenseBefore: expenseBefore,
+      incomeAfter: incomeBefore - incomeRemoved,
+      expenseAfter: expenseBefore - expenseRemoved,
+      walletsChanged: 0,
+      debtsChanged: 0,
+      backup: backup
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function applyBundledFinanceRecovery() {
   return importStatementBundle(getBundledFinanceRecovery_());
 }
@@ -1939,24 +2035,33 @@ function syncTaskToCalendar(id) {
 // Example query: from:alerts@yourbank.com newer_than:30d
 function importExpensesFromGmail(query, walletId) {
   if (!query || query.length < 5) throw new Error('Hãy nhập truy vấn Gmail, ví dụ from:alerts@yourbank.com newer_than:30d');
-  const sheet = getBook_().getSheetByName('Expenses');
-  const imported = new Set(readRows_(sheet).map(row => row.gmailMessageId).filter(Boolean));
-  const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
-  let count = 0, balanceUpdates = 0;
-  messages.forEach(message => {
-    const body = message.getPlainBody();
-    const balance = parseBalanceVnd_(body);
-    if (walletId && balance) { updateWalletBalance_(walletId, balance, message.getDate()); balanceUpdates++; }
-    if (!imported.has(message.getId())) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getBook_().getSheetByName('Expenses');
+    const imported = new Set(readRows_(sheet).map(row => String(row.gmailMessageId || '')).filter(Boolean));
+    const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
+    const rows = [];
+    let balanceUpdates = 0;
+    messages.forEach(function(message) {
+      const messageId = String(message.getId());
+      if (imported.has(messageId)) return;
+      imported.add(messageId); // also blocks duplicates inside this same run
+      const body = message.getPlainBody();
+      const balance = parseBalanceVnd_(body);
+      if (walletId && balance) { updateWalletBalance_(walletId, balance, message.getDate()); balanceUpdates++; }
       const amount = parseVnd_(body);
       if (!amount) return;
       const direction = guessDirection_(message.getSubject() + ' ' + body);
-      sheet.appendRow(HEADERS.Expenses.map(key => ({id:Utilities.getUuid(), date:message.getDate(), amount, merchant:cleanMerchant_(message.getSubject()), source:'Gmail import', gmailMessageId:message.getId(), category:categorize_(message.getSubject() + ' ' + body), direction, walletId:walletId || '', debtId:''}[key] ?? '')));
+      const record = {id:Utilities.getUuid(), date:message.getDate(), amount:amount, merchant:cleanMerchant_(message.getSubject()), source:'Gmail import', gmailMessageId:messageId, category:categorize_(message.getSubject() + ' ' + body), direction:direction, walletId:walletId || '', debtId:''};
+      rows.push(HEADERS.Expenses.map(function(key) { return record[key] === undefined ? '' : record[key]; }));
       if (walletId && !balance) adjustWalletByTransaction_(walletId, amount, direction, message.getDate());
-      count++;
-    }
-  });
-  return { count, balanceUpdates };
+    });
+    if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, HEADERS.Expenses.length).setValues(rows);
+    return { count: rows.length, balanceUpdates: balanceUpdates, skippedDuplicates: messages.length - rows.length };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function installBankSync(query, walletId) {
