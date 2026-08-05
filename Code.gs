@@ -10,7 +10,7 @@ const HEADERS = {
   Flights: ['id', 'code', 'destination', 'departure', 'terminal', 'gate', 'reg', 'fromCode', 'toCode', 'distanceKm', 'depTime', 'arrTime', 'airline', 'aircraft', 'seat', 'ticketPrice', 'note', 'source', 'gmailMessageId', 'flightType', 'airportTravelMinutes', 'checkinUrl', 'status', 'bookingRef', 'calendarEventId', 'lastCheckedAt', 'departureTimeZone', 'arrival', 'arrivalTimeZone'],
   Hotels: ['id', 'name', 'city', 'address', 'checkIn', 'checkOut', 'bookingRef', 'price', 'source', 'gmailMessageId', 'notes'],
   Appointments: ['id', 'title', 'type', 'startAt', 'endAt', 'location', 'withWhom', 'transport', 'notes', 'calendarEventId', 'createdAt'],
-  Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId'],
+  Expenses: ['id', 'date', 'amount', 'merchant', 'source', 'gmailMessageId', 'category', 'direction', 'walletId', 'debtId', 'transactionKey', 'note', 'updatedAt'],
   Wallets: ['id', 'name', 'type', 'balance', 'currency', 'lastUpdatedAt'],
   Allocations: ['id', 'name', 'percent', 'color'],
   CVs: ['id', 'title', 'targetRole', 'content', 'driveUrl', 'fileName', 'updatedAt'],
@@ -35,7 +35,7 @@ const HEADERS = {
 
 // Avoid re-reading and re-writing every sheet header on every mobile action.
 // Bump this value only when HEADERS changes.
-const SCHEMA_VERSION = '2026-07-30-flight-gmt-offsets-v20';
+const SCHEMA_VERSION = '2026-08-05-expense-ledger-v21';
 
 function doGet(e) {
   const download = e && e.parameter && e.parameter.download;
@@ -1431,6 +1431,7 @@ function addItem(type, item) {
   const sheet = getBook_().getSheetByName(type);
   if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
   const id = item.id || Utilities.getUuid();
+  if (type === 'Expenses') item = normalizeExpenseRecord_(Object.assign({}, item, { id: id }));
   const sheetHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const row = sheetHeaders.map(key => {
     if (key === 'id') return id;
@@ -1464,6 +1465,7 @@ function updateItem(type, item) {
   if (type === 'Flights' && !item.distanceKm && item.fromCode && item.toCode) item.distanceKm = distanceForRoute_(item.fromCode, item.toCode);
   const sheet = getBook_().getSheetByName(type);
   const existing = readRows_(sheet).find(row => row.id === item.id) || {};
+  if (type === 'Expenses') item = normalizeExpenseRecord_(item, existing);
   if (type === 'Expenses') applyExpenseImpact_(existing, -1);
   upsertRow_(sheet, Object.assign({}, existing, item));
   if (type === 'Flights') CacheService.getUserCache().remove('MY_ASSISTANT_BRIEF_V4');
@@ -1939,24 +1941,105 @@ function syncTaskToCalendar(id) {
 // Example query: from:alerts@yourbank.com newer_than:30d
 function importExpensesFromGmail(query, walletId) {
   if (!query || query.length < 5) throw new Error('Hãy nhập truy vấn Gmail, ví dụ from:alerts@yourbank.com newer_than:30d');
-  const sheet = getBook_().getSheetByName('Expenses');
-  const imported = new Set(readRows_(sheet).map(row => row.gmailMessageId).filter(Boolean));
-  const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
-  let count = 0, balanceUpdates = 0;
-  messages.forEach(message => {
-    const body = message.getPlainBody();
-    const balance = parseBalanceVnd_(body);
-    if (walletId && balance) { updateWalletBalance_(walletId, balance, message.getDate()); balanceUpdates++; }
-    if (!imported.has(message.getId())) {
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(2000)) return { count: 0, skipped: 0, balanceUpdates: 0, busy: true };
+  try {
+    const sheet = getBook_().getSheetByName('Expenses');
+    const rows = readRows_(sheet);
+    const importedMessages = new Set(rows.map(row => String(row.gmailMessageId || '')).filter(Boolean));
+    const importedKeys = new Set(rows.map(row => String(row.transactionKey || expenseTransactionKey_(row) || '')).filter(Boolean));
+    const messages = GmailApp.search(query, 0, 500).flatMap(thread => thread.getMessages());
+    const pending = [];
+    let count = 0, skipped = 0, balanceUpdates = 0;
+    messages.forEach(message => {
+      const messageId = String(message.getId());
+      if (importedMessages.has(messageId)) { skipped++; return; }
+      const body = message.getPlainBody();
       const amount = parseVnd_(body);
       if (!amount) return;
       const direction = guessDirection_(message.getSubject() + ' ' + body);
-      sheet.appendRow(HEADERS.Expenses.map(key => ({id:Utilities.getUuid(), date:message.getDate(), amount, merchant:cleanMerchant_(message.getSubject()), source:'Gmail import', gmailMessageId:message.getId(), category:categorize_(message.getSubject() + ' ' + body), direction, walletId:walletId || '', debtId:''}[key] ?? '')));
-      if (walletId && !balance) adjustWalletByTransaction_(walletId, amount, direction, message.getDate());
+      const item = normalizeExpenseRecord_({ id: Utilities.getUuid(), date: message.getDate(), amount: amount, merchant: cleanMerchant_(message.getSubject()), source: 'Gmail import', gmailMessageId: messageId, category: categorize_(message.getSubject() + ' ' + body), direction: direction, walletId: walletId || '', debtId: '', note: '' });
+      if (importedKeys.has(item.transactionKey)) { skipped++; importedMessages.add(messageId); return; }
+      pending.push(item);
+      importedMessages.add(messageId);
+      importedKeys.add(item.transactionKey);
+      const balance = parseBalanceVnd_(body);
+      if (walletId && balance) { updateWalletBalance_(walletId, balance, message.getDate()); balanceUpdates++; }
+      else if (walletId) adjustWalletByTransaction_(walletId, amount, direction, message.getDate());
       count++;
-    }
-  });
-  return { count, balanceUpdates };
+    });
+    if (pending.length) sheet.getRange(sheet.getLastRow() + 1, 1, pending.length, HEADERS.Expenses.length).setValues(pending.map(item => HEADERS.Expenses.map(key => item[key] === undefined ? '' : item[key])));
+    return { count: count, skipped: skipped, balanceUpdates: balanceUpdates, busy: false };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function normalizeExpenseRecord_(item, existing) {
+  const value = Object.assign({}, existing || {}, item || {});
+  value.id = value.id || Utilities.getUuid();
+  value.date = value.date ? new Date(value.date) : new Date();
+  if (isNaN(value.date.getTime())) value.date = new Date();
+  value.amount = Math.abs(Number(value.amount || 0));
+  value.direction = String(value.direction || 'expense').toLowerCase() === 'income' ? 'income' : 'expense';
+  value.merchant = String(value.merchant || '').trim();
+  value.transactionKey = expenseTransactionKey_(value);
+  value.note = String(value.note || '').trim();
+  value.updatedAt = new Date();
+  return value;
+}
+
+function expenseTransactionKey_(item) {
+  if (!item) return '';
+  if (item.gmailMessageId) return 'gmail:' + String(item.gmailMessageId).trim();
+  const date = item.date ? new Date(item.date) : new Date(0);
+  const dateKey = isNaN(date.getTime()) ? String(item.date || '') : Utilities.formatDate(date, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', "yyyy-MM-dd'T'HH:mm:ss");
+  const raw = [dateKey, Math.round(Number(item.amount || 0)), String(item.direction || 'expense').toLowerCase(), String(item.walletId || ''), String(item.merchant || '').trim().toLowerCase().replace(/\s+/g, ' ')].join('|');
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw, Utilities.Charset.UTF_8);
+  return 'tx:' + digest.map(function(byte) { return ('0' + ((byte + 256) % 256).toString(16)).slice(-2); }).join('').slice(0, 40);
+}
+
+function importExpenseWorkbook(rows) {
+  if (!Array.isArray(rows) || !rows.length) throw new Error('File XLSX không có dòng giao dịch nào.');
+  if (rows.length > 10000) throw new Error('Mỗi lần chỉ nhập tối đa 10.000 dòng.');
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(3000)) throw new Error('Một lượt nhập khác đang chạy. Đợi vài giây rồi thử lại.');
+  try {
+    const sheet = getBook_().getSheetByName('Expenses');
+    const existing = readRows_(sheet);
+    const byId = new Map(existing.map(item => [String(item.id), item]));
+    const byKey = new Map(existing.map(item => [String(item.transactionKey || expenseTransactionKey_(item)), item]));
+    const output = existing.slice();
+    const indexById = new Map(output.map((item, index) => [String(item.id), index]));
+    let added = 0, updated = 0, deleted = 0, skipped = 0;
+    rows.forEach(function(row) {
+      const action = String(row.action || '').trim().toUpperCase();
+      const id = String(row.transaction_id || row.id || '').trim();
+      const old = id ? byId.get(id) : null;
+      if (action === 'DELETE') {
+        if (!old) { skipped++; return; }
+        applyExpenseImpact_(old, -1);
+        const index = indexById.get(id); output[index] = null; byId.delete(id); byKey.delete(String(old.transactionKey || expenseTransactionKey_(old))); deleted++; return;
+      }
+      const draft = { id: id || '', date: row.date || row.transaction_date, direction: row.direction, amount: row.amount_vnd === undefined ? row.amount : row.amount_vnd, walletId: row.wallet_id || '', category: row.category || '', merchant: row.merchant_description || row.merchant || '', debtId: row.debt_id || '', source: row.source || 'XLSX import', gmailMessageId: row.gmail_message_id || '', transactionKey: row.transaction_key || '', note: row.note || '' };
+      const value = normalizeExpenseRecord_(draft, old || {});
+      if (!value.amount) { skipped++; return; }
+      const duplicate = byKey.get(value.transactionKey);
+      if (!old && duplicate) { skipped++; return; }
+      if (old && duplicate && String(duplicate.id) !== String(old.id)) { skipped++; return; }
+      if (old) {
+        applyExpenseImpact_(old, -1); output[indexById.get(id)] = value; applyExpenseImpact_(value, 1); byKey.delete(String(old.transactionKey || expenseTransactionKey_(old))); byKey.set(value.transactionKey, value); byId.set(id, value); updated++;
+      } else {
+        output.push(value); indexById.set(String(value.id), output.length - 1); byId.set(String(value.id), value); byKey.set(value.transactionKey, value); applyExpenseImpact_(value, 1); added++;
+      }
+    });
+    const clean = output.filter(Boolean);
+    if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+    if (clean.length) sheet.getRange(2, 1, clean.length, HEADERS.Expenses.length).setValues(clean.map(item => HEADERS.Expenses.map(key => item[key] === undefined ? '' : item[key])));
+    return { added: added, updated: updated, deleted: deleted, skipped: skipped, total: clean.length };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function installBankSync(query, walletId) {

@@ -1084,4 +1084,42 @@ html[data-theme=pastel] .compact-section[data-ui-fold="today-notifications"] .no
   .compact-section[data-ui-fold="today-notifications"] .notification-center{padding:12px}
 }
 
+/* Expense audit workbook and complete ledger */
+.expense-xlsx-panel{margin:14px 0;border:1px solid #c9ded8;border-radius:22px;background:linear-gradient(135deg,#fff,#eef8f4);box-shadow:0 10px 26px rgba(52,94,82,.07)}
+.expense-xlsx-panel>summary{padding:18px 20px;color:#274a42;font-weight:800;cursor:pointer}
+.expense-xlsx-panel[open]>summary{border-bottom:1px solid #d6e7e2}
+.expense-xlsx-panel .form-grid{padding:18px 20px}
+.expense-xlsx-panel input[type=file]{min-width:0;width:100%;padding:11px;border:1px dashed #91bcae;border-radius:14px;background:#fff;color:#31574e}
+.expense-ledger-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 210px auto;gap:10px;margin:14px 0}
+.expense-ledger-toolbar input,.expense-ledger-toolbar select{min-width:0;margin:0}
+.expense-ledger-list{display:grid;gap:9px}
+.expense-ledger-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,auto) auto;gap:14px;align-items:center;padding:13px 15px;border:1px solid #cee1dc;border-radius:16px;background:rgba(255,255,255,.9)}
+.expense-ledger-row>div:first-child{display:grid;gap:3px;min-width:0}
+.expense-ledger-row b,.expense-ledger-row span,.expense-ledger-row small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.expense-ledger-row b{color:#274a42;font-size:14px}
+.expense-ledger-row span{color:#617a74;font-size:12px}
+.expense-ledger-row small{color:#8a9c98;font-size:9px}
+.expense-ledger-row>strong{text-align:right;font-size:14px;white-space:nowrap}
+.expense-ledger-pager{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px}
+.expense-ledger-pager span{min-width:86px;text-align:center;color:#607a73;font-size:12px;font-weight:700}
+
+/* A light, low-friction daily capture prompt for the Assistant tab */
+.assistant-daily-capture{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;margin-top:14px;padding:20px 22px;border-left:5px solid #d6a43e;background:linear-gradient(125deg,#fffaf0 0%,#f5fbff 52%,#eef9f4 100%);box-shadow:0 12px 28px rgba(63,102,91,.08)}
+.assistant-daily-capture h3{margin:4px 0;color:#274a42}
+.assistant-daily-capture p{margin:0 0 5px;color:#607a73}
+.assistant-daily-capture small{color:#81948f}
+.assistant-daily-capture.is-done{border-left-color:#5ba184;background:linear-gradient(125deg,#f5fbf8,#eef9f4)}
+.assistant-daily-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;max-width:520px}
+.assistant-daily-actions button{min-height:42px;padding:9px 13px}
+
+@media(max-width:760px){
+  .expense-ledger-toolbar{grid-template-columns:1fr 1fr}.expense-ledger-toolbar input{grid-column:1/-1}
+  .expense-ledger-row{grid-template-columns:minmax(0,1fr) auto}.expense-ledger-row .card-actions{grid-column:1/-1;justify-content:flex-end}
+  .assistant-daily-capture{grid-template-columns:1fr;padding:17px}.assistant-daily-actions{justify-content:flex-start;max-width:none}.assistant-daily-actions button{flex:1 1 calc(50% - 8px)}
+}
+@media(max-width:420px){
+  .expense-ledger-toolbar{grid-template-columns:1fr}.expense-ledger-toolbar input{grid-column:auto}
+  .expense-ledger-row{grid-template-columns:1fr}.expense-ledger-row>strong{text-align:left}.expense-ledger-row .card-actions{grid-column:auto;justify-content:flex-start}
+}
+
 </style>
