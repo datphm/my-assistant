@@ -160,7 +160,7 @@
         <div class="inline wrap">
           <input id="gmailQuery" placeholder='from:alerts@yourbank.com newer_than:730d'>
           <select id="gmailWallet"></select>
-          <button onclick="importExpenses(this)">Nhập ngay</button>
+          <button onclick="importExpenses()">Nhập ngay</button>
           <button class="outline" onclick="enableBankSync()">Bật tự động</button>
           <button class="outline danger" onclick="disableBankSync()">Tắt tự động</button>
         </div>
@@ -176,15 +176,7 @@
           <p class="hint">Dữ liệu được gửi thẳng tới Google Apps Script của bạn; nội dung không được lưu trong mã nguồn hoặc GitHub.</p>
         </details>
       </div></details>
-      <details class="compact-section" data-ui-fold="money-xlsx-ledger" ontoggle="rememberUiFold('money-xlsx-ledger',this)"><summary><span><b>▦ Nhập / xuất sổ giao dịch XLSX</b><small>Sửa hàng loạt, rà soát và nhập lại mà không tạo bản trùng</small></span><i></i></summary><div class="compact-section-body expense-xlsx-panel">
-        <div class="section-head compact"><div><h3>Sổ XLSX an toàn</h3><p class="hint">Mỗi dòng có mã giao dịch và khóa chống trùng. Dùng cột action: ADD, UPDATE hoặc DELETE.</p></div><div class="actions"><button class="outline" onclick="exportExpenseWorkbook(false)">Xuất toàn bộ</button><button class="outline" onclick="exportExpenseWorkbook(true)">Tải file mẫu</button></div></div>
-        <div class="inline wrap"><input id="expenseWorkbookFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"><button onclick="importExpenseWorkbookFile(this)">Nhập XLSX</button><span class="hint">Bản ghi trùng Gmail Message ID hoặc cùng ngày–số tiền–ví–nội dung sẽ được bỏ qua.</span></div>
-      </div></details>
       <details class="compact-section" data-ui-fold="money-recent-transactions" ontoggle="rememberUiFold('money-recent-transactions',this)"><summary><span><b>₫ Giao dịch gần đây</b><small>12 giao dịch mới nhất · mở để sửa hoặc xoá</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Giao dịch gần đây</h3><button class="outline small" onclick="openForm('expense')">+ Giao dịch</button></div><div id="expenses" class="cards compact-cards"></div></div></details>
-      <details class="compact-section" data-ui-fold="money-full-ledger" ontoggle="rememberUiFold('money-full-ledger',this)"><summary><span><b>☷ Toàn bộ sổ giao dịch</b><small id="expenseLedgerCount">Tìm kiếm và xem 50 dòng mỗi trang</small></span><i></i></summary><div class="compact-section-body">
-        <div class="expense-ledger-toolbar"><input id="expenseLedgerSearch" placeholder="Tìm nội dung, danh mục, nguồn…" oninput="renderExpenseLedger(true)"><select id="expenseLedgerDirection" onchange="renderExpenseLedger(true)"><option value="">Tất cả dòng tiền</option><option value="income">Tiền vào</option><option value="expense">Tiền ra</option></select><button class="outline" onclick="openForm('expense')">+ Giao dịch</button></div>
-        <div id="expenseLedger" class="expense-ledger-list"></div><div class="expense-ledger-pager"><button class="outline" onclick="moveExpenseLedger(-1)">← Trước</button><span id="expenseLedgerPage">Trang 1/1</span><button class="outline" onclick="moveExpenseLedger(1)">Sau →</button></div>
-      </div></details>
       <details class="compact-section" data-ui-fold="money-debts" ontoggle="rememberUiFold('money-debts',this)"><summary><span><b>◎ Khoản nợ & kế hoạch trả</b><small>Ưu tiên, cập nhật số nợ và ghi nhận thanh toán</small></span><i></i></summary><div class="compact-section-body"><div id="debtPayoffPlan"></div><div id="debts" class="cards"></div></div></details>
       <details class="compact-section" data-ui-fold="money-plans" ontoggle="rememberUiFold('money-plans',this)"><summary><span><b>◇ Kế hoạch chi lớn</b><small>Chuyến đi và khoản chi cần chuẩn bị trước</small></span><i></i></summary><div class="compact-section-body"><div class="section-head compact"><h3>Kế hoạch chi lớn / chuyến đi sắp tới</h3><button class="outline" onclick="openForm('plan')">+ Kế hoạch</button></div><div id="moneyCoach" class="cards"></div><div id="plans" class="cards"></div></div></details>
     </section>
